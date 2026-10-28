@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#141821"/><stop offset="1" stop-color="#1d2330"/></linearGradient></defs>
+  <rect width="320" height="200" fill="url(#g)"/>
+  <rect y="172" width="320" height="28" fill="#232833"/>
+  <g fill="#4f8cff"><rect x="14" y="182" width="52" height="6"/><rect x="74" y="182" width="52" height="6"/><rect x="134" y="182" width="52" height="6"/></g>
+  <g fill="#2a2f39"><rect x="194" y="182" width="52" height="6"/><rect x="254" y="182" width="52" height="6"/></g>
+  <g font-family="ui-monospace,Menlo,monospace" font-size="18" font-weight="600">
+    <rect x="28" y="22" width="80" height="26" rx="5" fill="#000" opacity=".25"/><text x="36" y="41" fill="#eceef2">planet</text>
+    <rect x="176" y="52" width="80" height="26" rx="5" fill="#ffc53d" opacity=".14"/><text x="184" y="71" fill="#ffc53d">roc</text><text x="216" y="71" fill="#eceef2">ket</text>
+    <rect x="70" y="102" width="60" height="26" rx="5" fill="#000" opacity=".25"/><text x="78" y="121" fill="#eceef2">wave</text>
+    <rect x="200" y="132" width="102" height="26" rx="5" fill="#000" opacity=".25"/><text x="208" y="151" fill="#ff8a8a">thunder</text>
+  </g>
+</svg>

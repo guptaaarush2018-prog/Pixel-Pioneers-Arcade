@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <rect width="320" height="200" fill="#161920"/>
+  <rect x="92" y="32" width="40" height="40" fill="#ffc53d" opacity=".22"/><rect x="132" y="32" width="40" height="40" fill="#ffc53d" opacity=".22"/>
+  <rect x="172" y="72" width="40" height="40" fill="#4f8cff" opacity=".22"/><rect x="172" y="112" width="40" height="40" fill="#4f8cff" opacity=".22"/>
+  <g stroke-width="5" stroke-linecap="round">
+    <path d="M92 32 H172 M92 72 H172 M92 32 V72 M132 32 V72 M172 32 V72 M92 112 H132" stroke="#ffc53d"/>
+    <path d="M172 72 H212 M172 112 H212 M172 152 H212 M172 72 V152 M212 72 V152 M212 32 V72" stroke="#4f8cff"/>
+    <path d="M132 112 V152" stroke="#ffc53d" opacity=".5"/>
+  </g>
+  <g fill="#eceef2">
+    <circle cx="92" cy="32" r="4"/><circle cx="132" cy="32" r="4"/><circle cx="172" cy="32" r="4"/><circle cx="212" cy="32" r="4"/><circle cx="252" cy="32" r="4"/>
+    <circle cx="92" cy="72" r="4"/><circle cx="132" cy="72" r="4"/><circle cx="172" cy="72" r="4"/><circle cx="212" cy="72" r="4"/><circle cx="252" cy="72" r="4"/>
+    <circle cx="92" cy="112" r="4"/><circle cx="132" cy="112" r="4"/><circle cx="172" cy="112" r="4"/><circle cx="212" cy="112" r="4"/><circle cx="252" cy="112" r="4"/>
+    <circle cx="92" cy="152" r="4"/><circle cx="132" cy="152" r="4"/><circle cx="172" cy="152" r="4"/><circle cx="212" cy="152" r="4"/><circle cx="252" cy="152" r="4"/>
+  </g>
+  <g font-family="system-ui,sans-serif" font-weight="700" font-size="16" text-anchor="middle"><text x="112" y="58" fill="#ffc53d">Y</text><text x="152" y="58" fill="#ffc53d">Y</text><text x="192" y="98" fill="#4f8cff">T</text><text x="192" y="138" fill="#4f8cff">T</text></g>
+</svg>
