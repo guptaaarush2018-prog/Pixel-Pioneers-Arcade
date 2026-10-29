@@ -24,8 +24,17 @@
     <div class="overlay" id="overlay" hidden></div>
   </main>
 
-  <p class="help"><kbd>↑</kbd> gas · <kbd>↓</kbd> brake · <kbd>←</kbd><kbd>→</kbd> steer · <kbd>P</kbd> pause</p>
-  <div class="touchpad">
+  <p class="help" id="help"><kbd>↑</kbd> gas · <kbd>↓</kbd> brake · <kbd>←</kbd><kbd>→</kbd> steer · <kbd>P</kbd> pause</p>
+  <div class="toolbar" id="editor" hidden>
+    <button class="btn secondary" id="ed-undo" type="button">Undo</button>
+    <button class="btn secondary" id="ed-delete" type="button">Delete corner</button>
+    <button class="btn secondary" id="ed-reverse" type="button">Reverse</button>
+    <button class="btn secondary" id="ed-theme" type="button">Theme</button>
+    <button class="btn secondary" id="ed-clear" type="button">Clear</button>
+    <button class="btn" id="ed-save" type="button">Save</button>
+    <button class="btn secondary" id="ed-exit" type="button">Exit</button>
+  </div>
+  <div class="touchpad" id="touchpad">
     <button id="left" type="button">◀</button>
     <button id="brake" type="button">Brake</button>
     <button id="right" type="button">▶</button>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <rect width="320" height="200" fill="#7fc8a9"/>
+  <rect x="80" width="160" height="200" fill="#d9dee6"/>
+  <rect x="84" y="30" width="72" height="34" fill="#42a5f5" opacity=".7"/><rect x="164" y="30" width="72" height="34" fill="#ef5350" opacity=".7"/>
+  <g font-family="system-ui,sans-serif" font-weight="800" font-size="20" fill="#fff" text-anchor="middle"><text x="120" y="54">×3</text><text x="200" y="54">−12</text></g>
+  <g fill="#1e88e5"><circle cx="120" cy="140" r="4"/><circle cx="128" cy="144" r="4"/><circle cx="112" cy="146" r="4"/><circle cx="122" cy="152" r="4"/><circle cx="132" cy="134" r="4"/><circle cx="108" cy="134" r="4"/><circle cx="116" cy="128" r="4"/><circle cx="136" cy="150" r="4"/><circle cx="104" cy="152" r="4"/><circle cx="126" cy="128" r="4"/><circle cx="140" cy="140" r="4"/><circle cx="100" cy="142" r="4"/></g>
+  <g fill="#ef5350"><circle cx="200" cy="96" r="4"/><circle cx="208" cy="100" r="4"/><circle cx="192" cy="102" r="4"/><circle cx="204" cy="108" r="4"/><circle cx="196" cy="92" r="4"/></g>
+  <text x="120" y="182" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="800" font-size="18" fill="#0d47a1">42</text>
+</svg>

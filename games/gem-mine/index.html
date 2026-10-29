@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Gem Mine · Pixel Pioneers Arcade</title>
+  <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../assets/css/arcade.css">
+</head>
+<body class="game" data-game="gem-mine">
+  <header class="topbar">
+    <a class="back" href="../../index.html">← All games</a>
+    <h1>Gem Mine</h1>
+    <div class="stats">
+      <span>Gems<b id="gems">0</b></span>
+      <span>Per second<b id="rate">0</b></span>
+      <span>Depth<b id="depth">0 m</b></span>
+    </div>
+    <button class="icon-btn" id="mute" type="button">Sound on</button>
+  </header>
+
+  <main class="stage">
+    <canvas id="game"></canvas>
+    <div class="overlay" id="overlay" hidden></div>
+  </main>
+
+  <p class="help">Click the rock or press <kbd>Space</kbd> to dig · progress saves automatically and keeps going while you are away</p>
+
+  <script src="../../assets/js/config.js"></script>
+  <script src="../../assets/js/catalog.js"></script>
+  <script src="../../assets/js/arcade.js"></script>
+  <script src="../../assets/js/online.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

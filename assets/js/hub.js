@@ -1,7 +1,8 @@
 // Links point at index.html directly so the site also works when opened from disk.
 const gameUrl = g => `games/${g.id}/index.html`;
 const thumbUrl = g => `games/${g.id}/thumb.svg`;
-const BADGES = { multiplayer: 'Online multiplayer', ghost: 'Online ghosts' };
+const BADGES = { multiplayer: 'Online multiplayer', ghost: 'Online ghosts', live: 'Online multiplayer' };
+const badgeOn = g => (g.online === 'live' ? !!window.ARCADE_CONFIG?.relayUrl : Online.enabled);
 
 const grid = document.getElementById('games');
 const filters = document.getElementById('filters');
@@ -27,7 +28,7 @@ function renderCards() {
   for (const g of CATALOG) {
     if (active !== 'All' && g.genre !== active) continue;
     const best = Arcade.getBest(g.id);
-    const badge = g.online && Online.enabled ? `<span class="badge">${BADGES[g.online]}</span>` : '';
+    const badge = g.online && badgeOn(g) ? `<span class="badge">${BADGES[g.online]}</span>` : '';
     const card = document.createElement('a');
     card.className = 'card';
     card.href = gameUrl(g);

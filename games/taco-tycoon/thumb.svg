@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <rect width="320" height="200" fill="#7ec8e3"/>
+  <rect y="78" width="320" height="30" fill="#2f8fc9"/>
+  <rect y="108" width="320" height="40" fill="#e6cf8f"/>
+  <rect y="148" width="320" height="52" fill="#d9be78"/>
+  <circle cx="276" cy="36" r="18" fill="#ffd54f"/>
+  <rect x="96" y="72" width="120" height="72" fill="#ff7043"/>
+  <rect x="96" y="60" width="120" height="14" fill="#ffd54f"/>
+  <text x="156" y="71" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="800" font-size="11" fill="#5d2a14">TACOS</text>
+  <rect x="112" y="84" width="66" height="30" fill="#ffccbc"/>
+  <circle cx="122" cy="146" r="11" fill="#263238"/><circle cx="192" cy="146" r="11" fill="#263238"/>
+  <g><rect x="228" y="120" width="10" height="16" fill="#90caf9"/><circle cx="233" cy="114" r="6" fill="#90caf9"/><rect x="248" y="120" width="10" height="16" fill="#ef9a9a"/><circle cx="253" cy="114" r="6" fill="#ef9a9a"/><rect x="268" y="120" width="10" height="16" fill="#a5d6a7"/><circle cx="273" cy="114" r="6" fill="#a5d6a7"/></g>
+  <text x="228" y="100" font-family="system-ui,sans-serif" font-weight="700" font-size="16" fill="#2e7d32">+$6</text>
+</svg>

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Taco Truck Tycoon · Pixel Pioneers Arcade</title>
+  <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../assets/css/arcade.css">
+</head>
+<body class="game" data-game="taco-tycoon">
+  <header class="topbar">
+    <a class="back" href="../../index.html">← All games</a>
+    <h1>Taco Truck Tycoon</h1>
+    <div class="stats">
+      <span>Day<b id="day">-</b></span>
+      <span>Cash<b id="cash">-</b></span>
+      <span>Reputation<b id="rep">-</b></span>
+    </div>
+    <button class="icon-btn" id="mute" type="button">Sound on</button>
+  </header>
+
+  <main class="stage">
+    <canvas id="game"></canvas>
+    <div class="overlay" id="overlay" hidden></div>
+  </main>
+
+  <p class="help">Plan each morning, then tap the truck or press <kbd>Space</kbd> to cook faster during the lunch rush</p>
+
+  <script src="../../assets/js/config.js"></script>
+  <script src="../../assets/js/catalog.js"></script>
+  <script src="../../assets/js/arcade.js"></script>
+  <script src="../../assets/js/online.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

@@ -217,6 +217,17 @@ body.game {
 }
 .touchpad button:active { background: var(--line); }
 
+/* Row of tool buttons under the canvas, e.g. Pocket Racer's track editor. */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 16px 14px;
+}
+.toolbar[hidden] { display: none; }
+.toolbar .btn { padding: 8px 14px; font-size: 14px; }
+
 @media (pointer: coarse) {
   .touchpad { display: flex; }
   .help { display: none; }
