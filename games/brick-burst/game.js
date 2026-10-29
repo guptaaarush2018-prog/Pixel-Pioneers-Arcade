@@ -330,15 +330,20 @@
   }
 
   reset();
-  ui.show({
-    title: 'Brick Burst',
-    html: `<ul>
-      <li>Move the paddle to keep the ball in play and break every brick.</li>
-      <li>Where the ball hits the paddle decides where it goes.</li>
-      <li>Catch power-ups: <b>W</b> wide paddle, <b>M</b> multi-ball, <b>S</b> slow ball, <b>+</b> extra life.</li>
-    </ul>`,
-    button: 'Start',
-    onAction: start,
+  Versus.attach({
+    ui,
+    start,
+    score: () => score,
+    intro: {
+      title: 'Brick Burst',
+      html: `<ul>
+        <li>Move the paddle to keep the ball in play and break every brick.</li>
+        <li>Where the ball hits the paddle decides where it goes.</li>
+        <li>Catch power-ups: <b>W</b> wide paddle, <b>M</b> multi-ball, <b>S</b> slow ball, <b>+</b> extra life.</li>
+      </ul>`,
+      button: 'Start',
+      onAction: start,
+    },
   });
   requestAnimationFrame(frame);
 })();

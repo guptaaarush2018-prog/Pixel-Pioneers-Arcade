@@ -1,3 +1,4 @@
+const LOCAL_GAMES = CATALOG.filter(g => !g.url);
 const page = document.getElementById('page');
 
 if (!Online.enabled) {
@@ -9,12 +10,12 @@ if (!Online.enabled) {
     <section class="box">
       <table class="table">
         <thead><tr><th>Game</th><th style="text-align:right">Your best</th></tr></thead>
-        <tbody>${CATALOG.map(g => `<tr><td>${g.title}</td><td class="num">${Arcade.getBest(g.id).toLocaleString()}</td></tr>`).join('')}</tbody>
+        <tbody>${LOCAL_GAMES.map(g => `<tr><td>${g.title}</td><td class="num">${Arcade.getBest(g.id).toLocaleString()}</td></tr>`).join('')}</tbody>
       </table>
     </section>`;
 } else {
   const fromUrl = new URLSearchParams(location.search).get('game');
-  const initial = CATALOG.some(g => g.id === fromUrl) ? fromUrl : CATALOG[0].id;
+  const initial = LOCAL_GAMES.some(g => g.id === fromUrl) ? fromUrl : LOCAL_GAMES[0].id;
 
   page.innerHTML = `
     <div class="page-head">
@@ -24,7 +25,7 @@ if (!Online.enabled) {
     <section class="box">
       <div class="section-head">
         <select class="select" id="game" aria-label="Game">
-          ${CATALOG.map(g => `<option value="${g.id}"${g.id === initial ? ' selected' : ''}>${g.title}</option>`).join('')}
+          ${LOCAL_GAMES.map(g => `<option value="${g.id}"${g.id === initial ? ' selected' : ''}>${g.title}</option>`).join('')}
         </select>
         <span class="board-note" id="mine"></span>
       </div>

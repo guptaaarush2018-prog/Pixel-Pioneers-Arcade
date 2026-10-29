@@ -384,8 +384,9 @@
       closed: () => { if (net) opponentGone(); },
     };
     try {
-      const res = how === 'quick' ? await Relay.quickMatch('rune', handlers)
+      const res = how === 'quick' ? await Relay.quickMatch('rune', handlers, 'Match')
         : how === 'create' ? await Relay.createRoom('rune', handlers)
+        : how === 'public' ? await Relay.joinPublic(code, handlers)
         : await Relay.joinRoom('rune', code, handlers);
       if (cancelled) { res.conn.close(); return; }
       net = { conn: res.conn, names: [Arcade.profile().name, 'Opponent'], sendT: 0, want: { me: false, them: false } };
@@ -490,9 +491,11 @@
             <button class="btn secondary" type="button" data-net="join" ${online ? '' : 'disabled'}>Join</button>
           </div>
         </div>
-        <p class="error">${error}</p>`,
+        <p class="error">${error}</p>
+        <div data-waiting></div>`,
       button: null,
       onRender: panel => {
+        Relay.showWaiting(panel.querySelector('[data-waiting]'), room => goOnline('public', room));
         panel.querySelectorAll('[data-bot]').forEach(b => b.addEventListener('click', () => startBot(+b.dataset.bot)));
         const code = panel.querySelector('#code');
         panel.querySelectorAll('[data-net]').forEach(b => b.addEventListener('click', () => goOnline(b.dataset.net, code.value)));
@@ -851,5 +854,7 @@
   }
 
   showMenu();
+  const invite = Relay.takeInvite();
+  if (invite) goOnline('public', invite);
   requestAnimationFrame(frame);
 })();

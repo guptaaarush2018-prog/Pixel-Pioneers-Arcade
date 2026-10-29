@@ -1,8 +1,9 @@
-// Shared header for the hub pages: <header class="site-header" data-page="games|leaderboards|profile">
+// Shared header for the hub pages: <header class="site-header" data-page="games|lobby|leaderboards|profile">
 (() => {
   const header = document.querySelector('.site-header');
   const links = [
     ['games', 'index.html', 'Games'],
+    ['lobby', 'lobby.html', 'Lobby'],
     ['leaderboards', 'leaderboards.html', 'Leaderboards'],
     ['profile', 'profile.html', 'Profile'],
   ];

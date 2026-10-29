@@ -185,7 +185,7 @@ const Arcade = (() => {
   }
 
   function achievementList() {
-    const games = window.CATALOG || [];
+    const games = (window.CATALOG || []).filter(g => !g.url); // linked games keep their own scores
     const list = [
       { id: 'first-finish', title: 'First Run', desc: 'Finish your first game.', test: s => s.totalPlays >= 1 },
       { id: 'ten-games', title: 'Warmed Up', desc: 'Finish 10 games.', test: s => s.totalPlays >= 10 },
@@ -276,15 +276,19 @@ const Arcade = (() => {
   function finish(ui, { score, title = 'Game Over', lines = [], button = 'Play again', onAction, delay = 600, html = '' }) {
     const isBest = submitScore(gameId, score);
     countPlay();
+    // During an online duel (versus.js) the panel also shows the duel result and a rematch button.
+    const duel = (typeof Versus !== 'undefined' && Versus.finished(score)) || {};
     ui.show({
       title,
       html: `<p class="big">${score.toLocaleString()}</p>
         ${isBest && score > 0 ? '<p class="new-best">New personal best</p>' : ''}
+        ${duel.html || ''}
         ${lines.map(l => `<p>${l}</p>`).join('')}${html}
         <div class="board" data-board></div>`,
-      button,
-      onAction,
+      button: duel.button || button,
+      onAction: duel.onAction || onAction,
       delay,
+      onRender: duel.onRender,
     });
     if (typeof Online !== 'undefined' && Online.enabled && score > 0) {
       const slot = document.querySelector('[data-board]');

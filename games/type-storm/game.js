@@ -266,16 +266,21 @@
   }
 
   reset();
-  ui.show({
-    title: 'Type Storm',
-    html: `<ul>
-      <li>Type a falling word to destroy it before it hits the ground.</li>
-      <li>Start typing any word to lock onto it. Every word on screen starts with a different letter.</li>
-      <li>Each word that lands costs a shield. Clearing a wave gives one back.</li>
-      <li>Every 5 words in a row without a typo raises your multiplier.</li>
-    </ul>`,
-    button: 'Start typing',
-    onAction: start,
+  Versus.attach({
+    ui,
+    start,
+    score: () => score,
+    intro: {
+      title: 'Type Storm',
+      html: `<ul>
+        <li>Type a falling word to destroy it before it hits the ground.</li>
+        <li>Start typing any word to lock onto it. Every word on screen starts with a different letter.</li>
+        <li>Each word that lands costs a shield. Clearing a wave gives one back.</li>
+        <li>Every 5 words in a row without a typo raises your multiplier.</li>
+      </ul>`,
+      button: 'Start typing',
+      onAction: start,
+    },
   });
   requestAnimationFrame(frame);
 })();

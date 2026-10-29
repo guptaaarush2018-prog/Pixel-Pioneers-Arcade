@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <defs><radialGradient id="f" cx="50%" cy="45%" r="70%"><stop offset="0" stop-color="#1f7a4a"/><stop offset="1" stop-color="#0f3f27"/></radialGradient></defs>
+  <rect width="320" height="200" fill="url(#f)"/>
+  <g font-family="system-ui,sans-serif" font-weight="700">
+    <rect x="40" y="62" width="58" height="82" rx="7" fill="#fbfbf8" opacity=".5"/><text x="48" y="86" font-size="18" fill="#1b1e24" opacity=".6">4</text>
+    <rect x="130" y="46" width="66" height="96" rx="8" fill="#fbfbf8" stroke="#ffc53d" stroke-width="3"/><text x="139" y="72" font-size="22" fill="#d43b3b">7</text><text x="150" y="118" font-size="34" fill="#d43b3b">♦</text>
+    <path d="M250 60 l22 26 h-44z" fill="#3ddc84"/><path d="M250 142 l22 -26 h-44z" fill="#ff7a7a"/>
+    <text x="250" y="104" text-anchor="middle" font-size="13" fill="#fff">or</text>
+    <rect x="110" y="156" width="106" height="28" rx="14" fill="rgba(10,12,16,.7)"/><text x="163" y="176" text-anchor="middle" font-size="15" fill="#ffc53d">×2.11</text>
+  </g>
+</svg>

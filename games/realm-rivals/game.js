@@ -30,6 +30,8 @@
     { name: 'Emberreach', color: '#ff5d5d', x: 670, y: 180, power: 460 },
   ];
   const HOME = { x: 780, y: 125 };
+  const FOE = { x: 640, y: 118, color: '#ff5d5d' }; // the other player's kingdom in an online match
+  const SEND_EVERY = 1;   // seconds between status updates online
 
   const canvas = document.getElementById('game');
   const ctx = Arcade.setupCanvas(canvas, W, H);
@@ -41,6 +43,7 @@
   let speed = 1;
   let buttons = [];
   let selection = { kind: 'none' };
+  let net = null;   // online match: { conn, host, names, sendT, want }
 
   function newGame() {
     k = {
@@ -53,7 +56,10 @@
       raidT: 110,
       rivals: RIVALS.map(r => ({ ...r, hp: 100, conquered: false })),
       log: [], wins: 0, defended: 0,
+      foe: null,            // online: { name, power, castle, conquered, glory, player: true }
+      incoming: null,       // online: seconds until the other player's army arrives
     };
+    if (net) k.foe = { ...FOE, name: net.names[1], power: 30, castle: CASTLE_MAX, conquered: 0, glory: 0, player: true };
     k.plots[0] = { type: 'farm', lv: 1 };
     k.plots[1] = { type: 'mine', lv: 1 };
     k.plots[2] = { type: 'barracks', lv: 1 };
@@ -109,6 +115,14 @@
 
     tickMarch(dt);
     tickRaid(dt);
+    if (k.incoming !== null) k.incoming = Math.max(0, k.incoming - dt);
+    if (net) {
+      net.sendT -= dt;
+      if (net.sendT <= 0) {
+        net.sendT = SEND_EVERY;
+        net.conn.send('status', { d: Math.round(defence()), c: Math.round(k.castle), n: k.rivals.filter(r => r.conquered).length, g: Math.round(k.glory) });
+      }
+    }
   }
 
   function train(u) {
@@ -146,6 +160,7 @@
     if (k.march || r.conquered || !armyCount(k.army)) return;
     k.march = { target: r, army: { ...k.army }, t: 0, phase: 'out', loot: null };
     for (const u of UNITS) k.army[u.id] = 0;
+    if (r.player) net?.conn.send('march');
     say(`Your army marches on ${r.name}.`);
     Arcade.tone({ freq: 220, to: 330, dur: 0.2, type: 'sawtooth', vol: 0.04 });
   }
@@ -158,7 +173,14 @@
     const m = k.march;
     if (!m) return;
     m.t += dt;
+    if (m.phase === 'siege') return; // waiting to hear how the attack on the other player went
     if (m.t < MARCH) return;
+    if (m.phase === 'out' && m.target.player) {
+      m.phase = 'siege';
+      net?.conn.send('siege', { power: Math.round(armyPower(m.army) * Arcade.rand(0.85, 1.15)) });
+      if (!net) siegeResult({ win: false, lost: 0 });
+      return;
+    }
     if (m.phase === 'out') {
       const r = m.target;
       const atk = armyPower(m.army) * Arcade.rand(0.85, 1.15);
@@ -197,6 +219,51 @@
     }
     k.march = null;
     if (k.rivals.every(r => r.conquered)) victory();
+  }
+
+  // ---------- Online: attacks between the two players ----------
+
+  // Attacker: the defender's game decided the battle and sends back the outcome.
+  function siegeResult({ win, gold = 0, food = 0, lost = 0 }) {
+    const m = k.march;
+    if (!m || m.phase !== 'siege') return;
+    loseShare(m.army, lost);
+    if (win) {
+      m.loot = { gold, food };
+      k.glory += 300;
+      say(`You sacked ${m.target.name}'s castle and took ${gold} gold and ${food} food!`, '#ffc53d');
+      Arcade.tone({ freq: 523, to: 1046, dur: 0.4, type: 'triangle', vol: 0.06 });
+    } else {
+      say(`${m.target.name}'s defences held. The survivors retreat.`, '#ff9a7a');
+      Arcade.tone({ freq: 300, to: 120, dur: 0.4, type: 'sawtooth', vol: 0.04 });
+    }
+    m.phase = 'back';
+    m.t = 0;
+  }
+
+  // Defender: fight it out against everything at home, like a raid.
+  function onSiege(power) {
+    k.incoming = null;
+    const def = defence() * Arcade.rand(0.9, 1.1);
+    const name = net.names[1];
+    if (def >= power) {
+      loseShare(k.army, Math.min(0.6, (power / Math.max(1, def)) * 0.35));
+      k.glory += 200;
+      k.defended++;
+      say(`You threw back ${name}'s army!`, '#9be37a');
+      Arcade.tone({ freq: 523, to: 784, dur: 0.25, type: 'triangle', vol: 0.05 });
+      net.conn.send('siegeResult', { win: false, lost: Math.min(0.95, 0.55 + (def - power) / Math.max(1, def)) });
+      return;
+    }
+    const gold = Math.round(k.gold * 0.25), food = Math.round(k.food * 0.25);
+    k.gold -= gold;
+    k.food -= food;
+    loseShare(k.army, 0.3);
+    k.castle -= 25;
+    say(`${name} broke through and looted your stores!`, '#ff7a7a');
+    Arcade.tone({ freq: 200, to: 60, dur: 0.5, type: 'sawtooth', vol: 0.05 });
+    net.conn.send('siegeResult', { win: true, gold, food, lost: Math.min(0.8, (def / power) * 0.5) });
+    if (k.castle <= 0) defeat();
   }
 
   function tickRaid(dt) {
@@ -240,36 +307,214 @@
 
   function victory() {
     state = 'over';
+    if (net) return onlineResult(true, 'You conquered all five realms first!');
     const bonus = Math.max(0, Math.round(3000 - k.time * 3));
     const score = Math.round(k.glory + 2000 + bonus);
     Arcade.flag('realm-rivals-win');
     Arcade.finish(ui, {
       score, title: 'All realms are yours!',
       lines: [`Conquered in ${fmtTime(k.time)} · ${k.wins} victories · ${k.defended} raids held off`],
-      onAction: start,
+      button: 'Menu',
+      onAction: () => showMenu(),
     });
   }
 
   function defeat() {
     state = 'over';
+    if (net) return onlineResult(false, 'Your castle has fallen.');
     Arcade.finish(ui, {
       score: Math.round(k.glory), title: 'Your castle has fallen',
       lines: [`${k.rivals.filter(r => r.conquered).length} of 5 realms conquered · lasted ${fmtTime(k.time)}`],
-      onAction: start,
+      button: 'Menu',
+      onAction: () => showMenu(),
     });
   }
 
   const fmtTime = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 
   function start() {
+    leaveNet();
     newGame();
     speed = 1;
     state = 'playing';
     ui.hide();
   }
 
+  // ---------- Online match flow ----------
+
+  function onlineResult(won, why) {
+    state = 'over';
+    net.conn.send(won ? 'won' : 'fell');
+    showOnlineResult(won, why);
+  }
+
+  function showOnlineResult(won, why) {
+    state = 'over';
+    Arcade.countPlay();
+    Arcade.flag('online-match');
+    if (won) Arcade.flag('realm-rivals-online-win');
+    Arcade.tone(won ? { freq: 523, to: 1046, dur: 0.4, type: 'triangle', vol: 0.06 } : { freq: 300, to: 120, dur: 0.5, type: 'sawtooth', vol: 0.04 });
+    ui.show({
+      title: won ? 'Victory!' : 'Defeat',
+      html: `<p>${why}</p><p>${Math.round(k.glory)} glory · ${k.rivals.filter(r => r.conquered).length} of 5 realms · lasted ${fmtTime(k.time)}</p>
+        <div class="menu"><button class="btn secondary" type="button" data-leave>Leave</button></div>
+        <p class="muted-note" data-wait>A rematch starts when you both press it.</p>`,
+      button: 'Rematch',
+      onAction: () => {
+        if (!net) return showMenu();
+        net.want.me = true;
+        net.conn.send('rematch');
+        document.querySelector('[data-wait]').textContent = 'Waiting for your opponent…';
+        maybeRematch();
+      },
+      onRender: panel => panel.querySelector('[data-leave]').addEventListener('click', () => showMenu()),
+    });
+  }
+
+  async function goOnline(how, code) {
+    let cancelled = false;
+    const cancel = () => { cancelled = true; showMenu(); };
+    ui.show({ title: 'Connecting…', html: '<p>Waking up the game server. The first connection can take up to a minute.</p>', button: 'Cancel', onAction: cancel });
+    const handlers = {
+      ready: () => {
+        if (cancelled || !net) return;
+        net.conn.send('hello', { name: Arcade.profile().name });
+        if (net.host) startOnline();
+      },
+      event: onNet,
+      left: opponentGone,
+      closed: () => { if (net) opponentGone(); },
+    };
+    try {
+      const res = how === 'quick' ? await Relay.quickMatch('realm', handlers, 'Kingdom war')
+        : how === 'create' ? await Relay.createRoom('realm', handlers)
+        : how === 'public' ? await Relay.joinPublic(code, handlers)
+        : await Relay.joinRoom('realm', code, handlers);
+      if (cancelled) { res.conn.close(); return; }
+      net = { conn: res.conn, host: res.slot === 1, names: [Arcade.profile().name, 'Rival'], sendT: 0, want: { me: false, them: false } };
+      if (net.host) {
+        ui.show({
+          title: how === 'create' ? 'Waiting for a friend' : 'Looking for an opponent…',
+          html: how === 'create'
+            ? `<p>Share this code. The war starts as soon as they join.</p><p class="code">${res.code}</p>`
+            : '<p>You\'ll be matched with the next player who presses Quick match.</p>',
+          button: 'Cancel',
+          onAction: cancel,
+        });
+      } else {
+        ui.show({ title: 'Opponent found', html: '<p>Starting…</p>', button: null });
+      }
+    } catch (e) {
+      if (!cancelled) showMenu(e.message);
+    }
+  }
+
+  function startOnline() {
+    net.want = { me: false, them: false };
+    net.conn.send('start');
+    beginOnline();
+  }
+
+  function beginOnline() {
+    newGame();
+    speed = 1;
+    state = 'playing';
+    say('Your rival rules the red castle to the west. Raid them, or conquer the five realms first.', '#ff9a7a');
+    ui.hide();
+  }
+
+  function onNet(name, data) {
+    if (!net) return;
+    if (name === 'hello') {
+      net.names[1] = String(data?.name || 'Rival').slice(0, 24);
+      if (k.foe) k.foe.name = net.names[1];
+    } else if (name === 'start' && !net.host) beginOnline();
+    else if (name === 'status' && k.foe) Object.assign(k.foe, { power: +data.d || 0, castle: +data.c || 0, conquered: +data.n || 0, glory: +data.g || 0 });
+    else if (name === 'march' && state === 'playing') {
+      k.incoming = MARCH;
+      say(`${net.names[1]}'s army is marching on you! It arrives in ${MARCH} seconds.`, '#ff9a7a');
+      Arcade.tone({ freq: 880, to: 440, dur: 0.3, type: 'square', vol: 0.04 });
+    } else if (name === 'siege' && state === 'playing') onSiege(+data.power || 0);
+    else if (name === 'siegeResult') siegeResult(data || {});
+    else if (name === 'won' && state === 'playing') showOnlineResult(false, `${net.names[1]} conquered all five realms first.`);
+    else if (name === 'fell' && state === 'playing') showOnlineResult(true, `${net.names[1]}'s castle has fallen!`);
+    else if (name === 'rematch') {
+      net.want.them = true;
+      maybeRematch();
+    } else if (name === 'quit') opponentGone();
+  }
+
+  function maybeRematch() {
+    if (net?.host && net.want.me && net.want.them) startOnline();
+  }
+
+  function opponentGone() {
+    if (!net) return;
+    const name = net.names[1];
+    const wasPlaying = state === 'playing';
+    leaveNet(false);
+    if (wasPlaying) {
+      state = 'over';
+      Arcade.countPlay();
+      Arcade.flag('online-match');
+      Arcade.flag('realm-rivals-online-win');
+      ui.show({ title: `${name} surrendered`, html: '<p>Their kingdom is yours. You win!</p>', button: 'Back to menu', onAction: () => showMenu() });
+    } else if (state === 'over') {
+      document.querySelector('[data-wait]')?.replaceChildren(`${name} left.`);
+    } else {
+      showMenu(`${name} left.`);
+    }
+  }
+
+  function leaveNet(tell = true) {
+    if (!net) return;
+    if (tell) net.conn.send('quit');
+    net.conn.close();
+    net = null;
+  }
+  window.addEventListener('pagehide', () => net?.conn.send('quit'));
+
+  function showMenu(error = '') {
+    leaveNet();
+    state = 'menu';
+    newGame();
+    const online = Relay.enabled;
+    ui.show({
+      title: 'Realm Rivals',
+      html: `<ul>
+        <li><b>Farms</b> feed your army, <b>mines</b> pay for everything.</li>
+        <li>Train troops at the <b>barracks</b>, then attack rivals on the map. Three wins topple a realm.</li>
+        <li>Rivals raid you too. Troops at home, <b>walls</b> and <b>watchtowers</b> defend the castle.</li>
+        <li>Conquer all five realms before your castle falls.</li>
+      </ul>
+      <div class="menu">
+        <button class="btn" type="button" data-solo>Quick play</button>
+        <a class="btn secondary" href="kingdom.html">Kingdom (long-term) →</a>
+        ${online ? `<p class="muted-note" style="margin:6px 0 0">Kingdom war: race a real player to conquer the realms, and raid each other's castle</p>
+        <div class="row">
+          <button class="btn secondary" type="button" data-net="quick">Quick match</button>
+          <button class="btn secondary" type="button" data-net="create">Private room</button>
+        </div>
+        <div class="row">
+          <input class="field" id="code" maxlength="4" placeholder="CODE" autocomplete="off" aria-label="Room code">
+          <button class="btn secondary" type="button" data-net="join">Join</button>
+        </div>` : ''}
+      </div>
+      <p class="error">${Online.escape(error)}</p>
+      <div data-waiting></div>`,
+      button: null,
+      onRender: panel => {
+        panel.querySelector('[data-solo]').addEventListener('click', start);
+        const code = panel.querySelector('#code');
+        panel.querySelectorAll('[data-net]').forEach(b => b.addEventListener('click', () => goOnline(b.dataset.net, code.value)));
+        code?.addEventListener('keydown', e => { if (e.key === 'Enter') goOnline('join', code.value); });
+        Relay.showWaiting(panel.querySelector('[data-waiting]'), room => goOnline('public', room));
+      },
+    });
+  }
+
   function pause() {
-    if (state !== 'playing') return;
+    if (state !== 'playing' || net) return;
     state = 'paused';
     ui.show({ title: 'Paused', button: 'Resume', onAction: () => { state = 'playing'; ui.hide(); } });
   }
@@ -382,6 +627,14 @@
     }
 
     // Incoming raid banner.
+    if (k.incoming !== null && !k.raid) {
+      ctx.fillStyle = 'rgba(255,93,93,0.9)';
+      ctx.fillRect(160, 196, 280, 32);
+      ctx.fillStyle = '#fff';
+      ctx.font = '700 14px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${k.foe.name} attacks in ${Math.ceil(k.incoming)}s  ·  your defence ${Math.round(defence())}`, 300, 217);
+    }
     if (k.raid) {
       ctx.fillStyle = 'rgba(255,93,93,0.9)';
       ctx.fillRect(160, 196, 280, 32);
@@ -424,15 +677,33 @@
       buttons.push({ x: r.x - 30, y: r.y - 20, w: 60, h: 62, enabled: true, onClick: () => { selection = { kind: 'rival', r }; } });
     }
 
-    const dot = (from, to, t, color) => {
+    const foe = k.foe;
+    if (foe) {
+      ctx.strokeStyle = '#4a2a30';
+      ctx.setLineDash([4, 6]);
+      path(HOME, foe);
+      ctx.setLineDash([]);
+      const sel = selection.kind === 'foe';
+      ctx.fillStyle = foe.color;
+      ctx.fillRect(foe.x - 11, foe.y - 11, 22, 22);
+      if (sel) { ctx.strokeStyle = '#ffc53d'; ctx.lineWidth = 2; ctx.strokeRect(foe.x - 13, foe.y - 13, 26, 26); }
+      ctx.fillStyle = '#cfd4dc';
+      ctx.fillText(foe.name.length > 12 ? foe.name.slice(0, 11) + '…' : foe.name, foe.x, foe.y + 24);
+      ctx.fillStyle = '#ff9a7a';
+      ctx.fillText(`🛡 ${Math.round(foe.power)}`, foe.x, foe.y + 37);
+      buttons.push({ x: foe.x - 34, y: foe.y - 20, w: 68, h: 62, enabled: true, onClick: () => { selection = { kind: 'foe' }; } });
+      if (k.incoming !== null) dot(foe, HOME, 1 - k.incoming / MARCH, '#ff5d5d');
+    }
+
+    function dot(from, to, t, color) {
       ctx.fillStyle = color;
       ctx.beginPath();
       ctx.arc(from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t, 6, 0, Math.PI * 2);
       ctx.fill();
-    };
+    }
     if (k.march) {
       const t = Math.min(1, k.march.t / MARCH);
-      if (k.march.phase === 'out') dot(HOME, k.march.target, t, '#4f8cff');
+      if (k.march.phase === 'out' || k.march.phase === 'siege') dot(HOME, k.march.target, t, '#4f8cff');
       else dot(k.march.target, HOME, t, '#4f8cff');
     }
     if (k.raid) dot(k.raid.from, HOME, 1 - k.raid.t / 12, '#ff5d5d');
@@ -485,6 +756,18 @@
         const label = k.march ? 'Army is away' : !mine ? 'No troops at home' : mine > r.power * 1.15 ? 'Attack (good odds)' : mine > r.power * 0.85 ? 'Attack (risky)' : 'Attack (bad odds)';
         button(x, 308, w, 34, label, { enabled: !k.march && mine > 0, onClick: () => attack(r) });
       }
+    } else if (selection.kind === 'foe' && k.foe) {
+      const f = k.foe;
+      ctx.fillStyle = f.color;
+      ctx.font = '700 14px system-ui, sans-serif';
+      ctx.fillText(`${f.name} (player)`, x, 262);
+      ctx.fillStyle = '#8d94a1';
+      ctx.font = '500 12px system-ui, sans-serif';
+      ctx.fillText(`Defence ≈ ${Math.round(f.power)} · castle ${Math.round(f.castle)}/${CASTLE_MAX} · ${f.conquered}/5 realms`, x, 282);
+      const mine = armyPower(k.army);
+      ctx.fillText(`Your army at home: ${Math.round(mine)} power · a win loots 25% and hits their castle`, x, 298);
+      const label = k.march ? 'Army is away' : !mine ? 'No troops at home' : mine > f.power * 1.15 ? 'Raid them (good odds)' : mine > f.power * 0.85 ? 'Raid them (risky)' : 'Raid them (bad odds)';
+      button(x, 308, w, 34, label, { enabled: !k.march && mine > 0, onClick: () => attack(f) });
     } else {
       ctx.fillStyle = '#8d94a1';
       ctx.font = '500 12px system-ui, sans-serif';
@@ -516,7 +799,7 @@
     });
     ctx.globalAlpha = 1;
 
-    button(W - 96, H - 30, 86, 24, `${speed}× speed`, { onClick: () => { speed = speed === 1 ? 2 : 1; } });
+    if (!net) button(W - 96, H - 30, 86, 24, `${speed}× speed`, { onClick: () => { speed = speed === 1 ? 2 : 1; } });
   }
 
   function updateHud() {
@@ -541,17 +824,8 @@
     requestAnimationFrame(frame);
   }
 
-  newGame();
-  ui.show({
-    title: 'Realm Rivals',
-    html: `<ul>
-      <li><b>Farms</b> feed your army, <b>mines</b> pay for everything.</li>
-      <li>Train troops at the <b>barracks</b>, then attack rivals on the map. Three wins topple a realm.</li>
-      <li>Rivals raid you too. Troops at home, <b>walls</b> and <b>watchtowers</b> defend the castle.</li>
-      <li>Conquer all five realms before your castle falls.</li>
-    </ul>`,
-    button: 'Found your kingdom',
-    onAction: start,
-  });
+  showMenu();
+  const invite = Relay.takeInvite();
+  if (invite) goOnline('public', invite);
   requestAnimationFrame(frame);
 })();

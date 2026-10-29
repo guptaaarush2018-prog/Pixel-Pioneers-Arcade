@@ -1,4 +1,5 @@
 const page = document.getElementById('page');
+const LOCAL_GAMES = CATALOG.filter(g => !g.url);
 
 function formatTime(secs) {
   if (!secs) return '-';
@@ -14,7 +15,7 @@ function render() {
   const all = Arcade.achievementList();
   const general = all.filter(a => !a.game);
 
-  const gameRows = CATALOG.map(g => `
+  const gameRows = LOCAL_GAMES.map(g => `
     <tr>
       <td><a href="games/${g.id}/index.html">${g.title}</a></td>
       <td class="num">${Arcade.getBest(g.id).toLocaleString()}</td>

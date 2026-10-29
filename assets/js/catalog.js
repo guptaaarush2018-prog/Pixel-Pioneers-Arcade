@@ -1,17 +1,59 @@
 // Every game in the arcade. Add a new game here; its folder lives at games/<id>/ with an
 // index.html (body data-game="<id>") and a 16:10 thumb.svg.
 //   goals:  scores for the Bronze / Silver / Gold achievements
-//   online: 'multiplayer' or 'ghost' adds a badge on the hub when Firebase is set up; 'live'
-//           does the same when the real-time relay is (all games get leaderboards)
+//   online: 'ghost' adds a badge on the hub when Firebase is set up; 'live' (real-time matches)
+//           and 'duel' (online score duels, versus.js) do the same when the relay is
+//           (all games get leaderboards)
 //   extras: game-specific achievements, unlocked with Arcade.flag(id)
+//   url:    a game hosted elsewhere; the hub links out to it (with `thumb` and `by`), and it
+//           has no medals or leaderboard here
 window.CATALOG = [
+  {
+    id: 'stickman-battles',
+    title: 'Stickman Evolution: The 95th',
+    genre: 'Fighting',
+    desc: 'Fast stickman fights with friends or online. Made by Pixel Pioneers Studios.',
+    url: 'https://pixel-pioneers-studios.github.io/Stickman-Battles/',
+    thumb: 'assets/thumbs/stickman-battles.svg',
+    by: 'Pixel Pioneers Studios ↗',
+    online: 'live',
+  },
+  {
+    id: 'pixel-pitch',
+    title: 'Pixel Pitch',
+    genre: 'Sports',
+    desc: 'Four-a-side arcade football. Pass, sprint, slide in, and curl it past the keeper. Play the bots or anyone online.',
+    goals: [300, 700, 1200],
+    online: 'live',
+    extras: [
+      { id: 'pixel-pitch-win', title: 'Pixel Pitch: Match Winner', desc: 'Beat the bots.' },
+      { id: 'pixel-pitch-hard', title: 'Pixel Pitch: Golden Boot', desc: 'Beat the Hard bots.' },
+      { id: 'pixel-pitch-clean', title: 'Pixel Pitch: Clean Sheet', desc: 'Win without conceding.' },
+      { id: 'pixel-pitch-online-win', title: 'Pixel Pitch: Online Champion', desc: 'Win an online match.' },
+    ],
+  },
+  {
+    id: 'hoop-duel',
+    title: 'Hoop Duel',
+    genre: 'Sports',
+    desc: 'One-on-one, full-court basketball. Time your jump shot on the meter, dunk, block, and steal. Bots or online.',
+    goals: [300, 600, 1000],
+    online: 'live',
+    extras: [
+      { id: 'hoop-duel-win', title: 'Hoop Duel: Baller', desc: 'Beat the bot.' },
+      { id: 'hoop-duel-hard', title: 'Hoop Duel: MVP', desc: 'Beat the Hard bot.' },
+      { id: 'hoop-duel-three', title: 'Hoop Duel: From Downtown', desc: 'Score a three-pointer.' },
+      { id: 'hoop-duel-block', title: 'Hoop Duel: Not In My House', desc: 'Block a shot.' },
+      { id: 'hoop-duel-online-win', title: 'Hoop Duel: Streetball King', desc: 'Win an online match.' },
+    ],
+  },
   {
     id: 'pocket-racer',
     title: 'Pocket Racer',
     genre: 'Racing',
-    desc: 'Three quick laps against three rivals on six tracks, or build your own. Beat the fastest racer in the world, whose ghost runs with you.',
+    desc: 'Three quick laps against three rivals on six tracks, or build your own. Chase the world-record ghost, or race a real player online. R restarts instantly.',
     goals: [1200, 1800, 2300],
-    online: 'ghost',
+    online: 'live',
     extras: [{ id: 'pocket-racer-win', title: 'Pocket Racer: Podium Top', desc: 'Finish a race in 1st place.' }],
   },
   {
@@ -31,9 +73,15 @@ window.CATALOG = [
     id: 'realm-rivals',
     title: 'Realm Rivals',
     genre: 'Strategy',
-    desc: 'Build farms, mines and barracks, raise an army, and conquer five rival kingdoms before their raids bring down your castle.',
+    desc: 'Build farms, mines and barracks, raise an army, and conquer five rival kingdoms. Quick play, live wars against another player, or a long-term Kingdom that grows while you\'re away.',
     goals: [2000, 6000, 10000],
-    extras: [{ id: 'realm-rivals-win', title: 'Realm Rivals: High King', desc: 'Conquer all five realms.' }],
+    online: 'live',
+    extras: [
+      { id: 'realm-rivals-win', title: 'Realm Rivals: High King', desc: 'Conquer all five realms.' },
+      { id: 'realm-rivals-online-win', title: 'Realm Rivals: Warlord', desc: 'Win an online kingdom war.' },
+      { id: 'realm-kingdom-keep', title: 'Realm Rivals: Citadel', desc: 'Raise your Kingdom\'s keep to level 10.' },
+      { id: 'realm-kingdom-pvp', title: 'Realm Rivals: Conqueror', desc: 'Sack a real player\'s Kingdom.' },
+    ],
   },
   {
     id: 'taco-tycoon',
@@ -41,6 +89,7 @@ window.CATALOG = [
     genre: 'Tycoon',
     desc: 'Pick a spot, set your price, and stock up for the weather. Then work the lunch rush. Fourteen days to build a taco empire.',
     goals: [1500, 3000, 5000],
+    online: 'duel',
     extras: [
       { id: 'taco-tycoon-300', title: 'Taco Tycoon: Big Day', desc: 'Make $300 profit in one day.' },
       { id: 'taco-tycoon-mogul', title: 'Taco Tycoon: Taco Mogul', desc: 'Finish the season with $2,000.' },
@@ -64,6 +113,7 @@ window.CATALOG = [
     genre: 'Arcade',
     desc: 'Pick the right gates to grow your crowd, beat the red crowds, dodge the saws, and climb the stairs for a big multiplier.',
     goals: [500, 2000, 6000],
+    online: 'duel',
     extras: [{ id: 'crowd-rush-top', title: 'Crowd Rush: Sky High', desc: 'Reach the ×3.0 step.' }],
   },
   {
@@ -72,6 +122,7 @@ window.CATALOG = [
     genre: 'Racing',
     desc: 'Weave through highway traffic at ever-higher speeds. Close calls earn bonus points.',
     goals: [1000, 3000, 6000],
+    online: 'duel',
   },
   {
     id: 'box-battle',
@@ -79,7 +130,7 @@ window.CATALOG = [
     genre: 'Strategy',
     desc: 'Draw lines, close boxes, take another turn. Play the computer, a friend, or anyone online with a room code.',
     goals: [13, 16, 20],
-    online: 'multiplayer',
+    online: 'live',
     extras: [
       { id: 'box-battle-win', title: 'Box Battle: Outsmarted', desc: 'Beat the computer.' },
       { id: 'box-battle-online-win', title: 'Box Battle: Champion', desc: 'Win an online match.' },
@@ -91,6 +142,7 @@ window.CATALOG = [
     genre: 'Arcade',
     desc: 'Grow your noodle in a wrap-around arena. Chain bites for combos and grab prisms to slip through your own tail.',
     goals: [200, 600, 1500],
+    online: 'duel',
   },
   {
     id: 'crystal-swap',
@@ -98,6 +150,7 @@ window.CATALOG = [
     genre: 'Puzzle',
     desc: 'Swap crystals to make rows of three or more. You have 60 seconds, and big matches buy you more time.',
     goals: [2000, 5000, 9000],
+    online: 'duel',
   },
   {
     id: 'lantern-maze',
@@ -105,6 +158,7 @@ window.CATALOG = [
     genre: 'Maze',
     desc: 'Collect every spark in a dark maze while shadows close in. Your lantern is running low, so flash it wisely.',
     goals: [1000, 3000, 7000],
+    online: 'duel',
   },
   {
     id: 'brick-burst',
@@ -112,6 +166,7 @@ window.CATALOG = [
     genre: 'Arcade',
     desc: 'Bounce the ball, break every brick, catch power-ups. Each level is short and a little harder.',
     goals: [1500, 5000, 12000],
+    online: 'duel',
   },
   {
     id: 'type-storm',
@@ -119,6 +174,7 @@ window.CATALOG = [
     genre: 'Typing',
     desc: 'Words rain down from the sky. Type them before they land. Good practice that doesn\'t feel like it.',
     goals: [500, 1500, 3500],
+    online: 'duel',
   },
   {
     id: 'cloud-climber',
@@ -126,6 +182,7 @@ window.CATALOG = [
     genre: 'Platformer',
     desc: 'Bounce from platform to platform, all the way to space. Save your battery cells for rocket boosts.',
     goals: [500, 1500, 3000],
+    online: 'duel',
   },
   {
     id: 'stack-up',
@@ -133,6 +190,7 @@ window.CATALOG = [
     genre: 'Arcade',
     desc: 'One button. Drop each sliding block onto the tower; anything hanging over gets sliced off.',
     goals: [15, 30, 50],
+    online: 'duel',
   },
   {
     id: 'polarity-run',
@@ -140,5 +198,39 @@ window.CATALOG = [
     genre: 'Runner',
     desc: 'Flip gravity between the floor and the ceiling to dodge spikes. The faster it gets, the harder it is.',
     goals: [300, 800, 1500],
+    online: 'duel',
+  },
+  {
+    id: 'blackjack',
+    title: 'Blackjack',
+    genre: 'Cards',
+    desc: 'Beat the dealer to 21 with pretend chips. Double down, split pairs, and cash out at your peak.',
+    goals: [2000, 5000, 20000],
+    extras: [
+      { id: 'blackjack-natural', title: 'Blackjack: Natural', desc: 'Get dealt a blackjack.' },
+      { id: 'blackjack-big', title: 'Blackjack: High Roller', desc: 'Win $1,000 or more in one hand.' },
+    ],
+  },
+  {
+    id: 'video-poker',
+    title: 'Video Poker',
+    genre: 'Cards',
+    desc: 'Jacks or Better. Hold the cards you like, draw the rest, and chase a royal flush. Pretend chips only.',
+    goals: [2000, 5000, 20000],
+    extras: [
+      { id: 'video-poker-quads', title: 'Video Poker: Four of a Kind', desc: 'Make four of a kind or better.' },
+      { id: 'video-poker-royal', title: 'Video Poker: Royalty', desc: 'Hit a royal flush.' },
+    ],
+  },
+  {
+    id: 'high-low',
+    title: 'High-Low',
+    genre: 'Cards',
+    desc: 'Higher or lower? Every right guess multiplies the pot. Bank it before your luck runs out.',
+    goals: [2000, 5000, 20000],
+    extras: [
+      { id: 'high-low-streak', title: 'High-Low: Hot Streak', desc: 'Guess right 8 times in a row.' },
+      { id: 'high-low-big', title: 'High-Low: Big Bank', desc: 'Bank $1,000 or more profit at once.' },
+    ],
   },
 ];

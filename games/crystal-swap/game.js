@@ -346,15 +346,20 @@
     requestAnimationFrame(frame);
   }
 
-  ui.show({
-    title: 'Crystal Swap',
-    html: `<ul>
-      <li>Swap two neighboring crystals to line up 3 or more of the same kind.</li>
-      <li>Chain reactions multiply your points.</li>
-      <li>You have 60 seconds. Matching 4 or 5 adds extra time.</li>
-    </ul>`,
-    button: 'Start',
-    onAction: start,
+  Versus.attach({
+    ui,
+    start,
+    score: () => score,
+    intro: {
+      title: 'Crystal Swap',
+      html: `<ul>
+        <li>Swap two neighboring crystals to line up 3 or more of the same kind.</li>
+        <li>Chain reactions multiply your points.</li>
+        <li>You have 60 seconds. Matching 4 or 5 adds extra time.</li>
+      </ul>`,
+      button: 'Start',
+      onAction: start,
+    },
   });
   requestAnimationFrame(frame);
 })();

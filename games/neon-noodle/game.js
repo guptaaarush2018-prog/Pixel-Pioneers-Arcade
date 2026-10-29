@@ -173,16 +173,21 @@
   }
 
   function showIntro() {
-    ui.show({
-      title: 'Neon Noodle',
-      html: `<ul>
-        <li><b style="color:#3ef0ff">Orbs</b> grow you. Eat them quickly to build a combo up to x5.</li>
-        <li><b style="color:#ff4fd8">Prisms</b> let you pass through your own body for 5 seconds.</li>
-        <li><b style="color:#ffd23f">Clocks</b> slow time for 5 seconds.</li>
-        <li>The edges wrap around, but rocks appear as you grow. Don't hit them.</li>
-      </ul>`,
-      button: 'Play',
-      onAction: start,
+    Versus.attach({
+      ui,
+      start,
+      score: () => score,
+      intro: {
+        title: 'Neon Noodle',
+        html: `<ul>
+          <li><b style="color:#3ef0ff">Orbs</b> grow you. Eat them quickly to build a combo up to x5.</li>
+          <li><b style="color:#ff4fd8">Prisms</b> let you pass through your own body for 5 seconds.</li>
+          <li><b style="color:#ffd23f">Clocks</b> slow time for 5 seconds.</li>
+          <li>The edges wrap around, but rocks appear as you grow. Don't hit them.</li>
+        </ul>`,
+        button: 'Play',
+        onAction: start,
+      },
     });
   }
 

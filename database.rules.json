@@ -32,16 +32,31 @@
       }
     },
 
-    "rooms": {
-      "$code": {
+    "kingdoms": {
+      ".read": true,
+      ".indexOn": ["t", "power"],
+      "$player": {
+        ".write": true,
+        ".validate": "newData.hasChildren(['name', 'power', 'keep', 't']) && newData.child('name').val().matches(/^[A-Z][a-z]+[A-Z][a-z]+[0-9]{2}$/) && newData.child('power').isNumber() && newData.child('power').val() < 100000000 && newData.child('keep').isNumber() && newData.child('keep').val() <= 20 && newData.child('t').val() <= now"
+      }
+    },
+
+    "kinbox": {
+      "$player": {
         ".read": true,
-        ".write": "$code.matches(/^[A-Z]{4}$/)",
-        ".validate": "newData.hasChildren(['game', 'status'])",
-        "moves": {
-          "$move": {
-            ".validate": "newData.hasChildren(['l', 'p', 'r']) && newData.child('l').isNumber() && (newData.child('p').val() === 0 || newData.child('p').val() === 1) && newData.child('r').isNumber()"
-          }
+        ".write": true,
+        "$report": {
+          ".validate": "newData.hasChildren(['from', 'win', 'loss', 't']) && newData.child('from').val().matches(/^[A-Z][a-z]+[A-Z][a-z]+[0-9]{2}$/) && newData.child('win').isBoolean() && newData.child('loss').isNumber() && newData.child('loss').val() >= 0 && newData.child('loss').val() <= 0.9 && newData.child('t').val() <= now"
         }
+      }
+    },
+
+    "lobby": {
+      ".read": true,
+      ".indexOn": ["t"],
+      "$player": {
+        ".write": true,
+        ".validate": "newData.hasChildren(['game', 'room', 'name', 't']) && newData.child('game').isString() && newData.child('game').val().length <= 32 && newData.child('room').isString() && newData.child('room').val().matches(/^pp-[a-z0-9]+-q[0-9]+$/) && newData.child('name').val().matches(/^[A-Z][a-z]+[A-Z][a-z]+[0-9]{2}$/) && (!newData.child('label').exists() || (newData.child('label').isString() && newData.child('label').val().length <= 40)) && newData.child('t').val() <= now"
       }
     }
   }

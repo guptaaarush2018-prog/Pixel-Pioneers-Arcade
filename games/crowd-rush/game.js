@@ -337,15 +337,20 @@
     requestAnimationFrame(frame);
   }
 
-  ui.show({
-    title: 'Crowd Rush',
-    html: `<ul>
-      <li>Steer your crowd through the <b>blue gates</b> to grow it. Red ones shrink it.</li>
-      <li>Red crowds fight you one for one. Be bigger when you meet them.</li>
-      <li>Dodge the saws. At the end, climb the stairs: the higher you get, the bigger the multiplier.</li>
-    </ul>`,
-    button: 'Run!',
-    onAction: newRun,
+  Versus.attach({
+    ui,
+    start: newRun,
+    score: () => total,
+    intro: {
+      title: 'Crowd Rush',
+      html: `<ul>
+        <li>Steer your crowd through the <b>blue gates</b> to grow it. Red ones shrink it.</li>
+        <li>Red crowds fight you one for one. Be bigger when you meet them.</li>
+        <li>Dodge the saws. At the end, climb the stairs: the higher you get, the bigger the multiplier.</li>
+      </ul>`,
+      button: 'Run!',
+      onAction: newRun,
+    },
   });
   requestAnimationFrame(frame);
 })();

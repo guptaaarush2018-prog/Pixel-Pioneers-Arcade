@@ -194,15 +194,20 @@
   }
 
   reset();
-  ui.show({
-    title: 'Stack Up',
-    html: `<ul>
-      <li>Press <b>Space</b>, click, or tap to drop the sliding block.</li>
-      <li>Any part hanging over the edge gets sliced off, so your blocks get narrower.</li>
-      <li>Line it up perfectly to keep it whole. Three perfects in a row grow it back.</li>
-    </ul>`,
-    button: 'Start stacking',
-    onAction: start,
+  Versus.attach({
+    ui,
+    start,
+    score: () => height(),
+    intro: {
+      title: 'Stack Up',
+      html: `<ul>
+        <li>Press <b>Space</b>, click, or tap to drop the sliding block.</li>
+        <li>Any part hanging over the edge gets sliced off, so your blocks get narrower.</li>
+        <li>Line it up perfectly to keep it whole. Three perfects in a row grow it back.</li>
+      </ul>`,
+      button: 'Start stacking',
+      onAction: start,
+    },
   });
   requestAnimationFrame(frame);
 })();

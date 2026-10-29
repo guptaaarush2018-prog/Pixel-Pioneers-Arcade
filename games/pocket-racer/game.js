@@ -2,6 +2,7 @@
   const W = 800, H = 560, TRACK_W = 80, LAPS = 3, CAR_R = 13, STEP = 6;
   const TURN = 2.9;       // rad/s a car can turn once its tyres have full grip
   const GHOST_STEP = 0.1; // seconds between recorded ghost frames
+  const SEND_EVERY = 1 / 15; // seconds between position updates in an online race
   const PAR_SPEED = 150;  // px/s; averaging faster than this earns a time bonus (Pro rivals average ~200)
 
   const THEMES = [
@@ -49,6 +50,9 @@
   let level = LEVELS.find(l => l.id === Arcade.load('racer:level', 'pro')) || LEVELS[1];
   let selected = TRACKS[0];
   let edit = null;
+  let net = null;   // online race: { conn, host, names, want, sendT, target }
+  let raceOnline = false; // stays set if the opponent leaves mid-race, so it never scores as solo
+  const online = () => raceOnline;
   const keys = { up: false, down: false, left: false, right: false };
   let touchGas = false;
 
@@ -235,13 +239,22 @@
     };
   }
 
-  function setupRace(t) {
+  // Online races are just the two of you: no rivals, side by side on the front row.
+  function setupRace(t, vs = null) {
     track = t;
     ({ path, length: trackLen } = buildPath(t.points));
     N = path.length;
     racing = planRacingLine();
     renderTrack(t.grass, path);
-    cars = [makeCar(3, { color: '#ffc53d' }), ...RIVALS.map((r, i) => makeCar(i, r))];
+    if (vs) {
+      const mine = makeCar(vs.host ? 0 : 1, { color: '#ffc53d' });
+      const theirs = makeCar(vs.host ? 1 : 0, { color: '#ff5d5d' });
+      theirs.remote = true;
+      cars = [mine, theirs];
+      vs.remote = theirs;
+    } else {
+      cars = [makeCar(3, { color: '#ffc53d' }), ...RIVALS.map((r, i) => makeCar(i, r))];
+    }
     player = cars[0];
     raceTime = 0;
     countdown = 3.5;
@@ -250,7 +263,7 @@
     recorded = [];
     recordAcc = 0;
     ghost = null;
-    loadGhost();
+    if (!vs) loadGhost();
     updateHud();
   }
 
@@ -353,6 +366,7 @@
     raceTime += dt;
 
     for (const car of cars) {
+      if (car.remote) { followRemote(car, dt); continue; }
       if (car.finished !== null && car !== player) { drive(car, dt, false, true, 0); continue; }
       const input = car.ai
         ? aiInput(car, dt)
@@ -376,8 +390,16 @@
       recorded.push({ x: player.x, y: player.y, a: player.a });
     }
 
+    if (net) {
+      net.sendT -= dt;
+      if (net.sendT <= 0 || player.finished !== null) {
+        net.sendT = SEND_EVERY;
+        net.conn.state({ x: Math.round(player.x), y: Math.round(player.y), a: Math.round(player.a * 100) / 100, d: player.dist, f: player.finished });
+      }
+    }
+
     updateHud();
-    if (player.finished !== null) finishRace();
+    if (player.finished !== null) (online() ? finishOnline() : finishRace());
   }
 
   const position = car => 1 + cars.filter(c => c !== car && (
@@ -419,11 +441,169 @@
     Arcade.finish(ui, {
       score,
       title,
-      lines: [summary, `${level.name} rivals`],
+      lines: [summary, `${level.name} rivals`, '<span class="muted-note">Press R to restart on this track</span>'],
       button: 'Race again',
       onAction: showMenu,
     });
   }
+
+  // ---------- Online races ----------
+
+  // Each player drives their own car and streams where it is; the other car is drawn from that.
+  function followRemote(car, dt) {
+    const t = net?.target;
+    if (!t) return;
+    const k = Math.min(1, dt * 12);
+    car.x += (t.x - car.x) * k;
+    car.y += (t.y - car.y) * k;
+    car.a += angleDiff(t.a, car.a) * k;
+    car.dist = t.d;
+    car.lap = Math.floor(t.d / N);
+    if (t.f !== null && t.f !== undefined) car.finished = t.f;
+  }
+
+  function finishOnline() {
+    state = 'online-over';
+    const time = player.finished;
+    const rival = cars.find(c => c.remote);
+    const won = !rival || rival.finished === null || time <= rival.finished;
+    saveGhost(time);
+    Arcade.countPlay();
+    if (net) Arcade.flag('online-match');
+    if (won && net) Arcade.flag('pocket-racer-win');
+    Arcade.tone(won ? { freq: 523, to: 1046, dur: 0.4, type: 'triangle', vol: 0.06 } : { freq: 300, to: 120, dur: 0.5, type: 'sawtooth', vol: 0.04 });
+    const them = net ? esc(net.names[1]) : 'Your opponent';
+    const showResult = () => {
+      const r = cars.find(c => c.remote);
+      const theirTime = r && r.finished !== null ? `${them} ${r.finished.toFixed(2)}s` : net ? `${them} is still racing…` : `${them} left`;
+      ui.show({
+        title: won ? 'You win the race!' : `${them} wins`,
+        html: `<p class="big">${time.toFixed(2)}s</p><p>${esc(track.name)} · best lap ${bestLap.toFixed(2)}s</p><p data-them>${theirTime}</p>
+          ${net ? '<div class="menu"><button class="btn secondary" type="button" data-leave>Leave</button></div><p class="muted-note" data-wait>A rematch starts when you both press it.</p>' : ''}`,
+        button: net ? 'Rematch' : 'Back to menu',
+        delay: 600,
+        onAction: () => {
+          if (!net) return showMenu();
+          net.want.me = true;
+          net.conn.send('rematch');
+          document.querySelector('[data-wait]').textContent = 'Waiting for your opponent…';
+          maybeRematch();
+        },
+        onRender: panel => panel.querySelector('[data-leave]')?.addEventListener('click', () => leaveOnline()),
+      });
+    };
+    showResult();
+    // Fill in their time when they cross the line.
+    const poll = setInterval(() => {
+      const r = cars.find(c => c.remote);
+      const slot = document.querySelector('[data-them]');
+      if (state !== 'online-over' || !slot) return clearInterval(poll);
+      if (r && r.finished !== null) {
+        slot.textContent = `${net ? net.names[1] : 'Opponent'} ${r.finished.toFixed(2)}s`;
+        clearInterval(poll);
+      }
+    }, 250);
+  }
+
+  async function goOnline(how, code) {
+    let cancelled = false;
+    const cancel = () => { cancelled = true; leaveOnline(); };
+    ui.show({ title: 'Connecting…', html: '<p>Waking up the game server. The first connection can take up to a minute.</p>', button: 'Cancel', onAction: cancel });
+    const handlers = {
+      ready: () => {
+        if (cancelled || !net) return;
+        net.conn.send('hello', { name: Arcade.profile().name });
+        if (net.host) startOnline();
+      },
+      event: onNet,
+      state: s => { if (net) net.target = s; },
+      left: opponentGone,
+      closed: () => { if (net) opponentGone(); },
+    };
+    // Online races use the built-in tracks, which both players have.
+    if (selected.custom) selected = TRACKS[0];
+    try {
+      const res = how === 'quick' ? await Relay.quickMatch('racer', handlers, `Race · ${selected.name}`)
+        : how === 'create' ? await Relay.createRoom('racer', handlers)
+        : how === 'public' ? await Relay.joinPublic(code, handlers)
+        : await Relay.joinRoom('racer', code, handlers);
+      if (cancelled) { res.conn.close(); return; }
+      net = { conn: res.conn, host: res.slot === 1, names: [Arcade.profile().name, 'Opponent'], want: { me: false, them: false }, sendT: 0, target: null };
+      if (net.host) {
+        ui.show({
+          title: how === 'create' ? 'Waiting for a friend' : 'Looking for an opponent…',
+          html: (how === 'create'
+            ? `<p>Share this code. The race starts as soon as they join.</p><p class="code">${res.code}</p>`
+            : '<p>You\'ll be matched with the next player who presses Quick race.</p>') + `<p class="muted-note">Track: ${esc(selected.name)}</p>`,
+          button: 'Cancel',
+          onAction: cancel,
+        });
+      } else {
+        ui.show({ title: 'Opponent found', html: '<p>Starting…</p>', button: null });
+      }
+    } catch (e) {
+      if (!cancelled) showMenu(e.message);
+    }
+  }
+
+  // The host picks the track (whatever was selected in their menu) and both grids start together.
+  function startOnline() {
+    net.want = { me: false, them: false };
+    net.conn.send('race', { track: selected.id });
+    beginOnline(selected);
+  }
+
+  function beginOnline(t) {
+    net.target = null;
+    raceOnline = true;
+    setupRace(t, net);
+    state = 'playing';
+    ui.hide();
+  }
+
+  function onNet(name, data) {
+    if (!net) return;
+    if (name === 'hello') net.names[1] = String(data?.name || 'Opponent').slice(0, 24);
+    else if (name === 'race' && !net.host) beginOnline(TRACKS.find(t => t.id === data.track) || TRACKS[0]);
+    else if (name === 'rematch') {
+      net.want.them = true;
+      maybeRematch();
+    } else if (name === 'quit') opponentGone();
+  }
+
+  function maybeRematch() {
+    if (net?.host && net.want.me && net.want.them) startOnline();
+  }
+
+  // Mid-race you finish on your own; anywhere else it's back to the menu.
+  function opponentGone() {
+    if (!net) return;
+    const name = net.names[1];
+    net.conn.close();
+    net = null;
+    if (state === 'playing') {
+      cars = cars.filter(c => !c.remote);
+      Arcade.toast('Race', `${name} left. Finish for the win!`);
+    } else if (state === 'online-over') {
+      const slot = document.querySelector('[data-them]');
+      if (slot) slot.textContent = `${name} left`;
+      document.querySelector('[data-wait]')?.remove();
+      document.querySelector('[data-leave]')?.remove();
+      document.querySelector('[data-main]').textContent = 'Back to menu';
+    } else {
+      showMenu(`${name} left.`);
+    }
+  }
+
+  function leaveOnline() {
+    if (net) {
+      net.conn.send('quit');
+      net.conn.close();
+      net = null;
+    }
+    showMenu();
+  }
+  window.addEventListener('pagehide', () => net?.conn.send('quit'));
 
   // ---------- HUD & menu ----------
 
@@ -433,7 +613,13 @@
     $('time').textContent = raceTime.toFixed(1);
   }
 
-  function showMenu() {
+  function showMenu(error = '') {
+    if (net) {
+      net.conn.send('quit');
+      net.conn.close();
+      net = null;
+    }
+    raceOnline = false;
     state = 'menu';
     selected = allTracks().find(t => t.id === selected.id) || TRACKS[0];
     setupRace(selected);
@@ -453,10 +639,25 @@
       button: 'Start race',
       onAction: start,
       onRender: panel => {
+        const live = Relay.enabled && !selected.custom;
         panel.insertAdjacentHTML('beforeend', `<div class="menu" style="margin-top:8px"><div class="row">
           <button class="btn secondary" type="button" data-build>New track</button>
           ${selected.custom ? '<button class="btn secondary" type="button" data-edit>Edit</button><button class="btn secondary" type="button" data-delete>Delete</button>' : ''}
-        </div></div>`);
+        </div>
+        ${Relay.enabled ? `<p class="muted-note" style="margin:6px 0 0">Race a real player on ${selected.custom ? 'a built-in track' : esc(selected.name)}</p>
+        <div class="row">
+          <button class="btn secondary" type="button" data-net="quick" ${live ? '' : 'disabled'}>Quick race</button>
+          <button class="btn secondary" type="button" data-net="create" ${live ? '' : 'disabled'}>Private room</button>
+        </div>
+        <div class="row">
+          <input class="field" id="code" maxlength="4" placeholder="CODE" autocomplete="off" aria-label="Room code">
+          <button class="btn secondary" type="button" data-net="join">Join</button>
+        </div>` : ''}
+        </div><p class="error">${esc(error)}</p><div data-waiting></div>`);
+        const code = panel.querySelector('#code');
+        panel.querySelectorAll('[data-net]').forEach(b => b.addEventListener('click', () => goOnline(b.dataset.net, code.value)));
+        code?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.stopPropagation(); goOnline('join', code.value); } });
+        Relay.showWaiting(panel.querySelector('[data-waiting]'), room => goOnline('public', room));
         panel.querySelectorAll('[data-track]').forEach(b => b.addEventListener('click', () => {
           selected = allTracks().find(t => t.id === b.dataset.track);
           showMenu();
@@ -485,13 +686,14 @@
   }
 
   function start() {
+    raceOnline = false;
     setupRace(selected);
     state = 'playing';
     ui.hide();
   }
 
   function pause() {
-    if (state !== 'playing') return;
+    if (state !== 'playing' || online()) return;
     state = 'paused';
     ui.show({ title: 'Paused', button: 'Resume', onAction: resume });
   }
@@ -694,6 +896,12 @@
       else if (state === 'paused') resume();
       return;
     }
+    // Instant restart on the same track, for speedrunners. Not in online races.
+    if (e.code === 'KeyR' && !online() && ['playing', 'paused', 'over'].includes(state) && e.target.tagName !== 'INPUT') {
+      for (const k in keys) keys[k] = false;
+      start();
+      return;
+    }
     if (KEYMAP[e.code]) keys[KEYMAP[e.code]] = true;
   });
   window.addEventListener('keyup', e => { if (KEYMAP[e.code]) keys[KEYMAP[e.code]] = false; });
@@ -744,7 +952,7 @@
   function draw() {
     ctx.drawImage(trackLayer.canvas, 0, 0, W, H);
 
-    const g = state === 'playing' || state === 'paused' || state === 'over' ? ghostAt(raceTime) : null;
+    const g = state === 'playing' || state === 'paused' || state === 'over' || state === 'online-over' ? ghostAt(raceTime) : null;
     if (g) {
       drawCar(g.x, g.y, g.a, '#ffffff', 0.35);
       ctx.font = '600 11px system-ui, sans-serif';
@@ -756,6 +964,12 @@
     for (const car of cars.slice(1)) {
       const over = Math.hypot(car.x - player.x, car.y - player.y) < CAR_R * 2.5;
       drawCar(car.x, car.y, car.a, car.color, over ? 0.45 : 1);
+      if (car.remote && net) {
+        ctx.font = '600 11px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.fillText(net.names[1], car.x, car.y - 18);
+      }
     }
     drawCar(player.x, player.y, player.a, player.color);
 
@@ -869,5 +1083,7 @@
   }
 
   showMenu();
+  const invite = Relay.takeInvite();
+  if (invite) goOnline('public', invite);
   requestAnimationFrame(frame);
 })();

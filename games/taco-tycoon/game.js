@@ -475,16 +475,21 @@
     requestAnimationFrame(frame);
   }
 
-  ui.show({
-    title: 'Taco Truck Tycoon',
-    html: `<ul>
-      <li>Each morning, check the <b>forecast</b>, pick a spot, set your <b>price</b>, and buy stock.</li>
-      <li>During lunch, <b>tap the truck</b> to cook faster so nobody gives up waiting.</li>
-      <li>Spend profits on <b>upgrades</b>. Happy customers grow your reputation.</li>
-      <li>Finish ${DAYS} days with as much cash as you can.</li>
-    </ul>`,
-    button: 'Start the season',
-    onAction: start,
+  Versus.attach({
+    ui,
+    start,
+    score: () => biz.cash,
+    intro: {
+      title: 'Taco Truck Tycoon',
+      html: `<ul>
+        <li>Each morning, check the <b>forecast</b>, pick a spot, set your <b>price</b>, and buy stock.</li>
+        <li>During lunch, <b>tap the truck</b> to cook faster so nobody gives up waiting.</li>
+        <li>Spend profits on <b>upgrades</b>. Happy customers grow your reputation.</li>
+        <li>Finish ${DAYS} days with as much cash as you can.</li>
+      </ul>`,
+      button: 'Start the season',
+      onAction: start,
+    },
   });
   requestAnimationFrame(frame);
 })();

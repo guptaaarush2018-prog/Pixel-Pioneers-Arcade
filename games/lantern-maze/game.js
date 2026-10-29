@@ -565,16 +565,21 @@
   }
 
   reset();
-  ui.show({
-    title: 'Lantern Maze',
-    html: `<ul>
-      <li>Collect every <b style="color:#ffe28a">spark</b> to open the <b style="color:#5dff9b">exit</b>, then reach it.</li>
-      <li>Your lantern burns down over time. Grab <b style="color:#ffb347">oil flasks</b> to refill it.</li>
-      <li>Press <b>Space</b> (or tap) to flash: it uses a quarter tank and stuns nearby shadows. Touch a stunned shadow to banish it.</li>
-      <li>Red-eyed shadows always know where you are.</li>
-    </ul>`,
-    button: 'Enter the maze',
-    onAction: start,
+  Versus.attach({
+    ui,
+    start,
+    score: () => score,
+    intro: {
+      title: 'Lantern Maze',
+      html: `<ul>
+        <li>Collect every <b style="color:#ffe28a">spark</b> to open the <b style="color:#5dff9b">exit</b>, then reach it.</li>
+        <li>Your lantern burns down over time. Grab <b style="color:#ffb347">oil flasks</b> to refill it.</li>
+        <li>Press <b>Space</b> (or tap) to flash: it uses a quarter tank and stuns nearby shadows. Touch a stunned shadow to banish it.</li>
+        <li>Red-eyed shadows always know where you are.</li>
+      </ul>`,
+      button: 'Enter the maze',
+      onAction: start,
+    },
   });
   requestAnimationFrame(frame);
 })();

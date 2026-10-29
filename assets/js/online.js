@@ -22,6 +22,7 @@ const Online = (() => {
   const put = (path, body) => request('PUT', path, body);
   const patch = (path, body, options) => request('PATCH', path, body, '', options);
   const post = (path, body) => request('POST', path, body);
+  const remove = (path, options) => request('DELETE', path, undefined, '', options);
 
   const escape = s => String(s).replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 
@@ -106,34 +107,22 @@ const Online = (() => {
     return () => source.close();
   }
 
-  // ---------- Rooms (live matches) ----------
+  // ---------- Lobby (players waiting in public matchmaking) ----------
 
-  const CODE_LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  // relay.js lists a player here while they wait in a public queue room, so others can join
+  // them straight from the Lobby page. Private rooms are never listed.
+  const listWaiting = (game, room, label) =>
+    put(`lobby/${Arcade.profile().id}`, { game, room, label, name: Arcade.profile().name, t: TIMESTAMP });
+  const unlistWaiting = options => remove(`lobby/${Arcade.profile().id}`, options);
 
-  async function createRoom(game, data = {}) {
-    const me = Arcade.profile();
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const code = Array.from({ length: 4 }, () => Arcade.pick([...CODE_LETTERS])).join('');
-      if (await get(`rooms/${code}`)) continue;
-      await put(`rooms/${code}`, {
-        game, status: 'waiting', round: 0, created: TIMESTAMP,
-        players: { 0: { id: me.id, name: me.name } },
-        ...data,
-      });
-      return code;
-    }
-    throw new Error('Could not create a room');
-  }
-
-  // Returns the room on success; throws with a readable message otherwise.
-  async function joinRoom(game, code) {
-    code = code.trim().toUpperCase();
-    const room = await get(`rooms/${code}`);
-    if (!room || room.game !== game) throw new Error('No room with that code.');
-    const me = Arcade.profile();
-    if (room.players?.[1] && room.players[1].id !== me.id) throw new Error('That room is already full.');
-    await patch(`rooms/${code}`, { status: 'playing', 'players/1': { id: me.id, name: me.name } });
-    return code;
+  // Entries refresh every 20 seconds, so anything older than 45 seconds has gone stale.
+  async function waiting(game = null) {
+    const data = await get('lobby', q({ orderBy: '"t"', startAt: Date.now() - 45000 }));
+    const me = Arcade.profile().id;
+    return Object.entries(data || {})
+      .filter(([id, v]) => id !== me && (!game || v.game === game))
+      .map(([id, v]) => ({ id, ...v }))
+      .sort((a, b) => a.t - b.t);
   }
 
   // ---------- Ghosts (racing) ----------
@@ -145,7 +134,7 @@ const Online = (() => {
   if (enabled) heartbeat(Arcade.gameId || 'hub');
 
   return {
-    enabled, get, put, patch, post, escape, top, reportScore, renderBoard,
-    whoIsOnline, subscribe, createRoom, joinRoom, getGhost, saveGhost,
+    enabled, TIMESTAMP, get, put, patch, post, remove, escape, top, reportScore, renderBoard,
+    whoIsOnline, subscribe, listWaiting, unlistWaiting, waiting, getGhost, saveGhost,
   };
 })();

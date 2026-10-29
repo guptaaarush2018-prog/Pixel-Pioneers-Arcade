@@ -16,7 +16,7 @@
   let lines, boxes, turn, scores, lastLine, hover = -1;
   let names = ['You', 'Computer'];
   let me = 0;        // which player this device controls online
-  let room = null;   // { code, unsubscribe, round, shownRound, pending }
+  let room = null;   // { conn, code, round, pending } while playing online
   let cpuTimer = null;
 
   // ---------- Board rules ----------
@@ -161,7 +161,7 @@
     ui.show({
       title,
       html: `<p class="big">${a} – ${b}</p><p>${Online.escape(names[0])} vs ${Online.escape(names[1])}</p>
-        ${mode === 'online' ? '<div class="menu"><button class="btn secondary" type="button" data-leave>Leave room</button></div><p class="muted-note">Either player can start a rematch.</p>' : ''}`,
+        ${mode === 'online' ? '<div class="menu"><button class="btn secondary" type="button" data-leave>Leave</button></div><p class="muted-note">Either player can start a rematch.</p>' : ''}`,
       button: 'Rematch',
       onAction: rematch,
       delay: 400,
@@ -171,8 +171,10 @@
 
   function rematch() {
     if (mode === 'online') {
-      Online.patch(`rooms/${room.code}`, { round: room.round + 1 }).catch(() => {});
-      return; // the room update resets the board for both players
+      if (!room) return showMenu();
+      if (me === 0) newRound(room.round + 1);
+      else room.conn.send('rematch');
+      return;
     }
     startLocal(mode);
   }
@@ -200,90 +202,111 @@
     updateHud();
   }
 
-  async function createRoom() {
-    ui.show({ title: 'Creating room…', button: null });
+  // Online matches go over the relay (relay.js). The host (player 0) keeps the real board: the
+  // guest asks to draw a line, the host checks it and tells both sides, so the boards never drift.
+  async function goOnline(how, code) {
+    let cancelled = false;
+    const cancel = () => { cancelled = true; showMenu(); };
+    ui.show({ title: 'Connecting…', html: '<p>Waking up the game server. The first connection can take up to a minute.</p>', button: 'Cancel', onAction: cancel });
+    const handlers = {
+      ready: () => {
+        if (cancelled || !room) return;
+        room.conn.send('hello', { name: Arcade.profile().name });
+        if (me === 0) newRound(0);
+      },
+      event: onNet,
+      left: opponentLeft,
+      closed: () => { if (room) opponentLeft(); },
+    };
     try {
-      const code = await Online.createRoom('box-battle');
-      enterRoom(code, 0);
-      ui.show({
-        title: 'Waiting for a friend',
-        html: `<p>Share this code. The game starts as soon as they join.</p><p class="code">${code}</p>`,
-        button: 'Cancel',
-        onAction: leaveRoom,
-      });
-    } catch {
-      showMenu("Couldn't create a room. Check your connection.");
-    }
-  }
-
-  async function joinRoom(code) {
-    if (!/^[A-Za-z]{4}$/.test(code.trim())) {
-      showMenu('Room codes are 4 letters.');
-      return;
-    }
-    ui.show({ title: 'Joining…', button: null });
-    try {
-      enterRoom(await Online.joinRoom('box-battle', code), 1);
-    } catch (e) {
-      showMenu(e.message || "Couldn't join that room.");
-    }
-  }
-
-  function enterRoom(code, index) {
-    mode = 'online';
-    me = index;
-    room = { code, round: -1, shownRound: -1, pending: -1, unsubscribe: Online.subscribe(`rooms/${code}`, onRoom) };
-  }
-
-  // Rebuilds the board from the room's move list every time anything changes.
-  function onRoom(data) {
-    if (!room || !data) return;
-    const players = data.players || {};
-    names = [players[0]?.name || 'Host', players[1]?.name || 'Guest'];
-
-    if (data.status === 'left') {
-      const leaver = data.leftBy;
-      if (leaver !== me) {
-        closeRoom();
-        state = 'over';
-        ui.show({ title: 'Your opponent left', button: 'Back to menu', onAction: () => showMenu() });
+      const res = how === 'quick' ? await Relay.quickMatch('boxes', handlers, 'Match')
+        : how === 'create' ? await Relay.createRoom('boxes', handlers)
+        : how === 'public' ? await Relay.joinPublic(code, handlers)
+        : await Relay.joinRoom('boxes', code, handlers);
+      if (cancelled) { res.conn.close(); return; }
+      mode = 'online';
+      me = res.slot === 1 ? 0 : 1;
+      names = me === 0 ? [Arcade.profile().name, 'Guest'] : ['Host', Arcade.profile().name];
+      room = { conn: res.conn, code: res.code || '', round: -1, pending: -1 };
+      if (me === 0) {
+        ui.show({
+          title: how === 'create' ? 'Waiting for a friend' : 'Looking for an opponent…',
+          html: how === 'create'
+            ? `<p>Share this code. The game starts as soon as they join.</p><p class="code">${res.code}</p>`
+            : '<p>You\'ll be matched with the next player who presses Quick match.</p>',
+          button: 'Cancel',
+          onAction: cancel,
+        });
+      } else {
+        ui.show({ title: 'Opponent found', html: '<p>Starting…</p>', button: null });
       }
-      return;
+    } catch (e) {
+      if (!cancelled) showMenu(e.message);
     }
-    if (data.status !== 'playing') return;
+  }
 
-    const round = data.round || 0;
-    if (round !== room.round) {
-      room.round = round;
-      state = 'playing';
-      ui.hide();
-    }
+  // Host only: a fresh board for both players. Starts alternate between rounds.
+  function newRound(round) {
+    room.conn.send('start', { round });
+    beginRound(round);
+  }
+
+  function beginRound(round) {
+    room.round = round;
+    room.pending = -1;
     resetBoard(round % 2);
-    const moves = Object.entries(data.moves || {}).sort(([a], [b]) => (a < b ? -1 : 1)).map(([, m]) => m);
-    for (const m of moves) if (m.r === round) applyMove(m.l, m.p);
-    if (lines[room.pending] !== -1) room.pending = -1;
+    state = 'playing';
+    ui.hide();
     updateHud();
-    if (lastLine !== -1 && lines[lastLine] !== me) Arcade.tone({ freq: 330, dur: 0.05, vol: 0.03 });
-    if (gameOver() && room.shownRound !== round) {
-      room.shownRound = round;
-      endGame();
-    }
+  }
+
+  function onNet(name, data) {
+    if (!room) return;
+    if (name === 'hello') names[1 - me] = String(data?.name || 'Opponent').slice(0, 24);
+    else if (name === 'start' && me === 1) beginRound(data.round | 0);
+    else if (name === 'try' && me === 0 && state === 'playing') {
+      if (applyMove(data.l | 0, 1)) shareMove(data.l | 0, 1);
+    } else if (name === 'moved' && me === 1) {
+      applyMove(data.l, data.p);
+      if (data.p !== me) Arcade.tone({ freq: 330, dur: 0.05, vol: 0.03 });
+      room.pending = -1;
+      afterOnlineMove();
+    } else if (name === 'rematch' && me === 0 && state === 'over') newRound(room.round + 1);
+    else if (name === 'quit') opponentLeft();
+  }
+
+  function shareMove(l, p) {
+    room.conn.send('moved', { l, p });
+    if (p !== me) Arcade.tone({ freq: 330, dur: 0.05, vol: 0.03 });
+    afterOnlineMove();
+  }
+
+  function afterOnlineMove() {
+    updateHud();
+    if (gameOver() && state === 'playing') endGame();
+  }
+
+  function opponentLeft() {
+    if (!room) return;
+    const wasPlaying = state === 'playing';
+    closeRoom();
+    if (wasPlaying) Arcade.countPlay();
+    state = 'over';
+    ui.show({ title: 'Your opponent left', html: wasPlaying ? '<p>The game ends here.</p>' : '', button: 'Back to menu', onAction: () => showMenu() });
   }
 
   function closeRoom() {
-    room?.unsubscribe();
+    room?.conn.close();
     room = null;
   }
 
   function leaveRoom() {
-    if (room) Online.patch(`rooms/${room.code}`, { status: 'left', leftBy: me }).catch(() => {});
+    room?.conn.send('quit');
     closeRoom();
     showMenu();
   }
   // Closing the tab counts as leaving, so the other player isn't left waiting.
-  window.addEventListener('pagehide', () => {
-    if (room) Online.patch(`rooms/${room.code}`, { status: 'left', leftBy: me }, { keepalive: true }).catch(() => {});
-  });
+  window.addEventListener('pagehide', () => room?.conn.send('quit'));
 
   function showMenu(error = '') {
     clearTimeout(cpuTimer);
@@ -292,20 +315,22 @@
     mode = null;
     resetBoard(0);
     updateHud();
-    const online = Online.enabled;
+    const online = Relay.enabled;
     ui.show({
       title: 'Box Battle',
       html: `<p>Take turns drawing lines between dots. Close a box to claim it and go again. Most boxes wins.</p>
         <div class="menu">
           <button class="btn" type="button" data-mode="cpu">Play the computer</button>
           <button class="btn secondary" type="button" data-mode="local">Two players, one device</button>
-          <button class="btn secondary" type="button" data-mode="create" ${online ? '' : 'disabled'}>Create online room</button>
+          <button class="btn secondary" type="button" data-mode="quick" ${online ? '' : 'disabled'}>Quick match online</button>
+          <button class="btn secondary" type="button" data-mode="create" ${online ? '' : 'disabled'}>Create private room</button>
           <div class="row">
             <input class="field" id="code" maxlength="4" placeholder="CODE" autocomplete="off" aria-label="Room code" ${online ? '' : 'disabled'}>
             <button class="btn secondary" type="button" data-mode="join" ${online ? '' : 'disabled'}>Join</button>
           </div>
         </div>
         <p class="error">${error}</p>
+        <div data-waiting></div>
         ${online ? '' : '<p class="muted-note">Online play isn\'t switched on for this arcade yet.</p>'}`,
       button: null,
       onRender: panel => {
@@ -313,10 +338,10 @@
         panel.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => {
           const m = b.dataset.mode;
           if (m === 'cpu' || m === 'local') startLocal(m);
-          else if (m === 'create') createRoom();
-          else joinRoom(code.value);
+          else goOnline(m, code.value);
         }));
-        code.addEventListener('keydown', e => { if (e.key === 'Enter') joinRoom(code.value); });
+        code.addEventListener('keydown', e => { if (e.key === 'Enter') goOnline('join', code.value); });
+        Relay.showWaiting(panel.querySelector('[data-waiting]'), r => goOnline('public', r));
       },
     });
   }
@@ -351,9 +376,12 @@
     hover = -1;
     Arcade.tone({ freq: 440, dur: 0.05, vol: 0.03 });
     if (mode === 'online') {
-      if (room.pending !== -1) return;
-      room.pending = i;
-      Online.post(`rooms/${room.code}/moves`, { l: i, p: me, r: room.round }).catch(() => { room.pending = -1; });
+      if (me === 0) {
+        if (applyMove(i, 0)) shareMove(i, 0);
+      } else if (room.pending === -1) {
+        room.pending = i;
+        room.conn.send('try', { l: i });
+      }
       return;
     }
     applyMove(i, turn);
@@ -413,7 +441,7 @@
       ctx.font = '600 13px system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillStyle = '#8d94a1';
-      ctx.fillText(`${names[0]} vs ${names[1]} · room ${room?.code || ''}`, W / 2, H - 14);
+      ctx.fillText(`${names[0]} vs ${names[1]}${room?.code ? ` · room ${room.code}` : ''}`, W / 2, H - 14);
     }
   }
 
@@ -424,5 +452,7 @@
 
   resetBoard(0);
   showMenu();
+  const invite = Relay.takeInvite();
+  if (invite) goOnline('public', invite);
   requestAnimationFrame(frame);
 })();

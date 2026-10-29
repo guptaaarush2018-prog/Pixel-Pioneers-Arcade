@@ -415,7 +415,7 @@ body.game {
 }
 .field:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-.code {
+.panel .code {
   font-size: 34px;
   font-weight: 700;
   letter-spacing: .25em;
@@ -598,3 +598,125 @@ body.game {
   .online-pill { margin-left: 0; }
 }
 .btn:disabled, .field:disabled { opacity: .45; cursor: not-allowed; filter: none; }
+
+/* ---------- Online duels, lobby, player counts ---------- */
+
+.duel-pill {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  display: flex;
+  gap: 14px;
+  padding: 6px 14px;
+  font-size: 13px;
+  white-space: nowrap;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(14, 16, 20, .85);
+  color: var(--muted);
+  pointer-events: none;
+}
+.duel-pill[hidden], .overlay:not([hidden]) ~ .duel-pill { display: none; }
+.duel-pill b { color: var(--text); font-variant-numeric: tabular-nums; }
+.duel-pill .lead b { color: #ff7a7a; }
+.panel .duel-verdict { font-size: 16px; font-weight: 700; color: var(--text); }
+.panel .duel-verdict.win { color: #3ddc84; }
+.panel .duel-verdict.lose { color: #ff7a7a; }
+
+.card .thumb .live {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 5px;
+  background: rgba(14, 16, 20, .85);
+  border: 1px solid var(--line);
+}
+.card .thumb .live::before, .waiting-list .dot {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #3ddc84;
+}
+
+.waiting-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.waiting-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  text-align: left;
+}
+.waiting-list .who { flex: 1; min-width: 0; }
+.waiting-list .who b { display: block; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.waiting-list .who span { font-size: 12px; color: var(--muted); }
+.waiting-list .dot { display: inline-block; flex: none; }
+.waiting-list .btn { padding: 7px 14px; font-size: 13px; }
+.panel .waiting-list { margin: 0 0 12px; }
+.panel .waiting-list li { padding: 8px 10px; }
+.card.external .thumb::after {
+  content: '↗';
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  border-radius: 6px;
+  background: rgba(14, 16, 20, .85);
+}
+
+/* ---------- Realm Rivals: Kingdom (long-term mode) ---------- */
+
+body.kingdom-page { overflow: auto; height: auto; min-height: 100vh; }
+.kingdom-page .topbar { position: sticky; top: 0; z-index: 5; flex-wrap: wrap; }
+.kingdom-page .stats { flex-wrap: wrap; gap: 14px; }
+.kingdom-page .stats b.full { color: var(--accent); }
+.k-tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 16px 0; max-width: 1120px; margin: 0 auto; width: 100%; }
+.k-main { max-width: 1120px; margin: 0 auto; padding: 12px 16px 40px; width: 100%; }
+.k-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.k-row .box { margin-bottom: 16px; }
+.k-world { grid-template-columns: 1.6fr 1fr; align-items: start; }
+.k-map { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); margin-bottom: 16px; }
+.k-map canvas { display: block; width: 100%; cursor: pointer; }
+.k-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.k-card { padding: 14px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column; gap: 8px; }
+.k-card h3 { margin: 0; font-size: 15px; display: flex; justify-content: space-between; gap: 8px; }
+.k-card h3 span { font-size: 12px; font-weight: 600; color: var(--accent); }
+.k-card p { margin: 0; font-size: 13px; line-height: 1.45; color: var(--muted); }
+.k-card .btn { align-self: flex-start; padding: 8px 14px; font-size: 14px; }
+.k-cost span { margin-right: 6px; color: var(--text); white-space: nowrap; }
+.k-cost span.short { color: #ff7a7a; }
+.k-busy { color: var(--accent) !important; font-weight: 600; }
+.k-note { font-size: 13px; color: var(--muted); margin: 0 0 10px; }
+.k-note.good { color: #8fd3ff; }
+.k-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 14px; }
+.k-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--muted); }
+.k-list li b { color: var(--text); }
+.k-list .btn { padding: 5px 10px; font-size: 12px; }
+.k-train { display: flex; gap: 6px; }
+.k-train .field, .k-send .field { width: 80px; padding: 8px; letter-spacing: 0; }
+.k-send { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0; }
+.k-send label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+.k-mail { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.k-mail li { padding: 10px 12px; border-radius: 8px; background: var(--surface-2); border-left: 3px solid var(--line); }
+.k-mail li.good { border-left-color: #3ddc84; }
+.k-mail li.bad { border-left-color: #ff7a7a; }
+.k-mail b { font-size: 14px; }
+.k-mail span { float: right; font-size: 12px; color: var(--muted); }
+.k-mail p { margin: 4px 0 0; font-size: 13px; color: var(--muted); line-height: 1.45; }
+@media (max-width: 760px) {
+  .k-row, .k-world { grid-template-columns: 1fr; }
+}

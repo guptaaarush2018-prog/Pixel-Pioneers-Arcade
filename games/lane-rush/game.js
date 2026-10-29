@@ -246,15 +246,20 @@
   }
 
   reset();
-  ui.show({
-    title: 'Lane Rush',
-    html: `<ul>
-      <li>Change lanes to dodge the traffic. There's always a way through.</li>
-      <li>Passing right next to a car is a <b>close call</b>. Chain them for a bigger bonus.</li>
-      <li>Grab <b>coins</b> for 50 points. You keep getting faster.</li>
-    </ul>`,
-    button: 'Start driving',
-    onAction: start,
+  Versus.attach({
+    ui,
+    start,
+    score: () => score(),
+    intro: {
+      title: 'Lane Rush',
+      html: `<ul>
+        <li>Change lanes to dodge the traffic. There's always a way through.</li>
+        <li>Passing right next to a car is a <b>close call</b>. Chain them for a bigger bonus.</li>
+        <li>Grab <b>coins</b> for 50 points. You keep getting faster.</li>
+      </ul>`,
+      button: 'Start driving',
+      onAction: start,
+    },
   });
   requestAnimationFrame(frame);
 })();

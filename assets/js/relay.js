@@ -72,17 +72,65 @@ const Relay = (() => {
     });
   }
 
-  // Strangers: take the first public room for this game that isn't already full.
-  async function quickMatch(tag, handlers) {
+  // Strangers: take the first public room for this game that isn't already full. While we wait
+  // alone in it, the Lobby page lists us (when Firebase is on) so anyone can jump straight in.
+  // `label` describes the match there, e.g. "Duel" or "Race · Harbor Loop".
+  async function quickMatch(tag, handlers, label = '') {
     await wake();
     for (let n = 1; n <= QUEUE_ROOMS; n++) {
+      const room = `pp-${tag}-q${n}`;
       try {
-        return await seat(`pp-${tag}-q${n}`, handlers, () => true);
+        const listing = listed(room, label, handlers);
+        const res = await seat(room, listing.handlers, () => true);
+        if (res.slot === 1) listing.start(res.conn);
+        return res;
       } catch (e) {
         if (e.message !== 'full') throw new Error("Couldn't reach the game server.");
       }
     }
     throw new Error('Every public room is busy. Try again in a minute.');
+  }
+
+  // A waiting player's lobby entry: refreshed while they wait, removed once matched or gone.
+  function listed(room, label, handlers) {
+    let beat = null, live = false;
+    const on = typeof Online !== 'undefined' && Online.enabled;
+    const stop = () => {
+      clearInterval(beat);
+      if (live) Online.unlistWaiting().catch(() => {});
+      live = false;
+    };
+    return {
+      handlers: {
+        ...handlers,
+        ready: () => { stop(); handlers.ready?.(); },
+        left: () => { stop(); handlers.left?.(); },
+        closed: () => { stop(); handlers.closed?.(); },
+      },
+      start(conn) {
+        if (!on) return;
+        live = true;
+        const post = () => Online.listWaiting(Arcade.gameId, room, label).catch(() => {});
+        post();
+        beat = setInterval(post, 20000);
+        const close = conn.close;
+        conn.close = () => { stop(); close(); };
+        window.addEventListener('pagehide', () => { if (live) Online.unlistWaiting({ keepalive: true }).catch(() => {}); });
+      },
+    };
+  }
+
+  // Joins a specific public room someone is waiting in (from the Lobby).
+  async function joinPublic(room, handlers) {
+    if (!/^pp-[a-z0-9]+-q\d+$/.test(room)) throw new Error('That match link is broken.');
+    await wake();
+    try {
+      return await seat(room, handlers, slot => slot === 2);
+    } catch (e) {
+      if (e.message === 'full') throw new Error('Someone else got there first.');
+      if (e.message === 'reject') throw new Error('That player has already left.');
+      throw new Error("Couldn't reach the game server.");
+    }
   }
 
   // Friends: a fresh 4-letter code. Landing in slot 2 means the code was taken, so pick another.
@@ -113,7 +161,36 @@ const Relay = (() => {
     }
   }
 
+  // The Lobby page links to games/<id>/index.html?join=<room>; the game takes the room once.
+  function takeInvite() {
+    const params = new URLSearchParams(location.search);
+    const room = params.get('join');
+    if (!room) return null;
+    history.replaceState(null, '', location.pathname);
+    return enabled ? room : null;
+  }
+
+  // Fills `el` with the players waiting for this game and keeps it fresh while it's on screen.
+  function showWaiting(el, onJoin) {
+    if (!el || typeof Online === 'undefined' || !Online.enabled || !enabled) return;
+    const esc = Online.escape;
+    const render = list => {
+      if (!el.isConnected) return false;
+      el.innerHTML = list.length
+        ? `<p class="muted-note" style="margin:0 0 6px">Waiting for a match now</p><ul class="waiting-list">${list.slice(0, 4).map(w => `
+            <li><span class="dot"></span><span class="who"><b>${esc(w.name)}</b><span>${esc(w.label || 'Quick match')}</span></span>
+            <button class="btn" type="button" data-room="${esc(w.room)}">Join</button></li>`).join('')}</ul>`
+        : '';
+      el.querySelectorAll('[data-room]').forEach(b => b.addEventListener('click', () => onJoin(b.dataset.room)));
+      return true;
+    };
+    const refresh = () => Online.waiting(Arcade.gameId).then(list => {
+      if (render(list)) setTimeout(refresh, 5000);
+    }).catch(() => {});
+    refresh();
+  }
+
   if (enabled) wake();
 
-  return { enabled, join, quickMatch, createRoom, joinRoom };
+  return { enabled, join, quickMatch, createRoom, joinRoom, joinPublic, takeInvite, showWaiting };
 })();

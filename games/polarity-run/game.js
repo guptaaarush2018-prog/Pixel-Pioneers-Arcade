@@ -330,15 +330,20 @@
   }
 
   reset();
-  ui.show({
-    title: 'Polarity Run',
-    html: `<ul>
-      <li>Press <b>Space</b> or tap to flip gravity between the floor and the ceiling.</li>
-      <li>You can only flip once you've landed, so plan ahead. Pressing just before you land still counts.</li>
-      <li>Grab <b style="color:#ffd23f">shards</b> for bonus points. The run speeds up over time.</li>
-    </ul>`,
-    button: 'Run',
-    onAction: start,
+  Versus.attach({
+    ui,
+    start,
+    score: () => score(),
+    intro: {
+      title: 'Polarity Run',
+      html: `<ul>
+        <li>Press <b>Space</b> or tap to flip gravity between the floor and the ceiling.</li>
+        <li>You can only flip once you've landed, so plan ahead. Pressing just before you land still counts.</li>
+        <li>Grab <b style="color:#ffd23f">shards</b> for bonus points. The run speeds up over time.</li>
+      </ul>`,
+      button: 'Run',
+      onAction: start,
+    },
   });
   requestAnimationFrame(frame);
 })();

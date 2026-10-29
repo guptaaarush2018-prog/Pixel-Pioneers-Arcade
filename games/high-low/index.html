@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>High-Low · Pixel Pioneers Arcade</title>
+  <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../assets/css/arcade.css">
+</head>
+<body class="game" data-game="high-low">
+  <header class="topbar">
+    <a class="back" href="../../index.html">← All games</a>
+    <h1>High-Low</h1>
+    <div class="stats">
+      <span>Chips<b id="chips">$0</b></span>
+      <span>Pot<b id="pot">$0</b></span>
+      <span>Session best<b id="peak">$0</b></span>
+    </div>
+    <button class="icon-btn" id="mute" type="button">Sound on</button>
+  </header>
+
+  <main class="stage">
+    <canvas id="game"></canvas>
+    <div class="overlay" id="overlay" hidden></div>
+  </main>
+
+  <div class="toolbar" id="actions"></div>
+  <p class="help"><kbd>↑</kbd> higher · <kbd>↓</kbd> lower · <kbd>B</kbd> bank · <kbd>K</kbd> skip · <kbd>Space</kbd> play</p>
+
+  <script src="../../assets/js/config.js"></script>
+  <script src="../../assets/js/catalog.js"></script>
+  <script src="../../assets/js/arcade.js"></script>
+  <script src="../../assets/js/online.js"></script>
+  <script src="../../assets/js/cards.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
