@@ -1,4 +1,4 @@
-/* Shared bits for the card tables (Blackjack, Video Poker, High-Low): a chip wallet that carries
+/* Shared bits for the card tables (Blackjack, Video Poker, High-Low, Peak Run): a chip wallet that carries
    between them, a shuffled shoe, and card drawing with a deal animation. Chips are pretend
    money; they can't be bought and are worth nothing outside the arcade. */
 const Cards = (() => {

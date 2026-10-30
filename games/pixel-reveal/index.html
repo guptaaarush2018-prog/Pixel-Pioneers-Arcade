@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Pixel Reveal · Pixel Pioneers Arcade</title>
+  <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../assets/css/arcade.css">
+</head>
+<body class="game" data-game="pixel-reveal">
+  <header class="topbar">
+    <a class="back" href="../../index.html">← All games</a>
+    <h1>Pixel Reveal</h1>
+    <div class="stats">
+      <span>Time<b id="time">0:00</b></span>
+      <span>Hints<b id="hints">0</b></span>
+      <span>Gallery<b id="gallery">0</b></span>
+    </div>
+    <button class="icon-btn" id="mute" type="button">Sound on</button>
+  </header>
+
+  <main class="stage">
+    <canvas id="game"></canvas>
+    <div class="overlay" id="overlay" hidden></div>
+  </main>
+
+  <div class="toolbar">
+    <button class="btn secondary" type="button" id="mode-btn">Tap fills ■</button>
+    <button class="btn secondary" type="button" id="hint-btn">Hint (H)</button>
+  </div>
+  <p class="help">Click fills · right-click crosses out · drag to paint · <kbd>H</kbd> hint · <kbd>Esc</kbd> pauses</p>
+
+  <script src="../../assets/js/config.js"></script>
+  <script src="../../assets/js/catalog.js"></script>
+  <script src="../../assets/js/arcade.js"></script>
+  <script src="../../assets/js/online.js"></script>
+  <script src="../../assets/js/relay.js"></script>
+  <script src="../../assets/js/versus.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

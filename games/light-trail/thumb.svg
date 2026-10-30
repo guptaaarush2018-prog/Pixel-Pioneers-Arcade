@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <rect width="320" height="200" fill="#07090d"/>
+  <g stroke="rgba(80,110,160,.12)" stroke-width="1"><path d="M40 0V200M80 0V200M120 0V200M160 0V200M200 0V200M240 0V200M280 0V200M0 40H320M0 80H320M0 120H320M0 160H320"/></g>
+  <rect x="14" y="14" width="292" height="172" fill="none" stroke="#ff5f6d" stroke-width="2" opacity=".7"/>
+  <path d="M40 100 H110 V50 H200 V90 H160" stroke="#3de0ff" stroke-width="7" fill="none" opacity=".6"/>
+  <path d="M280 100 H230 V150 H120 V120 H168" stroke="#ff9a3d" stroke-width="7" fill="none" opacity=".6"/>
+  <rect x="153" y="84" width="12" height="12" fill="#fff" style="filter:drop-shadow(0 0 6px #3de0ff)"/>
+  <rect x="166" y="114" width="12" height="12" fill="#fff" style="filter:drop-shadow(0 0 6px #ff9a3d)"/>
+</svg>

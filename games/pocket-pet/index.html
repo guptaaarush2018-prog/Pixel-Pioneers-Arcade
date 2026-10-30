@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Pocket Pet · Pixel Pioneers Arcade</title>
+  <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../assets/css/arcade.css">
+</head>
+<body class="game" data-game="pocket-pet">
+  <header class="topbar">
+    <a class="back" href="../../index.html">← All games</a>
+    <h1>Pocket Pet</h1>
+    <div class="stats">
+      <span>Bond<b id="bond">0</b></span>
+      <span>Stage<b id="stage">Egg</b></span>
+      <span>Treats<b id="treats">0</b></span>
+    </div>
+    <button class="icon-btn" id="mute" type="button">Sound on</button>
+  </header>
+
+  <main class="stage">
+    <canvas id="game"></canvas>
+    <div class="overlay" id="overlay" hidden></div>
+  </main>
+
+  <div class="toolbar" id="actions"></div>
+  <p class="help">Click your pet to pet it · finish other arcade games to earn treats · progress saves and keeps going while you're away</p>
+
+  <script src="../../assets/js/config.js"></script>
+  <script src="../../assets/js/catalog.js"></script>
+  <script src="../../assets/js/arcade.js"></script>
+  <script src="../../assets/js/online.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

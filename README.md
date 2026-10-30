@@ -11,30 +11,40 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | Pixel Pitch | Sports (4-a-side football) | Live 1v1 |
 | Hoop Duel | Sports (1v1 basketball) | Live 1v1 |
 | Blitz Bowl | Sports (retro football, season mode) | Online duel |
+| Light Trail | Arcade (light-cycle duel, shrinking arena) | Live 1v1, two on one keyboard |
+| Quick Draw | Arcade (reaction standoff, outlaw ladder) | Live 1v1, two on one keyboard |
 | Pocket Racer | Racing | Live 1v1 races (live gap, match score), world-record ghost |
 | Rune Rumble | Strategy (real-time lane battler) | Live 1v1 |
 | Realm Rivals | Strategy (kingdom builder) | Live 1v1 kingdom wars, plus the long-term Kingdom mode |
 | Box Battle | Strategy | Live 1v1 |
+| Gravity Four | Strategy (four in a row with a board tilt) | Live 1v1 |
+| Mega Tac-Toe | Strategy (nine-board tic-tac-toe) | Live 1v1 |
+| Fleet Hunt | Strategy (hidden fleets, sonar, airstrikes) | Live 1v1 |
 | Taco Truck Tycoon | Tycoon | Online duel |
 | Gem Mine | Idle | Leaderboard |
+| Pocket Pet | Idle (virtual pet, earns treats from other games) | Leaderboard |
 | Crowd Rush | Arcade (gate runner) | Online duel |
 | Lane Rush | Racing | Online duel |
 | Neon Noodle | Arcade (snake) | Online duel |
 | Crystal Swap | Puzzle (match-3) | Online duel |
+| Sudoku Siege | Puzzle (sudoku, races with fog) | Live 1v1 race |
+| Pixel Reveal | Puzzle (picture logic, gallery) | Online duel |
 | Lantern Maze | Maze chase | Online duel |
 | Brick Burst | Arcade (brick breaker) | Online duel |
 | Comet Pinball | Arcade (pinball) | Online duel |
 | Type Storm | Typing | Online duel |
+| Letter Lock | Word (chained five-letter guessing) | Online duel |
 | Cloud Climber | Platformer | Online duel |
 | Stack Up | Arcade (one button) | Online duel |
 | Polarity Run | Runner | Online duel |
 | Blackjack | Cards | Leaderboard |
 | Video Poker | Cards | Leaderboard |
 | High-Low | Cards | Leaderboard |
+| Peak Run | Cards (tri-peaks solitaire with combos) | Leaderboard |
 
 Every game also feeds the shared **profile**: playtime, games finished, days played, and achievements (arcade-wide, plus Bronze/Silver/Gold medals and specials for each game). All of that lives in the player's browser and works without any setup.
 
-The three card tables share one wallet of pretend chips (`ppa:chips` in localStorage). Chips can't be bought; anyone who runs out is given a fresh stack. A table's score is the most chips held during a session.
+The four card tables share one wallet of pretend chips (`ppa:chips` in localStorage). Chips can't be bought; anyone who runs out is given a fresh stack. A table's score is the most chips held during a session.
 
 ## Run locally
 
@@ -61,6 +71,8 @@ That turns on global leaderboards, the "playing now" counters (site-wide and per
 Live matches don't use Firebase. They connect to the Socket.io relay that Stickman Evolution: The 95th already runs on Render (the Stickman-Battles repo) (`relayUrl` in [`assets/js/config.js`](assets/js/config.js)); that server's `ALLOWED_ORIGINS`/`PORTAL_ORIGINS` already include this site's GitHub Pages origin. [`assets/js/relay.js`](assets/js/relay.js) speaks the Socket.io wire format over a plain WebSocket, so there's still no SDK.
 
 - The relay pairs two players per room name and forwards their messages. In real-time games (Pixel Pitch, Hoop Duel, Rune Rumble) the player who arrived first runs the match and streams snapshots; the other sends inputs. Pocket Racer players each drive their own car and stream position and speed; the other car is drawn slightly ahead of its last update to hide the delay, and the host times a ping before the race so both countdowns end together. Box Battle and Realm Rivals send moves and attacks as events.
+- Gravity Four, Mega Tac-Toe, Fleet Hunt, Light Trail and Quick Draw share their menus, rooms and rematches through [`assets/js/match.js`](assets/js/match.js). In the turn-based ones both players run the same rules and send their own moves; Fleet Hunt keeps each fleet on its owner's device and answers shots with hit or miss. Light Trail's host runs the bikes, and Quick Draw times each player's reaction on their own screen so lag doesn't decide a round.
+- Sudoku Siege's host makes the puzzle and decides who finished first; progress and fog go back and forth as events.
 - **Quick match** takes the first free public room (`pp-<game>-q1`, `q2`, …). **Private rooms** use a 4-letter code.
 - **Online duels** ([`assets/js/versus.js`](assets/js/versus.js)) turn any single-player game into a live score race: both players start at the same moment with the same random seed, see each other's score, and the higher final score wins. A game opts in by showing its start panel through `Versus.attach({ ui, start, score, intro })`.
 - The relay sleeps when idle on Render's free plan, so the first connection can take up to a minute.

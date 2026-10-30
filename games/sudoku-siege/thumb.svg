@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <rect width="320" height="200" fill="#0e1014"/>
+  <g transform="translate(79 19)">
+    <rect width="162" height="162" fill="#161920"/>
+    <rect x="54" y="54" width="54" height="54" fill="#2c3d63"/>
+    <g stroke="#2a2f39" stroke-width="1"><path d="M18 0V162M36 0V162M72 0V162M90 0V162M126 0V162M144 0V162M0 18H162M0 36H162M0 72H162M0 90H162M0 126H162M0 144H162"/></g>
+    <g stroke="#6b7280" stroke-width="2.5" fill="none"><rect width="162" height="162"/><path d="M54 0V162M108 0V162M0 54H162M0 108H162"/></g>
+    <g font-family="system-ui,sans-serif" font-weight="700" font-size="13" text-anchor="middle" fill="#eceef2">
+      <text x="9" y="14">5</text><text x="45" y="14">3</text><text x="117" y="32">7</text><text x="27" y="50">6</text><text x="81" y="68">1</text><text x="135" y="86">9</text><text x="63" y="104">8</text><text x="153" y="122">6</text><text x="9" y="140">4</text><text x="99" y="158">2</text><text x="135" y="158">8</text>
+    </g>
+    <g font-family="system-ui,sans-serif" font-weight="600" font-size="13" text-anchor="middle" fill="#7fb0ff"><text x="63" y="68">4</text><text x="99" y="86">5</text><text x="81" y="104">7</text></g>
+    <rect x="109" y="1" width="52" height="52" fill="#96a0b4" opacity=".92"/>
+    <circle cx="124" cy="22" r="11" fill="#fff" opacity=".35"/><circle cx="144" cy="34" r="12" fill="#fff" opacity=".35"/>
+  </g>
+</svg>

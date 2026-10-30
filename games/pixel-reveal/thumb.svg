@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <rect width="320" height="200" fill="#0e1014"/>
+  <g font-family="system-ui,sans-serif" font-weight="700" font-size="10" fill="#8d94a1" text-anchor="middle">
+    <text x="110" y="22">3</text><text x="126" y="22">5</text><text x="142" y="22">7</text><text x="158" y="22">8</text><text x="174" y="22">8</text><text x="190" y="22">7</text><text x="206" y="22">5</text><text x="222" y="22">3</text>
+    <text x="88" y="45">2 2</text><text x="88" y="61">8</text><text x="88" y="77">8</text><text x="88" y="93">6</text><text x="88" y="109">4</text><text x="88" y="125">2</text>
+  </g>
+  <g transform="translate(102 32)">
+    <rect width="128" height="112" fill="#161920"/>
+    <g fill="#ff5f6d">
+      <rect x="16" y="0" width="32" height="16"/><rect x="80" y="0" width="32" height="16"/>
+      <rect x="0" y="16" width="128" height="32"/><rect x="16" y="48" width="96" height="16"/><rect x="32" y="64" width="64" height="16"/><rect x="48" y="80" width="32" height="16"/>
+    </g>
+    <rect x="16" y="16" width="16" height="16" fill="#ffd1d6"/>
+    <g fill="#c5cad3"><rect x="34" y="66" width="12" height="12" opacity="0"/></g>
+    <g stroke="#2a2f39" stroke-width="1"><path d="M16 0V112M32 0V112M48 0V112M64 0V112M80 0V112M96 0V112M112 0V112M0 16H128M0 32H128M0 48H128M0 64H128M0 80H128M0 96H128"/></g>
+    <rect x="0" y="48" width="128" height="64" fill="#0e1014" opacity=".55"/>
+  </g>
+  <text x="166" y="176" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="800" font-size="15" fill="#eceef2" letter-spacing="2">PIXEL REVEAL</text>
+</svg>

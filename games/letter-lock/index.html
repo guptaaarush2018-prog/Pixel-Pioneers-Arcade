@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Letter Lock · Pixel Pioneers Arcade</title>
+  <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../assets/css/arcade.css">
+</head>
+<body class="game" data-game="letter-lock">
+  <header class="topbar">
+    <a class="back" href="../../index.html">← All games</a>
+    <h1>Letter Lock</h1>
+    <div class="stats">
+      <span>Score<b id="score">0</b></span>
+      <span>Chain<b id="chain">0</b></span>
+      <span>Keys<b id="keys">0</b></span>
+    </div>
+    <button class="icon-btn" id="mute" type="button">Sound on</button>
+  </header>
+
+  <main class="stage">
+    <canvas id="game"></canvas>
+    <div class="overlay" id="overlay" hidden></div>
+  </main>
+
+  <p class="help">Type and press <kbd>Enter</kbd> · <kbd>?</kbd> spends a key · <kbd>Esc</kbd> pauses</p>
+
+  <script src="../../assets/js/config.js"></script>
+  <script src="../../assets/js/catalog.js"></script>
+  <script src="../../assets/js/arcade.js"></script>
+  <script src="../../assets/js/online.js"></script>
+  <script src="../../assets/js/relay.js"></script>
+  <script src="../../assets/js/versus.js"></script>
+  <script src="words.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

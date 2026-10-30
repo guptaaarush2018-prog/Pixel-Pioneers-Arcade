@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <rect width="320" height="200" fill="#0e1014"/>
+  <g transform="translate(95 20)">
+    <rect x="0" y="0" width="40" height="40" rx="5" fill="#161920"/><rect x="45" y="0" width="40" height="40" rx="5" fill="#161920"/><rect x="90" y="0" width="40" height="40" rx="5" fill="#161920"/>
+    <rect x="0" y="45" width="40" height="40" rx="5" fill="#161920"/><rect x="45" y="45" width="40" height="40" rx="5" fill="rgba(255,197,61,.15)" stroke="#ffc53d" stroke-width="1.5"/><rect x="90" y="45" width="40" height="40" rx="5" fill="#161920"/>
+    <rect x="0" y="90" width="40" height="40" rx="5" fill="#161920"/><rect x="45" y="90" width="40" height="40" rx="5" fill="#161920"/><rect x="90" y="90" width="40" height="40" rx="5" fill="#161920"/>
+    <g stroke="#2a2f39" stroke-width="1.2">
+      <path d="M13 3V37M27 3V37M3 13H37M3 27H37"/><path d="M58 48V82M72 48V82M48 58H82M48 72H82"/><path d="M103 93V127M117 93V127M93 103H127M93 117H127"/>
+      <path d="M58 93V127M72 93V127M48 103H82M48 117H82"/><path d="M13 48V82M27 48V82M3 58H37M3 72H37"/>
+    </g>
+    <g stroke="#ffc53d" stroke-width="7" stroke-linecap="round"><path d="M8 8L32 32M32 8L8 32"/><path d="M98 98L122 122M122 98L98 122"/></g>
+    <circle cx="110" cy="20" r="13" stroke="#4f8cff" stroke-width="6" fill="none"/>
+    <circle cx="20" cy="110" r="13" stroke="#4f8cff" stroke-width="6" fill="none"/>
+    <g stroke="#ffc53d" stroke-width="2.5" stroke-linecap="round"><path d="M50 50L56 56M56 50L50 56"/><path d="M76 74L82 80M82 74L76 80"/></g>
+    <g stroke="#4f8cff" stroke-width="2.5" fill="none"><circle cx="65" cy="65" r="4"/><circle cx="79" cy="53" r="4"/></g>
+  </g>
+  <text x="160" y="184" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="800" font-size="14" fill="#eceef2" letter-spacing="2">MEGA TAC-TOE</text>
+</svg>
