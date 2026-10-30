@@ -50,7 +50,7 @@
   let level = LEVELS.find(l => l.id === Arcade.load('racer:level', 'pro')) || LEVELS[1];
   let selected = TRACKS[0];
   let edit = null;
-  let net = null;   // online race: { conn, host, names, want, sendT, target }
+  let net = null;   // online race: { conn, host, names, want, sendT, target, targetAt, lag, wins, mine, theirs }
   let raceOnline = false; // stays set if the opponent leaves mid-race, so it never scores as solo
   const online = () => raceOnline;
   const keys = { up: false, down: false, left: false, right: false };
@@ -240,7 +240,7 @@
   }
 
   // Online races are just the two of you: no rivals, side by side on the front row.
-  function setupRace(t, vs = null) {
+  function setupRace(t, vs = null, lead = 0) {
     track = t;
     ({ path, length: trackLen } = buildPath(t.points));
     N = path.length;
@@ -252,12 +252,14 @@
       theirs.remote = true;
       cars = [mine, theirs];
       vs.remote = theirs;
+      vs.mine = new Map();   // track step -> race time each car first reached it, for the live gap
+      vs.theirs = new Map();
     } else {
       cars = [makeCar(3, { color: '#ffc53d' }), ...RIVALS.map((r, i) => makeCar(i, r))];
     }
     player = cars[0];
     raceTime = 0;
-    countdown = 3.5;
+    countdown = 3.5 + lead;
     lapStart = 0;
     bestLap = Infinity;
     recorded = [];
@@ -391,10 +393,11 @@
     }
 
     if (net) {
+      reached(net.mine, player.dist, raceTime);
       net.sendT -= dt;
       if (net.sendT <= 0 || player.finished !== null) {
         net.sendT = SEND_EVERY;
-        net.conn.state({ x: Math.round(player.x), y: Math.round(player.y), a: Math.round(player.a * 100) / 100, d: player.dist, f: player.finished });
+        net.conn.state({ x: Math.round(player.x), y: Math.round(player.y), a: Math.round(player.a * 100) / 100, v: Math.round(player.v), d: player.dist, f: player.finished });
       }
     }
 
@@ -450,13 +453,17 @@
   // ---------- Online races ----------
 
   // Each player drives their own car and streams where it is; the other car is drawn from that.
+  // Updates arrive a beat late, so aim at where they'll be by now (along their heading at their
+  // speed) rather than where they were, or the other car always trails a little behind.
   function followRemote(car, dt) {
     const t = net?.target;
     if (!t) return;
+    const ahead = t.f == null ? Math.min(0.25, (performance.now() - net.targetAt) / 1000 + net.lag) * (t.v || 0) : 0;
     const k = Math.min(1, dt * 12);
-    car.x += (t.x - car.x) * k;
-    car.y += (t.y - car.y) * k;
+    car.x += (t.x + Math.cos(t.a) * ahead - car.x) * k;
+    car.y += (t.y + Math.sin(t.a) * ahead - car.y) * k;
     car.a += angleDiff(t.a, car.a) * k;
+    reached(net.theirs, t.d, raceTime - net.lag);
     car.dist = t.d;
     car.lap = Math.floor(t.d / N);
     if (t.f !== null && t.f !== undefined) car.finished = t.f;
@@ -466,19 +473,24 @@
     state = 'online-over';
     const time = player.finished;
     const rival = cars.find(c => c.remote);
-    const won = !rival || rival.finished === null || time <= rival.finished;
+    let won = !rival || rival.finished === null || time <= rival.finished;
     saveGhost(time);
     Arcade.countPlay();
-    if (net) Arcade.flag('online-match');
+    if (net) {
+      Arcade.flag('online-match');
+      net.wins[won ? 0 : 1]++;
+    }
     if (won && net) Arcade.flag('pocket-racer-win');
     Arcade.tone(won ? { freq: 523, to: 1046, dur: 0.4, type: 'triangle', vol: 0.06 } : { freq: 300, to: 120, dur: 0.5, type: 'sawtooth', vol: 0.04 });
     const them = net ? esc(net.names[1]) : 'Your opponent';
+    const tally = () => net ? `Match score: you ${net.wins[0]} – ${net.wins[1]} ${net.names[1]}` : '';
     const showResult = () => {
       const r = cars.find(c => c.remote);
       const theirTime = r && r.finished !== null ? `${them} ${r.finished.toFixed(2)}s` : net ? `${them} is still racing…` : `${them} left`;
       ui.show({
         title: won ? 'You win the race!' : `${them} wins`,
         html: `<p class="big">${time.toFixed(2)}s</p><p>${esc(track.name)} · best lap ${bestLap.toFixed(2)}s</p><p data-them>${theirTime}</p>
+          <p class="muted-note" data-tally>${esc(tally())}</p>
           ${net ? '<div class="menu"><button class="btn secondary" type="button" data-leave>Leave</button></div><p class="muted-note" data-wait>A rematch starts when you both press it.</p>' : ''}`,
         button: net ? 'Rematch' : 'Back to menu',
         delay: 600,
@@ -493,13 +505,23 @@
       });
     };
     showResult();
-    // Fill in their time when they cross the line.
+    // Fill in their time when they cross the line. If they actually got there first (their
+    // finish was still on its way when ours landed), the result flips.
     const poll = setInterval(() => {
       const r = cars.find(c => c.remote);
       const slot = document.querySelector('[data-them]');
       if (state !== 'online-over' || !slot) return clearInterval(poll);
       if (r && r.finished !== null) {
         slot.textContent = `${net ? net.names[1] : 'Opponent'} ${r.finished.toFixed(2)}s`;
+        if (won && r.finished < time) {
+          won = false;
+          if (net) {
+            net.wins[0]--;
+            net.wins[1]++;
+          }
+          $('overlay').querySelector('h2').textContent = `${net ? net.names[1] : 'Your opponent'} wins`;
+          document.querySelector('[data-tally]').textContent = tally();
+        }
         clearInterval(poll);
       }
     }, 250);
@@ -513,10 +535,14 @@
       ready: () => {
         if (cancelled || !net) return;
         net.conn.send('hello', { name: Arcade.profile().name });
-        if (net.host) startOnline();
+        if (net.host) measureLag();
       },
       event: onNet,
-      state: s => { if (net) net.target = s; },
+      state: s => {
+        if (!net) return;
+        net.target = s;
+        net.targetAt = performance.now();
+      },
       left: opponentGone,
       closed: () => { if (net) opponentGone(); },
     };
@@ -528,7 +554,7 @@
         : how === 'public' ? await Relay.joinPublic(code, handlers)
         : await Relay.joinRoom('racer', code, handlers);
       if (cancelled) { res.conn.close(); return; }
-      net = { conn: res.conn, host: res.slot === 1, names: [Arcade.profile().name, 'Opponent'], want: { me: false, them: false }, sendT: 0, target: null };
+      net = { conn: res.conn, host: res.slot === 1, names: [Arcade.profile().name, 'Opponent'], want: { me: false, them: false }, sendT: 0, target: null, targetAt: 0, lag: 0, wins: [0, 0] };
       if (net.host) {
         ui.show({
           title: how === 'create' ? 'Waiting for a friend' : 'Looking for an opponent…',
@@ -546,17 +572,33 @@
     }
   }
 
+  // Before the first race the host times a round trip. The race message takes about half of it
+  // to arrive, so the host's countdown runs that much longer and both lights go green together.
+  // An opponent on an older version never answers; after 2s the race just starts.
+  function measureLag() {
+    const sent = performance.now();
+    const go = () => {
+      if (!net || net.pong !== go) return;
+      net.pong = null;
+      startOnline();
+    };
+    net.pong = go;
+    net.pingAt = sent;
+    net.conn.send('ping');
+    setTimeout(go, 2000);
+  }
+
   // The host picks the track (whatever was selected in their menu) and both grids start together.
   function startOnline() {
     net.want = { me: false, them: false };
-    net.conn.send('race', { track: selected.id });
-    beginOnline(selected);
+    net.conn.send('race', { track: selected.id, lag: net.lag });
+    beginOnline(selected, net.lag);
   }
 
-  function beginOnline(t) {
+  function beginOnline(t, lead = 0) {
     net.target = null;
     raceOnline = true;
-    setupRace(t, net);
+    setupRace(t, net, lead);
     state = 'playing';
     ui.hide();
   }
@@ -564,7 +606,15 @@
   function onNet(name, data) {
     if (!net) return;
     if (name === 'hello') net.names[1] = String(data?.name || 'Opponent').slice(0, 24);
-    else if (name === 'race' && !net.host) beginOnline(TRACKS.find(t => t.id === data.track) || TRACKS[0]);
+    else if (name === 'race' && !net.host) {
+      net.lag = clamp(Number(data.lag) || 0, 0, 1);
+      beginOnline(TRACKS.find(t => t.id === data.track) || TRACKS[0]);
+    }
+    else if (name === 'ping') net.conn.send('pong');
+    else if (name === 'pong' && net.pong) {
+      net.lag = Math.min(1, (performance.now() - net.pingAt) / 2000);
+      net.pong();
+    }
     else if (name === 'rematch') {
       net.want.them = true;
       maybeRematch();
@@ -607,9 +657,23 @@
 
   // ---------- HUD & menu ----------
 
+  // Logs the first time a car reached each step up to `dist` (updates can skip a few).
+  function reached(times, dist, t) {
+    for (let d = dist; d > dist - 40 && !times.has(d); d--) times.set(d, t);
+  }
+
+  // Online: how far apart you are in seconds, from when the leader passed the trailer's spot.
+  function gapText() {
+    const rival = net && cars.find(c => c.remote);
+    if (!rival || countdown > 0 || player.finished !== null || rival.finished !== null) return '';
+    const [lead, trail, times] = player.dist >= rival.dist ? [player, rival, net.mine] : [rival, player, net.theirs];
+    const passed = times.get(trail.dist);
+    return passed === undefined || lead.dist === trail.dist ? '' : ` · ${(raceTime - passed).toFixed(1)}s`;
+  }
+
   function updateHud() {
     $('lap').textContent = `${Math.min(LAPS, Math.max(1, player.lap + 1))}/${LAPS}`;
-    $('pos').textContent = `${position(player)}/${cars.length}`;
+    $('pos').textContent = `${position(player)}/${cars.length}${gapText()}`;
     $('time').textContent = raceTime.toFixed(1);
   }
 

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <rect width="320" height="200" fill="#2a6e3c"/>
+  <g fill="#2f7a43"><rect y="0" width="320" height="25"/><rect y="50" width="320" height="25"/><rect y="100" width="320" height="25"/><rect y="150" width="320" height="25"/></g>
+  <rect y="0" width="320" height="22" fill="#4f8cff" opacity=".6"/>
+  <g stroke="#fff" stroke-opacity=".7" stroke-width="2"><line x1="0" y1="22" x2="320" y2="22"/><line x1="0" y1="75" x2="320" y2="75"/><line x1="0" y1="125" x2="320" y2="125"/><line x1="0" y1="175" x2="320" y2="175"/></g>
+  <rect y="138" width="320" height="3" fill="#4f8cff"/>
+  <rect y="96" width="320" height="3" fill="#ffe14d"/>
+  <path d="M150 160 Q190 60 236 48" stroke="#fff" stroke-opacity=".5" stroke-width="2" stroke-dasharray="4 5" fill="none"/>
+  <g stroke="#7a5a12" stroke-width="2" fill="#ffc53d">
+    <circle cx="150" cy="162" r="8"/><circle cx="236" cy="56" r="8"/><circle cx="70" cy="132" r="8"/><circle cx="130" cy="146" r="8"/><circle cx="170" cy="146" r="8"/>
+  </g>
+  <g stroke="#222" stroke-width="2" fill="#ff5d5d">
+    <circle cx="214" cy="40" r="8"/><circle cx="132" cy="128" r="8"/><circle cx="172" cy="128" r="8"/><circle cx="80" cy="102" r="8"/>
+  </g>
+  <ellipse cx="236" cy="44" rx="5" ry="7" fill="#8b4a22"/>
+  <text x="160" y="196" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="800" font-size="15" fill="#fff" letter-spacing="2">BLITZ BOWL</text>
+</svg>

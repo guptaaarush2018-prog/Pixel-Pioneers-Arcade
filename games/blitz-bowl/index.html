@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Blitz Bowl · Pixel Pioneers Arcade</title>
+  <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../assets/css/arcade.css">
+</head>
+<body class="game" data-game="blitz-bowl">
+  <header class="topbar">
+    <a class="back" href="../../index.html">← All games</a>
+    <h1>Blitz Bowl</h1>
+    <div class="stats">
+      <span>Score<b id="score">0 – 0</b></span>
+      <span>Down<b id="down">1st & 10</b></span>
+      <span>Clock<b id="clock">Q1 5:00</b></span>
+    </div>
+    <button class="icon-btn" id="mute" type="button">Sound on</button>
+  </header>
+
+  <main class="stage">
+    <canvas id="game"></canvas>
+    <div class="overlay" id="overlay" hidden></div>
+  </main>
+
+  <p class="help"><kbd>1</kbd>–<kbd>4</kbd> pick a play, then throw to a receiver · click to throw to a spot · arrows move · <kbd>Space</kbd> burst · <kbd>P</kbd> pause</p>
+  <div class="touchpad">
+    <button id="t-burst" type="button">Burst</button>
+  </div>
+
+  <script src="../../assets/js/config.js"></script>
+  <script src="../../assets/js/catalog.js"></script>
+  <script src="../../assets/js/arcade.js"></script>
+  <script src="../../assets/js/online.js"></script>
+  <script src="../../assets/js/relay.js"></script>
+  <script src="../../assets/js/versus.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

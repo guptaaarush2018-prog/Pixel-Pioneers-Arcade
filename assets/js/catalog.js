@@ -19,6 +19,16 @@ window.CATALOG = [
     online: 'live',
   },
   {
+    id: 'paintball-arena',
+    title: 'Paintball Arena',
+    genre: 'Fighting',
+    desc: 'A 2-player paintball platform fighter with seven silly weapons. Play a friend on one keyboard, the CPU, or online with a join code.',
+    url: 'https://plzgimmeaname.github.io/paintball-web/',
+    thumb: 'assets/thumbs/paintball-arena.svg',
+    by: 'plzgimmeaname ↗',
+    online: 'live',
+  },
+  {
     id: 'pixel-pitch',
     title: 'Pixel Pitch',
     genre: 'Sports',
@@ -55,6 +65,19 @@ window.CATALOG = [
     goals: [1200, 1800, 2300],
     online: 'live',
     extras: [{ id: 'pocket-racer-win', title: 'Pocket Racer: Podium Top', desc: 'Finish a race in 1st place.' }],
+  },
+  {
+    id: 'blitz-bowl',
+    title: 'Blitz Bowl',
+    genre: 'Sports',
+    desc: 'Retro top-down football. Call the play, drop back, and fire it downfield, then upgrade your team between games as the season gets tougher.',
+    goals: [1500, 3500, 5500],
+    online: 'duel',
+    extras: [
+      { id: 'blitz-bowl-win', title: 'Blitz Bowl: Game Ball', desc: 'Win a game.' },
+      { id: 'blitz-bowl-shutout', title: 'Blitz Bowl: Shutout', desc: 'Win without letting them score.' },
+      { id: 'blitz-bowl-bomb', title: 'Blitz Bowl: The Bomb', desc: 'Complete a pass 35+ yards downfield.' },
+    ],
   },
   {
     id: 'rune-rumble',
@@ -167,6 +190,18 @@ window.CATALOG = [
     desc: 'Bounce the ball, break every brick, catch power-ups. Each level is short and a little harder.',
     goals: [1500, 5000, 12000],
     online: 'duel',
+  },
+  {
+    id: 'comet-pinball',
+    title: 'Comet Pinball',
+    genre: 'Arcade',
+    desc: 'A space-themed pinball table. Light C·O·M, drop the targets, stack up multipliers, and start multiball.',
+    goals: [15000, 40000, 80000],
+    online: 'duel',
+    extras: [
+      { id: 'comet-pinball-skill', title: 'Comet Pinball: Skill Shot', desc: 'Launch straight into the flashing lane.' },
+      { id: 'comet-pinball-multi', title: 'Comet Pinball: Multiball', desc: 'Start multiball.' },
+    ],
   },
   {
     id: 'type-storm',

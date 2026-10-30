@@ -7,9 +7,11 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | Game | Genre | Online |
 | --- | --- | --- |
 | Stickman Evolution: The 95th | Fighting | Linked from the hub; hosted at [pixel-pioneers-studios.github.io/Stickman-Battles](https://pixel-pioneers-studios.github.io/Stickman-Battles/) |
+| Paintball Arena | Fighting (platform shooter) | Linked from the hub; hosted at [plzgimmeaname.github.io/paintball-web](https://plzgimmeaname.github.io/paintball-web/) |
 | Pixel Pitch | Sports (4-a-side football) | Live 1v1 |
 | Hoop Duel | Sports (1v1 basketball) | Live 1v1 |
-| Pocket Racer | Racing | Live 1v1 races, world-record ghost |
+| Blitz Bowl | Sports (retro football, season mode) | Online duel |
+| Pocket Racer | Racing | Live 1v1 races (live gap, match score), world-record ghost |
 | Rune Rumble | Strategy (real-time lane battler) | Live 1v1 |
 | Realm Rivals | Strategy (kingdom builder) | Live 1v1 kingdom wars, plus the long-term Kingdom mode |
 | Box Battle | Strategy | Live 1v1 |
@@ -21,6 +23,7 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | Crystal Swap | Puzzle (match-3) | Online duel |
 | Lantern Maze | Maze chase | Online duel |
 | Brick Burst | Arcade (brick breaker) | Online duel |
+| Comet Pinball | Arcade (pinball) | Online duel |
 | Type Storm | Typing | Online duel |
 | Cloud Climber | Platformer | Online duel |
 | Stack Up | Arcade (one button) | Online duel |
@@ -57,7 +60,7 @@ That turns on global leaderboards, the "playing now" counters (site-wide and per
 
 Live matches don't use Firebase. They connect to the Socket.io relay that Stickman Evolution: The 95th already runs on Render (the Stickman-Battles repo) (`relayUrl` in [`assets/js/config.js`](assets/js/config.js)); that server's `ALLOWED_ORIGINS`/`PORTAL_ORIGINS` already include this site's GitHub Pages origin. [`assets/js/relay.js`](assets/js/relay.js) speaks the Socket.io wire format over a plain WebSocket, so there's still no SDK.
 
-- The relay pairs two players per room name and forwards their messages. In real-time games (Pixel Pitch, Hoop Duel, Rune Rumble) the player who arrived first runs the match and streams snapshots; the other sends inputs. Pocket Racer players each drive their own car and stream positions. Box Battle and Realm Rivals send moves and attacks as events.
+- The relay pairs two players per room name and forwards their messages. In real-time games (Pixel Pitch, Hoop Duel, Rune Rumble) the player who arrived first runs the match and streams snapshots; the other sends inputs. Pocket Racer players each drive their own car and stream position and speed; the other car is drawn slightly ahead of its last update to hide the delay, and the host times a ping before the race so both countdowns end together. Box Battle and Realm Rivals send moves and attacks as events.
 - **Quick match** takes the first free public room (`pp-<game>-q1`, `q2`, …). **Private rooms** use a 4-letter code.
 - **Online duels** ([`assets/js/versus.js`](assets/js/versus.js)) turn any single-player game into a live score race: both players start at the same moment with the same random seed, see each other's score, and the higher final score wins. A game opts in by showing its start panel through `Versus.attach({ ui, start, score, intro })`.
 - The relay sleeps when idle on Render's free plan, so the first connection can take up to a minute.
