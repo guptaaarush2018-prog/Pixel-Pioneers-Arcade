@@ -182,6 +182,7 @@ const Arcade = (() => {
   // list these under `extras` to turn them into achievements.
   function flag(name) {
     updateStats(s => { s.flags[name] = true; });
+    dailyEvent({ flag: name });
   }
 
   function achievementList() {
@@ -271,17 +272,25 @@ const Arcade = (() => {
       s.plays[gameId] = (s.plays[gameId] || 0) + 1;
       s.totalPlays++;
     });
+    addTickets(1);
+    dailyEvent({ play: gameId });
   }
 
   function finish(ui, { score, title = 'Game Over', lines = [], button = 'Play again', onAction, delay = 600, html = '' }) {
     const isBest = submitScore(gameId, score);
     countPlay();
+    // A ticket for finishing, plus one for each medal score this run reached.
+    const goals = (window.CATALOG || []).find(g => g.id === gameId)?.goals || [];
+    const medals = goals.filter(goal => score >= goal).length;
+    addTickets(medals);
+    dailyEvent({ score });
     // During an online duel (versus.js) the panel also shows the duel result and a rematch button.
     const duel = (typeof Versus !== 'undefined' && Versus.finished(score)) || {};
     ui.show({
       title,
       html: `<p class="big">${score.toLocaleString()}</p>
         ${isBest && score > 0 ? '<p class="new-best">New personal best</p>' : ''}
+        <p class="ticket-note">+${1 + medals} ticket${medals ? 's' : ''} · ${tickets().toLocaleString()} total</p>
         ${duel.html || ''}
         ${lines.map(l => `<p>${l}</p>`).join('')}${html}
         <div class="board" data-board></div>`,
@@ -300,6 +309,113 @@ const Arcade = (() => {
         })
         .catch(() => { slot.innerHTML = '<p class="board-note">Couldn\'t reach the leaderboard.</p>'; });
     }
+  }
+
+  // ---------- Tickets & prize shop ----------
+  // Every finished game pays a ticket (more for medal scores, and for daily challenges). Tickets buy
+  // cosmetics; a game reads what's equipped with Arcade.equipped(slot).
+
+  const SHOP = [
+    { slot: 'chess-board', game: 'chess', title: 'Chess board', items: [
+      { id: 'wood', name: 'Wood', cost: 0, colors: ['#d9c49a', '#9a7650', '#3a2c1d'] },
+      { id: 'ocean', name: 'Ocean', cost: 40, colors: ['#bfe3ef', '#4f8fae', '#1d3a4a'] },
+      { id: 'candy', name: 'Candy', cost: 60, colors: ['#ffd6e5', '#e5739f', '#5a2340'] },
+      { id: 'midnight', name: 'Midnight', cost: 80, colors: ['#8c93a8', '#3c4358', '#151824'] },
+    ] },
+    { slot: 'rune-team', game: 'rune-rumble', title: 'Rune Rumble team colour', items: [
+      { id: 'blue', name: 'Royal blue', cost: 0, colors: ['#4f8cff'] },
+      { id: 'emerald', name: 'Emerald', cost: 40, colors: ['#3ccf8e'] },
+      { id: 'violet', name: 'Violet', cost: 40, colors: ['#b07cff'] },
+      { id: 'gold', name: 'Gold', cost: 80, colors: ['#ffc53d'] },
+    ] },
+    { slot: 'gem-sparkle', game: 'gem-mine', title: 'Gem Mine sparkles', items: [
+      { id: 'classic', name: 'Classic', cost: 0, colors: ['#7fdbff', '#b388ff', '#9be37a', '#ffd54f'] },
+      { id: 'fire', name: 'Fire', cost: 30, colors: ['#ff7043', '#ffb300', '#ff5252', '#ffe082'] },
+      { id: 'ice', name: 'Ice', cost: 30, colors: ['#e1f5fe', '#81d4fa', '#4fc3f7', '#b3e5fc'] },
+      { id: 'rainbow', name: 'Rainbow', cost: 60, colors: ['#ff5252', '#ffb300', '#ffee58', '#66bb6a', '#42a5f5', '#ab47bc'] },
+    ] },
+  ];
+
+  const tickets = () => load('tickets', 0);
+  function addTickets(n) {
+    if (n > 0) save('tickets', tickets() + n);
+  }
+  const owned = () => load('shop:owned', {});
+  // The equipped item for a slot (falling back to the free one).
+  function equipped(slot) {
+    const group = SHOP.find(g => g.slot === slot);
+    const id = load(`shop:${slot}`, null);
+    return group?.items.find(i => i.id === id && (i.cost === 0 || owned()[`${slot}:${i.id}`])) || group?.items[0] || null;
+  }
+  // Buys (if needed) and equips. Returns false when there aren't enough tickets.
+  function equip(slot, id) {
+    const item = SHOP.find(g => g.slot === slot)?.items.find(i => i.id === id);
+    if (!item) return false;
+    const have = owned();
+    if (item.cost && !have[`${slot}:${id}`]) {
+      if (tickets() < item.cost) return false;
+      save('tickets', tickets() - item.cost);
+      have[`${slot}:${id}`] = Date.now();
+      save('shop:owned', have);
+    }
+    save(`shop:${slot}`, id);
+    return true;
+  }
+
+  // ---------- Daily challenges ----------
+  // Three a day, the same for everyone (picked from the date): one score, one win, one general.
+
+  const DAILY_REWARD = 5, DAILY_BONUS = 5;
+
+  function dailyPool() {
+    const games = (window.CATALOG || []).filter(g => !g.url && g.goals);
+    const scores = games.map(g => ({ id: `score:${g.id}`, text: `Score ${g.goals[0].toLocaleString()} in ${g.title}`, game: g.id, min: g.goals[0] }));
+    const wins = games.flatMap(g => (g.extras || []).filter(x => /-win$/.test(x.id) && !/online|realm/.test(x.id))
+      .map(x => ({ id: `flag:${x.id}`, text: `${x.desc.replace(/\.$/, '')} in ${g.title}`, game: g.id, flag: x.id })));
+    const general = [
+      { id: 'plays:5', text: 'Finish 5 games', plays: 5 },
+      { id: 'plays:10', text: 'Finish 10 games', plays: 10 },
+      { id: 'variety:3', text: 'Play 3 different games', variety: 3 },
+      { id: 'variety:5', text: 'Play 5 different games', variety: 5 },
+      { id: 'flag:online-match', text: 'Finish an online match', flag: 'online-match' },
+    ];
+    return [scores, wins, general];
+  }
+
+  function daily() {
+    const day = today();
+    let d = load('daily', null);
+    if (!d || d.day !== day) {
+      let h = 2166136261;
+      for (const c of day) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+      const tasks = dailyPool().map((pool, i) => pool.length ? pool[((h >>> 0) + i * 7919) % pool.length] : null).filter(Boolean);
+      d = { day, tasks, done: [], plays: 0, games: [] };
+      save('daily', d);
+    }
+    return d;
+  }
+
+  function dailyEvent({ flag: f, play, score }) {
+    if (!window.CATALOG) return;
+    const d = daily();
+    if (play) {
+      d.plays++;
+      if (!d.games.includes(play)) d.games.push(play);
+    }
+    for (const t of d.tasks) {
+      if (d.done.includes(t.id)) continue;
+      const hit = (t.flag && t.flag === f) || (t.plays && d.plays >= t.plays) || (t.variety && d.games.length >= t.variety)
+        || (t.min && score !== undefined && gameId === t.game && score >= t.min);
+      if (!hit) continue;
+      d.done.push(t.id);
+      addTickets(DAILY_REWARD);
+      toast('Daily challenge done', `${t.text} · +${DAILY_REWARD} tickets`);
+      if (d.done.length === d.tasks.length) {
+        addTickets(DAILY_BONUS);
+        toast('All daily challenges done', `+${DAILY_BONUS} bonus tickets`);
+      }
+    }
+    save('daily', d);
   }
 
   // Tiny synth for sound effects; no audio files needed.
@@ -346,5 +462,6 @@ const Arcade = (() => {
   return {
     load, save, getBest, submitScore, setupCanvas, makeLayer, DIRS, VEC, onSwipe, onBlur, overlay, tone, rand, randInt, pick,
     gameId, profile, setName, randomName, stats, flag, achievementList, unlocked, finish, countPlay, toast,
+    SHOP, tickets, addTickets, equipped, equip, owned, daily, DAILY_REWARD, DAILY_BONUS,
   };
 })();

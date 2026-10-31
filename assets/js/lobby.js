@@ -32,10 +32,11 @@ if (!Online.enabled) {
       counts.innerHTML = `<div class="stat"><span>Playing now</span><b>${total}</b></div>
         <div class="stat"><span>Waiting for a match</span><b>${list.length}</b></div>
         ${busiest.map(([id, n]) => `<div class="stat"><span>${Online.escape(titleOf(id))}</span><b>${n}</b></div>`).join('')}`;
+      list.sort((a, b) => !!Friends.get(b.id) - !!Friends.get(a.id));
       waitingEl.innerHTML = list.length
         ? `<ul class="waiting-list">${list.map(w => `
             <li><span class="dot"></span>
-              <span class="who"><b>${Online.escape(w.name)}</b><span>${Online.escape(titleOf(w.game))} · ${Online.escape(w.label || 'Quick match')} · waiting ${Math.max(1, Math.round((Date.now() - w.t) / 1000))}s</span></span>
+              <span class="who"><b>${Online.escape(Friends.display(w.id, w.name))}</b><span>${Online.escape(titleOf(w.game))} · ${Online.escape(w.label || 'Quick match')} · waiting ${Math.max(1, Math.round((Date.now() - w.t) / 1000))}s</span></span>
               <a class="btn" href="games/${encodeURIComponent(w.game)}/index.html?join=${encodeURIComponent(w.room)}">Join</a></li>`).join('')}</ul>`
         : '<p class="board-note">Nobody is waiting right now. Press Quick match in any online game and you\'ll show up here for others to join.</p>';
     } catch {

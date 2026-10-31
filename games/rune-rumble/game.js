@@ -10,7 +10,7 @@
   const MATCH_TIME = 180, OVERTIME = 60, DOUBLE_AT = 60;
   const MANA_MAX = 10, MANA_EVERY = 2.8;
   const SEND_EVERY = 0.08;
-  const COLORS = { me: '#4f8cff', them: '#ff5d5d' };
+  const COLORS = { me: Arcade.equipped('rune-team')?.colors[0] || '#4f8cff', them: '#ff5d5d' };
 
   // Every player brings the same eight runes. `count` units spawn per card.
   const CARDS = [
@@ -44,6 +44,7 @@
   let me = 0;           // the side this device plays: 0 left, 1 right (guests are drawn mirrored)
   let g = null;         // the match; on a guest, rebuilt from snapshots
   let selected = -1;
+  let picked = -1;      // squad of your troops picked to switch lanes
   let hover = null;
   let net = null;       // { conn, names, sendT, want: { me, them } }
   let snaps = [];       // guest: the last two snapshots, for smoothing
@@ -73,7 +74,7 @@
   }
 
   function addEnt(e) {
-    const ent = { id: g.nextId++, cd: 0.4, maxHp: e.hp, yOff: 0, flash: 0, ...e };
+    const ent = { id: g.nextId++, cd: 0.4, maxHp: e.hp, yOff: 0, flash: 0, toLane: -1, ...e };
     g.ents.push(ent);
     return ent;
   }
@@ -121,10 +122,11 @@
       return true;
     }
     const n = card.count || 1;
+    const squad = g.nextId;   // everything one card spawns moves between lanes together
     for (let i = 0; i < n; i++) {
       const spread = n > 1 ? (i - (n - 1) / 2) : 0;
       addEnt({
-        type: card.id, side, lane, x: x - spread * 6 * (side ? -1 : 1), yOff: spread * 12,
+        type: card.id, side, lane, squad, x: x - spread * 6 * (side ? -1 : 1), yOff: spread * 12, spread: spread * 12,
         hp: card.hp, dmg: card.dmg, rate: card.rate, range: card.range, speed: card.speed || 0,
         r: card.r, ranged: !!card.ranged, splash: card.splash || 0, siege: !!card.siege,
         building: card.kind === 'building', life: card.life || 0,
@@ -133,6 +135,18 @@
     fx({ k: 'ring', x, y: LANES[lane], r: 26, s: side });
     Arcade.tone({ freq: 520, to: 700, dur: 0.08, type: 'triangle', vol: 0.04 });
     return true;
+  }
+
+  // Sends a squad over to another lane. Picking its own lane again calls it back.
+  function moveSquad(side, squad, lane) {
+    if (lane < 0 || lane >= LANES.length) return false;
+    let moved = false;
+    for (const u of g.ents) {
+      if (u.side !== side || u.squad !== squad || u.hp <= 0 || !u.speed || u.lane < 0) continue;
+      u.toLane = lane;
+      moved = true;
+    }
+    return moved;
   }
 
   // ---------- Simulation (bot games and the online host) ----------
@@ -184,6 +198,10 @@
         if (u.life <= 0) { u.hp = 0; continue; }
       }
       u.cd -= dt;
+      if (u.toLane >= 0) {
+        crossLanes(u, dt);
+        continue;
+      }
       const t = findTarget(u, u.speed ? u.range + 90 : u.range);
       if (t && t.d <= u.range) {
         if (u.cd <= 0) {
@@ -209,6 +227,21 @@
     }
   }
 
+  // Troops walk across without fighting. Past halfway they count as being in the new lane.
+  function crossLanes(u, dt) {
+    if (u.lane !== u.toLane && Math.abs(LANES[u.lane] + u.yOff - LANES[u.toLane]) < Math.abs(u.yOff)) {
+      u.yOff += LANES[u.lane] - LANES[u.toLane];
+      u.lane = u.toLane;
+    }
+    const want = (u.lane === u.toLane ? 0 : LANES[u.toLane] - LANES[u.lane]) + (u.spread || 0);
+    const d = want - u.yOff, step = Math.max(40, u.speed) * dt;
+    if (Math.abs(d) > step) u.yOff += Math.sign(d) * step;
+    else {
+      u.yOff = want;
+      if (u.lane === u.toLane) u.toLane = -1;
+    }
+  }
+
   function attack(u, target) {
     const y1 = entY(u), y2 = entY(target);
     if (u.ranged) fx({ k: 'shot', x1: u.x, y1, x2: target.x, y2, c: u.splash ? '#ffb347' : '#e8e3c8' });
@@ -230,8 +263,20 @@
 
   // ---------- Bot ----------
 
+  // Normal and Hard bots pull fresh troops over to whichever lane is under the most pressure.
+  function botShift(enemies) {
+    if (level === 0) return;
+    const threat = [0, 1, 2].map(lane => enemies.filter(e => e.lane === lane && e.x > MID - 60).reduce((s, e) => s + e.hp, 0));
+    const lane = threat.indexOf(Math.max(...threat));
+    if (!threat[lane]) return;
+    const idle = g.ents.find(u => u.side === 1 && u.hp > 0 && u.speed && u.lane >= 0 && u.lane !== lane && u.toLane < 0 && u.x > MID
+      && !enemies.some(e => e.lane === u.lane && Math.abs(e.x - u.x) < 220));
+    if (idle) moveSquad(1, idle.squad, lane);
+  }
+
   function botThink() {
     const side = 1, p = g.players[side];
+    botShift(g.ents.filter(e => e.side === 0 && e.hp > 0 && !e.building));
     const hand = p.hand.map((c, slot) => ({ slot, card: CARDS[c] })).filter(h => h.card.cost <= p.mana);
     if (!hand.length) return;
     const enemies = g.ents.filter(e => e.side === 0 && e.hp > 0 && !e.building);
@@ -276,7 +321,7 @@
   function snapshot() {
     return {
       t: Math.round(g.time * 10) / 10, o: g.overtime ? 1 : 0,
-      e: g.ents.map(e => [e.id, CARD_INDEX[e.type] ?? (e.type === 'tower' ? 90 : 91), e.side, Math.round(e.x), e.lane, Math.round(e.hp), e.maxHp, Math.round(e.yOff), e.flash > 0 ? 1 : 0]),
+      e: g.ents.map(e => [e.id, CARD_INDEX[e.type] ?? (e.type === 'tower' ? 90 : 91), e.side, Math.round(e.x), e.lane, Math.round(e.hp), e.maxHp, Math.round(e.yOff), e.flash > 0 ? 1 : 0, e.squad || 0, e.toLane]),
       p: g.players.map(p => [Math.round(p.mana * 100) / 100, p.crowns]),
       h: g.players[1].hand, n: g.players[1].queue[0],
       f: g.newFx.splice(0),
@@ -307,18 +352,23 @@
     const [a, b] = snaps;
     const k = Math.min(1, (performance.now() - b.at) / (SEND_EVERY * 1000));
     const prev = new Map(a.s.e.map(e => [e[0], e]));
-    return b.s.e.map(([id, ci, side, x, lane, hp, maxHp, yOff, flash]) => {
+    const laneY = l => LANES[l < 0 ? 1 : l];
+    return b.s.e.map(([id, ci, side, x, lane, hp, maxHp, yOff, flash, squad, toLane]) => {
       const old = prev.get(id);
       const px = old ? old[3] + (x - old[3]) * k : x;
+      // Blend the on-screen height, since yOff is relative to a lane that can change mid-crossing.
+      const y = laneY(lane) + yOff, oldY = old ? laneY(old[4]) + old[7] : y;
       const type = ci === 90 ? 'tower' : ci === 91 ? 'keep' : CARDS[ci].id;
       const base = ci >= 90 ? BUILDINGS[type] : CARDS[ci];
-      return { id, type, side, x: px, lane, hp, maxHp, yOff, flash: flash ? 0.1 : 0, r: base.r, building: ci >= 90 || base.kind === 'building' };
+      return { id, type, side, x: px, lane, hp, maxHp, yOff: oldY + (y - oldY) * k - laneY(lane), flash: flash ? 0.1 : 0, r: base.r, building: ci >= 90 || base.kind === 'building', squad, toLane: toLane ?? -1, speed: base.speed || 0 };
     });
   }
 
   function onNetEvent(name, data) {
     if (name === 'play' && mode === 'host' && state === 'playing') {
       playCard(1, data.slot, data.lane, data.x);
+    } else if (name === 'move' && mode === 'host' && state === 'playing') {
+      moveSquad(1, data.squad, data.lane);
     } else if (name === 'rematch') {
       net.want.them = true;
       maybeRematch();
@@ -414,6 +464,7 @@
   function beginPlaying() {
     state = 'playing';
     selected = -1;
+    picked = -1;
     botT = 0;
     ui.hide();
     Arcade.tone({ freq: 392, to: 784, dur: 0.25, type: 'triangle', vol: 0.05 });
@@ -480,6 +531,7 @@
     ui.show({
       title: 'Rune Rumble',
       html: `<p>Spend mana on rune cards to send troops down three lanes. Topple towers for crowns, or break the keep to win outright.</p>
+        <p>Changed your mind? Click one of your troops, then another lane, and they'll march across.</p>
         <div class="menu">
           <div class="row">
             ${LEVELS.map((l, i) => `<button class="btn ${i === 1 ? '' : 'secondary'}" type="button" data-bot="${i}">${l.name}</button>`).join('')}
@@ -526,8 +578,38 @@
   const CARD_W = 128, CARD_H = 104, HAND_Y = FIELD_H + 18;
   const cardX = i => 210 + i * (CARD_W + 12);
 
+  const ents = () => (mode === 'guest' ? guestEnts() : g.ents);
+  const squadOf = id => ents().filter(e => e.side === me && e.squad === id && e.hp > 0);
+
+  function orderSquad(lane) {
+    if (picked < 0 || lane < 0 || lane >= LANES.length) return;
+    if (mode === 'guest') net.conn.send('move', { squad: picked, lane });
+    else moveSquad(me, picked, lane);
+    Arcade.tone({ freq: 440, to: 600, dur: 0.07, type: 'triangle', vol: 0.03 });
+  }
+
+  // With no card picked, a click picks up one of your troops, and the next click on a lane sends them there.
+  function tryCommand(px, py) {
+    if (py > FIELD_H) return;
+    const hit = ents()
+      .filter(e => e.side === me && e.hp > 0 && e.speed && e.lane >= 0)
+      .map(e => [Math.hypot(sx(e.x) - px, entY(e) - py), e])
+      .filter(([d, e]) => d < e.r + 14)
+      .sort((a, b) => a[0] - b[0])[0];
+    if (hit) {
+      picked = hit[1].squad === picked ? -1 : hit[1].squad;
+      Arcade.tone({ freq: 760, dur: 0.04, vol: 0.03 });
+      return;
+    }
+    if (picked >= 0 && laneOf(py) >= 0) {
+      orderSquad(laneOf(py));
+      picked = -1;
+    }
+  }
+
   function tryPlay(px, py) {
-    if (selected < 0 || py > FIELD_H) return;
+    if (selected < 0) return tryCommand(px, py);
+    if (py > FIELD_H) return;
     const lane = laneOf(py), x = sx(px);
     if (mode === 'guest') {
       if (!canPlay(1, selected, lane, x)) return Arcade.tone({ freq: 140, dur: 0.08, vol: 0.03 });
@@ -545,6 +627,7 @@
     for (let i = 0; i < 4; i++) {
       if (px >= cardX(i) && px <= cardX(i) + CARD_W && py >= HAND_Y && py <= HAND_Y + CARD_H) {
         selected = selected === i ? -1 : i;
+        picked = -1;
         Arcade.tone({ freq: 660, dur: 0.04, vol: 0.03 });
         return;
       }
@@ -560,7 +643,17 @@
       return;
     }
     const n = ['Digit1', 'Digit2', 'Digit3', 'Digit4'].indexOf(e.code);
-    if (n >= 0 && state === 'playing') selected = selected === n ? -1 : n;
+    if (n >= 0 && state === 'playing') {
+      selected = selected === n ? -1 : n;
+      picked = -1;
+    }
+    // Up and down nudge the picked troops one lane over.
+    const dir = { ArrowUp: -1, KeyW: -1, ArrowDown: 1, KeyS: 1 }[e.code];
+    if (dir && state === 'playing' && picked >= 0) {
+      e.preventDefault();
+      const u = squadOf(picked)[0];
+      if (u) orderSquad((u.toLane >= 0 ? u.toLane : u.lane) + dir);
+    }
   });
 
   // ---------- Drawing ----------
@@ -587,6 +680,14 @@
     for (const y of LANES) {
       ctx.fillStyle = '#6b5233';
       ctx.fillRect(MID - 14, y - 22, 28, 44);
+    }
+
+    if (picked >= 0 && state === 'playing' && hover && hover[1] < FIELD_H) {
+      const lane = laneOf(hover[1]);
+      if (lane >= 0) {
+        ctx.fillStyle = 'rgba(255,197,61,0.08)';
+        ctx.fillRect(0, LANES[lane] - 26, W, 52);
+      }
     }
 
     if (selected >= 0 && state === 'playing') {
@@ -672,6 +773,24 @@
         ctx.beginPath(); ctx.moveTo(6 * face, -2); ctx.lineTo(16 * face, -10); ctx.stroke();
     }
     ctx.restore();
+
+    if (e.side === me && e.squad === picked && picked >= 0) {
+      ctx.strokeStyle = '#ffc53d';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x, y, e.r + 6, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    if (e.toLane >= 0) {
+      const up = LANES[e.toLane] < y;
+      ctx.fillStyle = e.side === me ? '#ffc53d' : '#ff9a9a';
+      ctx.beginPath();
+      ctx.moveTo(x, y + (up ? -e.r - 12 : e.r + 12));
+      ctx.lineTo(x - 5, y + (up ? -e.r - 5 : e.r + 5));
+      ctx.lineTo(x + 5, y + (up ? -e.r - 5 : e.r + 5));
+      ctx.closePath();
+      ctx.fill();
+    }
 
     if (e.hp < e.maxHp) {
       const w = e.building ? 44 : Math.max(16, e.r * 2.2);
@@ -842,10 +961,11 @@
       if (g.over) showResult();
     }
 
-    const ents = mode === 'guest' ? guestEnts() : g.ents;
+    const list = ents();
+    if (picked >= 0 && !list.some(e => e.side === me && e.squad === picked && e.hp > 0)) picked = -1;
     drawField();
-    for (const e of ents.filter(e => e.building)) drawEnt(e);
-    for (const e of ents.filter(e => !e.building)) drawEnt(e);
+    for (const e of list.filter(e => e.building)) drawEnt(e);
+    for (const e of list.filter(e => !e.building)) drawEnt(e);
     drawFx(dt);
     drawBanner();
     drawHand();

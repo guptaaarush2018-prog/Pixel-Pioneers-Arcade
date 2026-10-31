@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <rect width="320" height="200" fill="#0e1014"/>
+  <g transform="translate(96 14)">
+    <rect x="-4" y="-4" width="136" height="136" fill="#3a2c1d"/>
+    <g fill="#d9c49a"><rect width="128" height="128"/></g>
+    <g fill="#9a7650">
+      <rect x="32" width="32" height="32"/><rect x="96" width="32" height="32"/>
+      <rect y="32" width="32" height="32"/><rect x="64" y="32" width="32" height="32"/>
+      <rect x="32" y="64" width="32" height="32"/><rect x="96" y="64" width="32" height="32"/>
+      <rect y="96" width="32" height="32"/><rect x="64" y="96" width="32" height="32"/>
+    </g>
+    <path d="M80 48l7 -10 7 10 -7 10z" fill="#c77dff"/>
+    <g fill="#f6f2e7" stroke="#1b1d22" stroke-width="1.5" stroke-linejoin="round">
+      <path d="M8 124h16v-4h-16z M10 120l-2-14 5 6 3-10 3 10 5-6-2 14z"/>
+      <path d="M40 92h16v-4h-16z M42 88v-12h12v12z M40 76v-7h4v3h3v-3h2v3h3v-3h4v7z"/>
+    </g>
+    <g fill="#22252c" stroke="#e4e7ee" stroke-width="1.5" stroke-linejoin="round">
+      <path d="M104 28h16v-4h-16z M106 24l-1-11 6 2 1-6h0 2l1 6 6-2-1 11z M111 9h2v-6h-2z"/>
+      <path d="M72 60h16v-4h-16z M73 56l3-8 -4-4 7-7 3 1 2 4 1 14z"/>
+    </g>
+  </g>
+  <text x="160" y="184" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="800" font-size="14" fill="#eceef2" letter-spacing="2">CHESS</text>
+</svg>

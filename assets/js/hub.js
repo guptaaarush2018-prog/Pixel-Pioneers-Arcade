@@ -85,3 +85,5 @@ if (Online.enabled) {
 }
 // Refresh best scores when coming back from a game via the browser's back button.
 window.addEventListener('pageshow', renderCards);
+
+renderDaily(document.getElementById('daily'));

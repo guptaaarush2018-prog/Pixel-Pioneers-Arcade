@@ -46,7 +46,7 @@ if (!Online.enabled) {
         ? `<table class="table">
             <thead><tr><th>#</th><th>Player</th><th style="text-align:right">Score</th></tr></thead>
             <tbody>${list.map((r, i) => `
-              <tr class="${r.id === me ? 'me' : ''}"><td>${i + 1}</td><td>${Online.escape(r.name)}</td><td class="num">${Number(r.score).toLocaleString()}</td></tr>`).join('')}
+              <tr class="${r.id === me ? 'me' : ''}"><td>${i + 1}</td><td>${Online.escape(Friends.display(r.id, r.name))}</td><td class="num">${Number(r.score).toLocaleString()}</td></tr>`).join('')}
             </tbody>
           </table>`
         : '<p class="board-note">No scores yet. Go set the first one!</p>';

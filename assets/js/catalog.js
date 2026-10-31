@@ -1,6 +1,7 @@
 // Every game in the arcade. Add a new game here; its folder lives at games/<id>/ with an
 // index.html (body data-game="<id>") and a 16:10 thumb.svg.
 //   goals:  scores for the Bronze / Silver / Gold achievements
+//   relay:  the room tag a live game uses on the relay (lets friends challenge each other to it)
 //   online: 'ghost' adds a badge on the hub when Firebase is set up; 'live' (real-time matches)
 //           and 'duel' (online score duels, versus.js) do the same when the relay is
 //           (all games get leaderboards)
@@ -35,6 +36,7 @@ window.CATALOG = [
     desc: 'Four-a-side arcade football. Pass, sprint, slide in, and curl it past the keeper. Play the bots or anyone online.',
     goals: [300, 700, 1200],
     online: 'live',
+    relay: 'pitch',
     extras: [
       { id: 'pixel-pitch-win', title: 'Pixel Pitch: Match Winner', desc: 'Beat the bots.' },
       { id: 'pixel-pitch-hard', title: 'Pixel Pitch: Golden Boot', desc: 'Beat the Hard bots.' },
@@ -49,6 +51,7 @@ window.CATALOG = [
     desc: 'One-on-one, full-court basketball. Time your jump shot on the meter, dunk, block, and steal. Bots or online.',
     goals: [300, 600, 1000],
     online: 'live',
+    relay: 'hoops',
     extras: [
       { id: 'hoop-duel-win', title: 'Hoop Duel: Baller', desc: 'Beat the bot.' },
       { id: 'hoop-duel-hard', title: 'Hoop Duel: MVP', desc: 'Beat the Hard bot.' },
@@ -64,6 +67,7 @@ window.CATALOG = [
     desc: 'Three quick laps against three rivals on six tracks, or build your own. Chase the world-record ghost, or race a real player online. R restarts instantly.',
     goals: [1200, 1800, 2300],
     online: 'live',
+    relay: 'racer',
     extras: [{ id: 'pocket-racer-win', title: 'Pocket Racer: Podium Top', desc: 'Finish a race in 1st place.' }],
   },
   {
@@ -86,6 +90,7 @@ window.CATALOG = [
     desc: 'Your bike leaves a wall of light behind it. Box your rival in, boost past them, and survive the shrinking arena. Bots, two on one keyboard, or online.',
     goals: [500, 1000, 1600],
     online: 'live',
+    relay: 'lighttrail',
     extras: [
       { id: 'light-trail-win', title: 'Light Trail: Last Rider', desc: 'Beat a bot.' },
       { id: 'light-trail-hard', title: 'Light Trail: Grid Legend', desc: 'Beat the Hard bot.' },
@@ -100,6 +105,7 @@ window.CATALOG = [
     desc: 'A western standoff. Wait for DRAW!, then fire faster than eight outlaws, a friend on the same keyboard, or anyone online. Don\'t fall for the fake signs.',
     goals: [1500, 4000, 7000],
     online: 'live',
+    relay: 'quickdraw',
     extras: [
       { id: 'quick-draw-200', title: 'Quick Draw: Lightning Hands', desc: 'Win a round in under 200 ms.' },
       { id: 'quick-draw-ladder', title: 'Quick Draw: Fastest in the West', desc: 'Beat all eight outlaws.' },
@@ -113,6 +119,7 @@ window.CATALOG = [
     desc: 'Real-time lane battles. Spend mana on rune cards, send troops down three lanes, and topple the enemy keep. Play the bot or anyone online.',
     goals: [600, 1200, 2000],
     online: 'live',
+    relay: 'rune',
     extras: [
       { id: 'rune-rumble-win', title: 'Rune Rumble: First Crown', desc: 'Beat the bot.' },
       { id: 'rune-rumble-hard', title: 'Rune Rumble: Rune Master', desc: 'Beat the Hard bot.' },
@@ -126,6 +133,7 @@ window.CATALOG = [
     desc: 'Build farms, mines and barracks, raise an army, and conquer five rival kingdoms. Quick play, live wars against another player, or a long-term Kingdom that grows while you\'re away.',
     goals: [2000, 6000, 10000],
     online: 'live',
+    relay: 'realm',
     extras: [
       { id: 'realm-rivals-win', title: 'Realm Rivals: High King', desc: 'Conquer all five realms.' },
       { id: 'realm-rivals-online-win', title: 'Realm Rivals: Warlord', desc: 'Win an online kingdom war.' },
@@ -193,6 +201,7 @@ window.CATALOG = [
     desc: 'Draw lines, close boxes, take another turn. Play the computer, a friend, or anyone online with a room code.',
     goals: [13, 16, 20],
     online: 'live',
+    relay: 'boxes',
     extras: [
       { id: 'box-battle-win', title: 'Box Battle: Outsmarted', desc: 'Beat the computer.' },
       { id: 'box-battle-online-win', title: 'Box Battle: Champion', desc: 'Win an online match.' },
@@ -205,6 +214,7 @@ window.CATALOG = [
     desc: 'Four in a row on a square board, with a twist: once a game you can tilt the whole board and send every piece tumbling. Computer, friend, or online.',
     goals: [500, 1000, 1600],
     online: 'live',
+    relay: 'gravity4',
     extras: [
       { id: 'gravity-four-win', title: 'Gravity Four: Connected', desc: 'Beat the computer.' },
       { id: 'gravity-four-hard', title: 'Gravity Four: Grandmaster', desc: 'Beat the Hard computer.' },
@@ -219,11 +229,28 @@ window.CATALOG = [
     desc: 'Nine tic-tac-toe boards in one. Every move decides where your opponent plays next. Computer, friend, or online.',
     goals: [400, 900, 1400],
     online: 'live',
+    relay: 'megattt',
     extras: [
       { id: 'mega-tac-toe-win', title: 'Mega Tac-Toe: Big Board', desc: 'Beat the computer.' },
       { id: 'mega-tac-toe-hard', title: 'Mega Tac-Toe: Mastermind', desc: 'Beat the Hard computer.' },
       { id: 'mega-tac-toe-sweep', title: 'Mega Tac-Toe: Clean Sweep', desc: 'Win without losing a single small board.' },
       { id: 'mega-tac-toe-online-win', title: 'Mega Tac-Toe: Champion', desc: 'Win an online match.' },
+    ],
+  },
+  {
+    id: 'chess',
+    title: 'Chess',
+    genre: 'Strategy',
+    desc: 'Classic chess, or Crystal chess: grab the crystals that appear mid-board to level up your pieces, all the way to an Amazon. Computer, friend, or online.',
+    goals: [400, 900, 1400],
+    online: 'live',
+    relay: 'chess',
+    extras: [
+      { id: 'chess-win', title: 'Chess: Checkmate', desc: 'Beat the computer.' },
+      { id: 'chess-hard', title: 'Chess: Grandmaster', desc: 'Beat the Hard computer.' },
+      { id: 'chess-crystal', title: 'Chess: Crystal Crown', desc: 'Win a game of Crystal chess against the computer or online.' },
+      { id: 'chess-amazon', title: 'Chess: Amazon', desc: 'Level a queen up into an Amazon.' },
+      { id: 'chess-online-win', title: 'Chess: Champion', desc: 'Win an online match.' },
     ],
   },
   {
@@ -233,6 +260,7 @@ window.CATALOG = [
     desc: 'Hide your fleet, then hunt theirs. Ping with sonar and charge up airstrikes with hit streaks. Computer or online.',
     goals: [500, 900, 1400],
     online: 'live',
+    relay: 'fleethunt',
     extras: [
       { id: 'fleet-hunt-win', title: 'Fleet Hunt: Admiral', desc: 'Beat the computer.' },
       { id: 'fleet-hunt-hard', title: 'Fleet Hunt: Sea Wolf', desc: 'Beat the Hard computer.' },
@@ -263,6 +291,7 @@ window.CATALOG = [
     desc: 'Fresh sudoku every time in three difficulties. Or race a bot or a real player on the same grid, and fog their board every time you finish a row.',
     goals: [700, 1600, 2600],
     online: 'live',
+    relay: 'sudoku',
     extras: [
       { id: 'sudoku-siege-hard', title: 'Sudoku Siege: Hard Nut', desc: 'Solve a Hard puzzle.' },
       { id: 'sudoku-siege-clean', title: 'Sudoku Siege: No Mistakes', desc: 'Solve a puzzle without a wrong number.' },

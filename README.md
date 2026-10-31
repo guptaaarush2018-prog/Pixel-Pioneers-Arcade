@@ -20,6 +20,7 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | Gravity Four | Strategy (four in a row with a board tilt) | Live 1v1 |
 | Mega Tac-Toe | Strategy (nine-board tic-tac-toe) | Live 1v1 |
 | Fleet Hunt | Strategy (hidden fleets, sonar, airstrikes) | Live 1v1 |
+| Chess | Strategy (classic, or Crystal chess with level-ups) | Live 1v1 |
 | Taco Truck Tycoon | Tycoon | Online duel |
 | Gem Mine | Idle | Leaderboard |
 | Pocket Pet | Idle (virtual pet, earns treats from other games) | Leaderboard |
@@ -46,6 +47,15 @@ Every game also feeds the shared **profile**: playtime, games finished, days pla
 
 The four card tables share one wallet of pretend chips (`ppa:chips` in localStorage). Chips can't be bought; anyone who runs out is given a fresh stack. A table's score is the most chips held during a session.
 
+## Social and rewards
+
+- **Tickets and prize shop.** Every finished game pays a ticket, plus one per medal score reached. Tickets buy cosmetics on the Profile page (chess boards, Rune Rumble team colours, Gem Mine sparkles); a game reads its slot with `Arcade.equipped(slot)`. Items live in `Arcade.SHOP` in [`assets/js/arcade.js`](assets/js/arcade.js).
+- **Daily challenges.** Three a day (one score, one win, one general), the same for everyone, picked from the date. +5 tickets each, +5 for all three. Shown on the hub and Profile.
+- **Chat** ([`chat.js`](assets/js/chat.js)). One arcade-wide room. Messages go through [`filter.js`](assets/js/filter.js) before sending and again when shown; links, emails and phone numbers are blocked. It only streams while open, and anyone may delete messages over a day old.
+- **Friends and nicknames** ([`friends.js`](assets/js/friends.js)). Kept in the browser, keyed by player id. Add friends by friend code (on Profile), from chat, or from Recent players (anyone you met in a live match). Nicknames are private and replace names in chat, the lobby, leaderboards and match screens.
+- **Challenges** ([`invites.js`](assets/js/invites.js)). Pick an online friend and a game; both of you land in the same 4-letter room. Only invites from your friends are shown, and they last two minutes.
+- **Quick chat.** During any live match, a row of preset messages (GG!, Nice one!, …). Built into [`relay.js`](assets/js/relay.js), so every live game gets it.
+
 ## Run locally
 
 Open `index.html` in a browser, or:
@@ -64,14 +74,14 @@ GitHub Pages only serves static files, so online features talk directly from the
 4. Copy the database URL shown at the top of the **Data** tab (it looks like `https://your-project-default-rtdb.firebaseio.com`).
 5. Paste it into [`assets/js/config.js`](assets/js/config.js) as `firebaseUrl`, then commit and push.
 
-That turns on global leaderboards, the "playing now" counters (site-wide and per game), the **Lobby** page, Pocket Racer ghosts, and real players in Realm Rivals' Kingdom mode. Leave `firebaseUrl` empty and everything else keeps working, including every live match and duel below.
+That turns on global leaderboards, the "playing now" counters (site-wide and per game), the **Lobby** page, chat, friend status and challenges, Pocket Racer ghosts, and real players in Realm Rivals' Kingdom mode. Leave `firebaseUrl` empty and everything else keeps working, including every live match and duel below.
 
 ## Real-time matches and duels
 
 Live matches don't use Firebase. They connect to the Socket.io relay that Stickman Evolution: The 95th already runs on Render (the Stickman-Battles repo) (`relayUrl` in [`assets/js/config.js`](assets/js/config.js)); that server's `ALLOWED_ORIGINS`/`PORTAL_ORIGINS` already include this site's GitHub Pages origin. [`assets/js/relay.js`](assets/js/relay.js) speaks the Socket.io wire format over a plain WebSocket, so there's still no SDK.
 
 - The relay pairs two players per room name and forwards their messages. In real-time games (Pixel Pitch, Hoop Duel, Rune Rumble) the player who arrived first runs the match and streams snapshots; the other sends inputs. Pocket Racer players each drive their own car and stream position and speed; the other car is drawn slightly ahead of its last update to hide the delay, and the host times a ping before the race so both countdowns end together. Box Battle and Realm Rivals send moves and attacks as events.
-- Gravity Four, Mega Tac-Toe, Fleet Hunt, Light Trail and Quick Draw share their menus, rooms and rematches through [`assets/js/match.js`](assets/js/match.js). In the turn-based ones both players run the same rules and send their own moves; Fleet Hunt keeps each fleet on its owner's device and answers shots with hit or miss. Light Trail's host runs the bikes, and Quick Draw times each player's reaction on their own screen so lag doesn't decide a round.
+- Gravity Four, Mega Tac-Toe, Fleet Hunt, Chess, Light Trail and Quick Draw share their menus, rooms and rematches through [`assets/js/match.js`](assets/js/match.js). In the turn-based ones both players run the same rules and send their own moves; Fleet Hunt keeps each fleet on its owner's device and answers shots with hit or miss. Light Trail's host runs the bikes, and Quick Draw times each player's reaction on their own screen so lag doesn't decide a round.
 - Sudoku Siege's host makes the puzzle and decides who finished first; progress and fog go back and forth as events.
 - **Quick match** takes the first free public room (`pp-<game>-q1`, `q2`, …). **Private rooms** use a 4-letter code.
 - **Online duels** ([`assets/js/versus.js`](assets/js/versus.js)) turn any single-player game into a live score race: both players start at the same moment with the same random seed, see each other's score, and the higher final score wins. A game opts in by showing its start panel through `Versus.attach({ ui, start, score, intro })`.

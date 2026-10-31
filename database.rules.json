@@ -20,7 +20,7 @@
       ".indexOn": ["t"],
       "$player": {
         ".write": true,
-        ".validate": "newData.hasChildren(['at', 't']) && newData.child('at').isString() && newData.child('at').val().length <= 32 && newData.child('t').val() <= now"
+        ".validate": "newData.hasChildren(['at', 't']) && newData.child('at').isString() && newData.child('at').val().length <= 32 && (!newData.child('name').exists() || newData.child('name').val().matches(/^[A-Z][a-z]+[A-Z][a-z]+[0-9]{2}$/)) && newData.child('t').val() <= now"
       }
     },
 
@@ -47,6 +47,26 @@
         ".write": true,
         "$report": {
           ".validate": "newData.hasChildren(['from', 'win', 'loss', 't']) && newData.child('from').val().matches(/^[A-Z][a-z]+[A-Z][a-z]+[0-9]{2}$/) && newData.child('win').isBoolean() && newData.child('loss').isNumber() && newData.child('loss').val() >= 0 && newData.child('loss').val() <= 0.9 && newData.child('t').val() <= now"
+        }
+      }
+    },
+
+    "chat": {
+      ".read": true,
+      ".indexOn": ["t"],
+      "$msg": {
+        ".write": "(!data.exists() && newData.exists()) || (!newData.exists() && data.child('t').val() < now - 86400000)",
+        ".validate": "newData.hasChildren(['id', 'name', 'text', 'at', 't']) && newData.child('id').isString() && newData.child('id').val().length <= 32 && newData.child('name').val().matches(/^[A-Z][a-z]+[A-Z][a-z]+[0-9]{2}$/) && newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 140 && newData.child('at').isString() && newData.child('at').val().length <= 32 && newData.child('t').val() === now",
+        "$other": { ".validate": "$other === 'id' || $other === 'name' || $other === 'text' || $other === 'at' || $other === 't'" }
+      }
+    },
+
+    "invites": {
+      "$to": {
+        ".read": true,
+        "$from": {
+          ".write": true,
+          ".validate": "newData.hasChildren(['name', 'game', 'room', 't']) && newData.child('name').val().matches(/^[A-Z][a-z]+[A-Z][a-z]+[0-9]{2}$/) && newData.child('game').isString() && newData.child('game').val().length <= 32 && newData.child('room').isString() && newData.child('room').val().matches(/^pp-[a-z0-9]+-[a-z]{4}$/) && newData.child('t').val() === now"
         }
       }
     },

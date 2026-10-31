@@ -52,7 +52,7 @@ const Online = (() => {
     if (!list.length) return '<p class="board-note">No scores yet. Be the first!</p>';
     const rows = list.map((r, i) => `
       <li class="${r.id === me ? 'me' : ''}">
-        <span class="rank">${i + 1}</span><span class="name">${escape(r.name)}</span><b>${Number(r.score).toLocaleString()}</b>
+        <span class="rank">${i + 1}</span><span class="name">${escape(typeof Friends === 'undefined' ? r.name : Friends.display(r.id, r.name))}</span><b>${Number(r.score).toLocaleString()}</b>
       </li>`).join('');
     const note = rank ? `<p class="board-note">You're #${rank} worldwide</p>` : '';
     return `<p class="board-title">Global leaderboard</p><ol class="board-list">${rows}</ol>${note}`;
@@ -62,7 +62,7 @@ const Online = (() => {
 
   function heartbeat(where) {
     if (!enabled) return;
-    const beat = () => put(`presence/${Arcade.profile().id}`, { at: where, t: TIMESTAMP }).catch(() => {});
+    const beat = () => put(`presence/${Arcade.profile().id}`, { at: where, name: Arcade.profile().name, t: TIMESTAMP }).catch(() => {});
     beat();
     setInterval(() => { if (!document.hidden) beat(); }, 30000);
   }
@@ -77,8 +77,8 @@ const Online = (() => {
 
   // ---------- Live data ----------
 
-  // Keeps a local copy of `path` in sync and calls onChange(data) on every update.
-  function subscribe(path, onChange) {
+  // Keeps a local copy of `path` (optionally narrowed by a query) in sync and calls onChange(data) on every update.
+  function subscribe(path, onChange, query = '') {
     let root = null;
     const set = (p, value) => {
       const parts = p.split('/').filter(Boolean);
@@ -93,7 +93,7 @@ const Online = (() => {
       if (value === null) delete node[last];
       else node[last] = value;
     };
-    const source = new EventSource(url(path));
+    const source = new EventSource(url(path, query));
     source.addEventListener('put', e => {
       const { path: p, data } = JSON.parse(e.data);
       set(p, data);

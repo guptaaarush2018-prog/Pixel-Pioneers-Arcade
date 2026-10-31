@@ -4,11 +4,15 @@
    neither side has to be in charge. Rounds alternate who goes first.
      Match.setup({ ui, tag, title, rules, levels, onStart, onMove, winFlag, hardFlag, onlineWinFlag, local })
        local: false hides the same-device mode (for games with hidden information)
-       onStart({ mode, level, me, first, names })  a fresh board; `first` is the player who opens
+       onMenu(panel)       optional: add controls to the start menu
+       quickTag(), quickLabel()  optional: a separate quick-match queue (and Lobby label) per game option
+       startData()         optional: options for a round; online, the host's are used by both players
+       onStart({ mode, level, me, first, names, data })  a fresh board; `first` is the player who opens
        onMove(data)                                the other player's move, online only
      Match.move(data)         sends this player's move online (no-op offline)
      Match.mine(turn)         true when `turn` (0 or 1) is played on this device right now
-     Match.over({ winner, score, lines })  winner 0 or 1, or -1 for a draw; score counts vs the computer */
+     Match.over({ winner, score, lines, practice })  winner 0 or 1, or -1 for a draw; score counts vs the computer;
+                                       practice: true skips the win achievements (e.g. after take-backs) */
 const Match = (() => {
   let opts = null, room = null;
   const m = { mode: null, level: 0, me: 0, names: ['You', 'Computer'], round: 0 };
@@ -49,6 +53,7 @@ const Match = (() => {
         panel.querySelectorAll('[data-net]').forEach(b => b.addEventListener('click', () => connect(b.dataset.net, code.value)));
         code?.addEventListener('keydown', e => { if (e.key === 'Enter') connect('join', code.value); });
         Relay.showWaiting(panel.querySelector('[data-waiting]'), r => connect('public', r));
+        opts.onMenu?.(panel);
       },
     });
   }
@@ -67,7 +72,8 @@ const Match = (() => {
 
   function startRound() {
     opts.ui.hide();
-    opts.onStart({ mode: m.mode, level: m.level, me: m.me, first: m.round % 2, names: m.names.slice() });
+    const data = m.mode === 'online' ? m.data : opts.startData?.() || {};
+    opts.onStart({ mode: m.mode, level: m.level, me: m.me, first: m.round % 2, names: m.names.slice(), data });
   }
 
   // ---------- Online ----------
@@ -87,7 +93,7 @@ const Match = (() => {
       closed: () => { if (room) opponentLeft(); },
     };
     try {
-      const res = how === 'quick' ? await Relay.quickMatch(opts.tag, handlers, 'Match')
+      const res = how === 'quick' ? await Relay.quickMatch(opts.quickTag?.() || opts.tag, handlers, opts.quickLabel?.() || 'Match')
         : how === 'create' ? await Relay.createRoom(opts.tag, handlers)
         : how === 'public' ? await Relay.joinPublic(code, handlers)
         : await Relay.joinRoom(opts.tag, code, handlers);
@@ -114,12 +120,14 @@ const Match = (() => {
   }
 
   function newRound(round) {
-    room.conn.send('start', { round });
-    beginOnline(round);
+    const data = opts.startData?.() || {};
+    room.conn.send('start', { round, data });
+    beginOnline(round, data);
   }
 
-  function beginOnline(round) {
+  function beginOnline(round, data = {}) {
     m.round = round;
+    m.data = data;
     room.want = room.theirWant = false;
     room.playing = true;
     startRound();
@@ -128,7 +136,7 @@ const Match = (() => {
   function onNet(name, data) {
     if (!room) return;
     if (name === 'hello') m.names[1 - m.me] = String(data?.name || 'Opponent').slice(0, 24);
-    else if (name === 'start' && m.me === 1) beginOnline(data.round | 0);
+    else if (name === 'start' && m.me === 1) beginOnline(data.round | 0, data.data || {});
     else if (name === 'move' && room.playing) opts.onMove(data || {});
     else if (name === 'rematch') {
       room.theirWant = true;
@@ -163,11 +171,11 @@ const Match = (() => {
 
   // ---------- Results ----------
 
-  function over({ winner, score = 0, lines = [] }) {
+  function over({ winner, score = 0, lines = [], practice = false }) {
     const draw = winner === -1;
     if (m.mode === 'cpu') {
-      if (winner === 0 && opts.winFlag) Arcade.flag(opts.winFlag);
-      if (winner === 0 && m.level === opts.levels.length - 1 && opts.hardFlag) Arcade.flag(opts.hardFlag);
+      if (winner === 0 && opts.winFlag && !practice) Arcade.flag(opts.winFlag);
+      if (winner === 0 && m.level === opts.levels.length - 1 && opts.hardFlag && !practice) Arcade.flag(opts.hardFlag);
       Arcade.finish(opts.ui, {
         score,
         title: draw ? "It's a draw" : winner === 0 ? 'You win!' : 'The computer wins',

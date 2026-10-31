@@ -22,7 +22,7 @@ const Relay = (() => {
   // event(name, data), state(data), left() when the other player goes, closed() on network loss.
   function join(room, handlers) {
     const ws = new WebSocket(wsUrl);
-    let live = true;
+    let live = true, them = 'Opponent';
     const emit = (ev, data) => { if (ws.readyState === 1) ws.send('42' + JSON.stringify([ev, data])); };
     ws.onmessage = e => {
       const m = String(e.data);
@@ -34,12 +34,23 @@ const Relay = (() => {
       try { [ev, data] = JSON.parse(m.slice(2)); } catch { return; }
       if (ev === 'joined') handlers.joined?.(data.slot);
       else if (ev === 'roomFull') handlers.full?.();
-      else if (ev === 'bothConnected') handlers.ready?.();
-      else if (ev === 'remoteGameEvent') handlers.event?.(data?.event, data?.data);
+      else if (ev === 'bothConnected') {
+        QuickChat.show(i => emit('gameEvent', { event: '__qc', data: { i } }));
+        handlers.ready?.();
+      } else if (ev === 'remoteGameEvent' && data?.event === '__qc') QuickChat.heard(them, data.data?.i);
+      else if (ev === 'remoteGameEvent') {
+        const d = data?.event === 'hello' ? greet(data?.data) : data?.data;
+        if (data?.event === 'hello' && d?.name) them = String(d.name).slice(0, 24);
+        handlers.event?.(data?.event, d);
+      }
       else if (ev === 'remoteState') handlers.state?.(data);
-      else if (ev === 'opponentDisconnected') handlers.left?.();
+      else if (ev === 'opponentDisconnected') {
+        QuickChat.hide();
+        handlers.left?.();
+      }
     };
     const lost = () => {
+      QuickChat.hide();
       if (!live) return;
       live = false;
       handlers.closed?.();
@@ -47,13 +58,71 @@ const Relay = (() => {
     ws.onclose = lost;
     ws.onerror = lost;
     return {
-      send: (event, data) => emit('gameEvent', { event, data }),
+      // Every game greets the other player with its name; the id lets them be added as a friend.
+      send: (event, data) => emit('gameEvent', { event, data: event === 'hello' ? { ...data, id: Arcade.profile().id } : data }),
       state: data => emit('playerState', data),
       close() {
+        QuickChat.hide();
         live = false;
         try { ws.close(); } catch {}
       },
     };
+  }
+
+  // Quick chat: a row of preset messages during a live match. Nothing typed, so nothing to filter.
+  const QuickChat = (() => {
+    const LINES = ['Good luck!', 'GG!', 'Nice one!', 'Wow!', 'Oops!', 'Thanks!', 'Rematch?'];
+    let bar = null, send = null, lastAt = 0;
+    function build() {
+      bar = document.createElement('div');
+      bar.className = 'quick-chat';
+      bar.innerHTML = `<button class="qc-toggle" type="button" aria-expanded="true" title="Quick chat">💬</button>
+        <div class="qc-lines">${LINES.map((l, i) => `<button type="button" data-i="${i}">${l}</button>`).join('')}</div>`;
+      bar.querySelector('.qc-toggle').addEventListener('click', e => {
+        const open = bar.classList.toggle('closed');
+        e.currentTarget.setAttribute('aria-expanded', String(!open));
+      });
+      bar.querySelectorAll('[data-i]').forEach(b => b.addEventListener('click', () => {
+        if (!send || Date.now() - lastAt < 1500) return;
+        lastAt = Date.now();
+        send(+b.dataset.i);
+        bubble('You', LINES[+b.dataset.i], true);
+        b.blur();
+      }));
+      document.body.appendChild(bar);
+    }
+    function bubble(who, text, mine) {
+      const el = document.createElement('div');
+      el.className = `qc-bubble${mine ? ' mine' : ''}`;
+      el.textContent = `${who}: ${text}`;
+      document.body.appendChild(el);
+      setTimeout(() => el.classList.add('out'), 2600);
+      setTimeout(() => el.remove(), 3000);
+    }
+    return {
+      show(fn) {
+        send = fn;
+        if (!bar) build();
+        bar.hidden = false;
+      },
+      hide() {
+        send = null;
+        if (bar) bar.hidden = true;
+      },
+      heard(who, i) {
+        if (!LINES[i | 0] || !bar || bar.hidden) return;
+        bubble(who, LINES[i | 0], false);
+        Arcade.tone({ freq: 880, dur: 0.06, type: 'triangle', vol: 0.03 });
+      },
+    };
+  })();
+
+  // The other player's greeting: remember them under Recent players, and show a friend's nickname
+  // in place of their name, so every game's match screen picks it up.
+  function greet(d) {
+    if (!d || typeof Friends === 'undefined' || !/^[A-Z][a-z]+[A-Z][a-z]+[0-9]{2}$/.test(d.name || '')) return d;
+    Friends.met(d.id, d.name);
+    return { ...d, name: Friends.short(d.id, d.name) };
   }
 
   // Shared plumbing for quickMatch / createRoom / joinRoom: resolves with { conn, slot } once
@@ -120,12 +189,14 @@ const Relay = (() => {
     };
   }
 
-  // Joins a specific public room someone is waiting in (from the Lobby).
+  // Joins a specific room from a link: a public room someone is waiting in (from the Lobby), or a
+  // friend challenge (a 4-letter room both players head to, so either may arrive first).
   async function joinPublic(room, handlers) {
-    if (!/^pp-[a-z0-9]+-q\d+$/.test(room)) throw new Error('That match link is broken.');
+    const challenge = /^pp-[a-z0-9]+-[a-z]{4}$/.test(room);
+    if (!challenge && !/^pp-[a-z0-9]+-q\d+$/.test(room)) throw new Error('That match link is broken.');
     await wake();
     try {
-      return await seat(room, handlers, slot => slot === 2);
+      return await seat(room, handlers, slot => challenge || slot === 2);
     } catch (e) {
       if (e.message === 'full') throw new Error('Someone else got there first.');
       if (e.message === 'reject') throw new Error('That player has already left.');
@@ -176,9 +247,10 @@ const Relay = (() => {
     const esc = Online.escape;
     const render = list => {
       if (!el.isConnected) return false;
+      list = list.slice().sort((a, b) => !!Friends.get(b.id) - !!Friends.get(a.id));
       el.innerHTML = list.length
         ? `<p class="muted-note" style="margin:0 0 6px">Waiting for a match now</p><ul class="waiting-list">${list.slice(0, 4).map(w => `
-            <li><span class="dot"></span><span class="who"><b>${esc(w.name)}</b><span>${esc(w.label || 'Quick match')}</span></span>
+            <li><span class="dot"></span><span class="who"><b>${esc(Friends.display(w.id, w.name))}</b><span>${esc(w.label || 'Quick match')}</span></span>
             <button class="btn" type="button" data-room="${esc(w.room)}">Join</button></li>`).join('')}</ul>`
         : '';
       el.querySelectorAll('[data-room]').forEach(b => b.addEventListener('click', () => onJoin(b.dataset.room)));
