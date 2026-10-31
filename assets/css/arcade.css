@@ -143,15 +143,18 @@ body.game {
 .overlay {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
+  display: flex;
   padding: 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   background: rgba(10, 11, 14, .7);
 }
 .overlay[hidden] { display: none; }
+/* margin: auto centres the panel, but unlike place-items it lets a panel taller than the screen scroll from its top. */
+.overlay > .panel { margin: auto; }
 
 .panel {
-  max-width: 380px;
+  max-width: min(380px, 100%);
   padding: 24px;
   text-align: center;
   background: var(--surface);
@@ -228,15 +231,92 @@ body.game {
 .toolbar[hidden] { display: none; }
 .toolbar .btn { padding: 8px 14px; font-size: 14px; }
 
+/* ---------- Phones and tablets ---------- */
+
+/* Holding a button or the canvas shouldn't select text, flash a highlight or pop up a callout. */
+body.game { -webkit-tap-highlight-color: transparent; }
+.stage, .touchpad, .toolbar, .topbar { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.touchpad button, .stage canvas { touch-action: none; }
+.btn, .chip, .icon-btn { touch-action: manipulation; }
+
+.icon-btn span[aria-hidden] { margin-right: 4px; }
+
+.rotate-tip {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  z-index: 6;
+  transform: translateX(-50%);
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(22, 25, 32, .95);
+  color: var(--text);
+  font-size: 12px;
+  white-space: nowrap;
+}
+@media (orientation: landscape) { .rotate-tip { display: none; } }
+
+.tp-side { display: contents; }
+
 @media (pointer: coarse) {
   .touchpad { display: flex; }
+  .touchpad button { min-height: 54px; }
   .help { display: none; }
 }
 
+/* Upright phone: title, chat and sound on one row, the stats under it. */
 @media (max-width: 560px) {
-  .topbar { flex-wrap: wrap; gap: 12px; }
-  .topbar h1 { order: -1; flex-basis: 100%; }
-  .stats { flex: 1; gap: 14px; }
+  .topbar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-areas: "back title chat mute" "stats stats stats stats";
+    gap: 6px 10px;
+    padding: 8px 12px;
+  }
+  .topbar .back { grid-area: back; font-size: 0; padding: 4px 6px 4px 0; }
+  .topbar .back::before { content: '←'; font-size: 20px; line-height: 1; }
+  .topbar h1 { grid-area: title; }
+  .topbar .chat-root { grid-area: chat; }
+  .topbar #mute { grid-area: mute; }
+  .topbar .mute-label { display: none; }
+  .topbar .icon-btn span[aria-hidden] { margin: 0; font-size: 15px; }
+  .stats { grid-area: stats; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; font-size: 10px; }
+  .stats b { font-size: 15px; }
+  .touchpad { padding: 0 10px 12px; gap: 8px; }
+}
+
+/* Sideways phone: a slim bar, and the touch buttons float at the edges beside the canvas. */
+@media (orientation: landscape) and (max-height: 540px) {
+  .topbar { padding: 4px 12px; gap: 14px; }
+  .topbar h1 { font-size: 14px; }
+  .stats { gap: 14px; font-size: 9px; }
+  .stats b { font-size: 14px; margin-top: 0; }
+  .topbar .mute-label { display: none; }
+  .stage { padding: 4px; }
+  .help { display: none; }
+  .toolbar { padding: 0 8px 6px; }
+}
+@media (orientation: landscape) and (max-height: 540px) and (pointer: coarse) {
+  .touchpad {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 10px;
+    z-index: 20;
+    justify-content: space-between;
+    align-items: flex-end;
+    padding: 0 max(10px, env(safe-area-inset-left)) 0 max(10px, env(safe-area-inset-right));
+    pointer-events: none;
+  }
+  .tp-side { display: flex; flex-direction: column; gap: 8px; }
+  .touchpad button {
+    flex: 0 0 auto;
+    width: 88px;
+    min-height: 64px;
+    pointer-events: auto;
+    background: rgba(30, 34, 42, .8);
+  }
 }
 
 /* ---------- Arcade hub ---------- */
@@ -724,6 +804,9 @@ body.kingdom-page { overflow: auto; height: auto; min-height: 100vh; }
 /* ---------- Chat (chat.js) ---------- */
 
 .chat-root { position: fixed; left: 16px; bottom: 16px; z-index: 40; }
+.chat-root.in-bar { position: relative; left: auto; bottom: auto; }
+.chat-root.in-bar .chat-toggle { padding: 6px 12px; font-size: 12px; font-weight: 600; box-shadow: none; }
+.chat-root.in-bar .chat-panel { position: fixed; top: 60px; left: auto; right: 12px; bottom: auto; height: min(460px, calc(100dvh - 80px)); }
 .chat-toggle {
   position: relative;
   padding: 8px 14px;
@@ -847,7 +930,13 @@ body.kingdom-page { overflow: auto; height: auto; min-height: 100vh; }
 .qc-bubble.mine { background: #4f8cff; top: 116px; }
 .qc-bubble.out { opacity: 0; }
 @media (max-width: 700px) {
-  .quick-chat { top: auto; bottom: 64px; right: 8px; left: 8px; border-radius: 14px; }
+  /* Under the top bar rather than the bottom, where the touch controls are. */
+  .quick-chat { top: 100px; right: 8px; left: auto; max-width: calc(100vw - 16px); border-radius: 14px; }
+}
+@media (orientation: landscape) and (max-height: 540px) {
+  .quick-chat { top: 52px; }
+  .qc-bubble { top: 56px; }
+  .qc-bubble.mine { top: 92px; }
 }
 
 /* ---------- Friend challenges (invites.js) ---------- */
@@ -923,3 +1012,10 @@ body.kingdom-page { overflow: auto; height: auto; min-height: 100vh; }
 .move-list b { color: var(--muted); font-weight: 600; }
 .move-list .muted { color: var(--muted); }
 .clock-row .btn { white-space: nowrap; padding-left: 6px; padding-right: 6px; font-size: 13px; }
+
+/* Device-specific wording in start panels: <span class="kbd-only"> for keyboards, <span class="touch-only"> for touch screens. */
+@media (pointer: coarse) { .kbd-only { display: none; } }
+@media (pointer: fine) { .touch-only { display: none; } }
+
+/* Room under the last line of a page for the floating chat button. */
+@media (max-width: 760px) { body.hub { padding-bottom: 64px; } }

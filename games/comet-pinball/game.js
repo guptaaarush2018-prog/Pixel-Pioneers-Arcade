@@ -626,7 +626,7 @@
     intro: {
       title: 'Comet Pinball',
       html: `<ul>
-        <li>Hold <b>Space</b> to pull the plunger and let go to launch.</li>
+        <li>Hold <b class="kbd-only">Space</b><b class="touch-only">Launch</b> to pull the plunger and let go to launch.</li>
         <li>Flip with <kbd>←</kbd><kbd>→</kbd> (or <kbd>Z</kbd> <kbd>/</kbd>), or tap either side of the table.</li>
         <li>Light <b>C·O·M</b> and knock down the targets to raise your multiplier. Every second bank starts multiball.</li>
         <li>Launch straight into the flashing lane for a 5,000-point skill shot.</li>

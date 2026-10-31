@@ -471,7 +471,7 @@
       html: `<ul>
         <li>You bounce automatically. Steer left and right; the sides wrap around.</li>
         <li><b style="color:#a99bff">Purple</b> platforms move, <b style="color:#d8a878">cracked</b> ones crumble after one bounce, and <b style="color:#ffd23f">springs</b> launch you.</li>
-        <li>Grab <b style="color:#ffd23f">battery cells</b> for a rocket boost (Space). Boosting smashes drones.</li>
+        <li>Grab <b style="color:#ffd23f">battery cells</b> for a rocket boost (<span class="kbd-only">Space</span><span class="touch-only">the Boost button</span>). Boosting smashes drones.</li>
         <li>Stomp drones from above. Touching one any other way ends the run.</li>
       </ul>`,
       button: 'Start climbing',

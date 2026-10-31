@@ -183,7 +183,7 @@
           <li>The numbers show how many filled squares are in a row or column, and in what groups. <b>3 1</b> means a block of 3, a gap, then 1.</li>
           <li><b>Click</b> to fill, <b>right-click</b> to cross out. Drag to paint several.</li>
           <li>Each finished row lights up in the picture's real colors.</li>
-          <li>Solve it fast for a high score. A hint (<kbd>H</kbd>) fixes one square but costs ${HINT_COST} points.</li>
+          <li>Solve it fast for a high score. A hint (<span class="kbd-only"><kbd>H</kbd></span><span class="touch-only">the Hint button</span>) fixes one square but costs ${HINT_COST} points.</li>
         </ul>`,
         button: 'Next picture',
         onAction: () => start(),

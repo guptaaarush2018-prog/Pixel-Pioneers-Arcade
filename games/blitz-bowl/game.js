@@ -965,9 +965,9 @@
     intro: {
       title: 'Blitz Bowl',
       html: `<ul>
-          <li>Call a play, then drop back with <kbd>←</kbd><kbd>↑</kbd><kbd>→</kbd><kbd>↓</kbd>.</li>
+          <li>Call a play<span class="kbd-only">, then drop back with <kbd>←</kbd><kbd>↑</kbd><kbd>→</kbd><kbd>↓</kbd></span>.</li>
           <li>Click or tap a spot to throw there, or press <kbd>1</kbd>–<kbd>4</kbd> to hit a receiver in stride.</li>
-          <li>After the catch, steer with the arrows or hold a finger where you want to run. <kbd>Space</kbd> bursts and breaks tackles.</li>
+          <li>After the catch, steer with the arrows or hold a finger where you want to run. <span class="kbd-only"><kbd>Space</kbd></span><span class="touch-only"><b>Burst</b></span> speeds you up and breaks tackles.</li>
         </ul><div data-season></div>`,
       button: 'Kick off',
       onAction: () => { ui.hide(); newGame(); },

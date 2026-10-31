@@ -64,7 +64,7 @@ window.CATALOG = [
     id: 'pocket-racer',
     title: 'Pocket Racer',
     genre: 'Racing',
-    desc: 'Three quick laps against three rivals on six tracks, or build your own. Chase the world-record ghost, or race a real player online. R restarts instantly.',
+    desc: 'A full racing game: a six-cup career, 38 tracks, 17 cars to unlock, time trials with world-record ghosts and per-track leaderboards, a track builder, and live online races.',
     goals: [1200, 1800, 2300],
     online: 'live',
     relay: 'racer',

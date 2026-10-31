@@ -416,7 +416,7 @@
         <li>Guess the five-letter word in six tries. <b style="color:#3ddc84">Green</b> is the right spot, <b style="color:#ffc53d">gold</b> is in the word somewhere else.</li>
         <li>The <b>last letter</b> of each answer is locked in as the <b>first letter</b> of the next one.</li>
         <li>Fewer guesses score more and add time to the clock. Missing a word costs ${FAIL_PENALTY} seconds and breaks your chain.</li>
-        <li>Every third word in a chain earns a <b>key</b>. Press <kbd>?</kbd> to spend it on a free letter.</li>
+        <li>Every third word in a chain earns a <b>key</b>. <span class="kbd-only">Press <kbd>?</kbd></span><span class="touch-only">Tap the key button</span> to spend it on a free letter.</li>
       </ul>`,
       button: 'Start the chain',
       onAction: start,

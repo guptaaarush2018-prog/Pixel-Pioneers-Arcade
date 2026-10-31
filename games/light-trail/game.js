@@ -172,9 +172,9 @@
     onlineWinFlag: 'light-trail-online-win',
     rules: `<ul>
       <li>Your bike leaves a solid wall behind it. Anything you hit, a wall or a trail, ends the round.</li>
-      <li>Press <b>Space</b> to <b>boost</b>: double speed for a moment, then it recharges.</li>
+      <li><span class="kbd-only">Press <b>Space</b></span><span class="touch-only">Tap</span> to <b>boost</b>: double speed for a moment, then it recharges.</li>
       <li>After ${SHRINK_AFTER} seconds the arena starts to shrink. First to ${WIN_ROUNDS} rounds wins.</li>
-      <li>Two on one device: Player 1 uses <b>WASD</b> + <b>Shift</b>, Player 2 uses the <b>arrows</b> + <b>/</b>.</li>
+      <li>Two on one device: Player 1 uses <b>WASD</b> + <b>Shift</b>, Player 2 uses the <b>arrows</b> + <b>/</b>. On a touch screen, each player swipes on their own half.</li>
     </ul>`,
     onStart: startMatch,
     onMove: onNet,
@@ -287,8 +287,9 @@
     if (e.code === 'Space' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') steer(i, undefined, true);
   });
 
-  // Touch: swipe to turn, tap to boost.
-  Arcade.onSwipe(canvas, dir => steer(mode === 'online' ? me : 0, ['up', 'right', 'down', 'left'].indexOf(dir)), () => steer(mode === 'online' ? me : 0, undefined, true));
+  // Touch: swipe to turn, tap to boost. Two on one device: each player owns half the screen.
+  const touchPlayer = side => mode === 'local' ? (side < 0.5 ? 0 : 1) : mode === 'online' ? me : 0;
+  Arcade.onSwipe(canvas, (dir, side) => steer(touchPlayer(side), ['up', 'right', 'down', 'left'].indexOf(dir)), side => steer(touchPlayer(side), undefined, true));
 
   // ---------- Drawing ----------
 

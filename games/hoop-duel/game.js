@@ -420,9 +420,9 @@
       title: 'Hoop Duel',
       html: `<p>One on one, full court. First to ${WIN_AT} or the most points when two minutes are up.</p>
         <ul>
-          <li>Hold <b>Space</b> to fill the shot meter and let go in the gold zone. Perfect timing never misses.</li>
-          <li>Jump (<b>↑</b>) near the rim and press Space to dunk.</li>
-          <li>On defence, Space swipes for a steal, and jumping blocks shots.</li>
+          <li>Hold <b class="kbd-only">Space</b><b class="touch-only">Shoot</b> to fill the shot meter and let go in the gold zone. Perfect timing never misses.</li>
+          <li>Jump (<b class="kbd-only">↑</b><b class="touch-only">Jump</b>) near the rim and press <span class="kbd-only">Space</span><span class="touch-only">Shoot</span> to dunk.</li>
+          <li>On defence, <span class="kbd-only">Space</span><span class="touch-only">Shoot</span> swipes for a steal, and jumping blocks shots.</li>
         </ul>
         <div class="menu">
           <div class="row">${LEVELS.map((l, i) => `<button class="btn ${i === level ? '' : 'secondary'}" type="button" data-bot="${i}">${l.name}</button>`).join('')}</div>

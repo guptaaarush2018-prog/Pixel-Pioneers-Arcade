@@ -13,7 +13,7 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | Blitz Bowl | Sports (retro football, season mode) | Online duel |
 | Light Trail | Arcade (light-cycle duel, shrinking arena) | Live 1v1, two on one keyboard |
 | Quick Draw | Arcade (reaction standoff, outlaw ladder) | Live 1v1, two on one keyboard |
-| Pocket Racer | Racing | Live 1v1 races (live gap, match score), world-record ghost |
+| Pocket Racer | Racing | Its own mini-site: six-cup career with stars, 38 tracks, garage of 17 unlockable cars, time trials with per-track world leaderboards, track builder, synthesized engine sound and music, follow camera on phones, live 1v1 races, world-record ghost |
 | Rune Rumble | Strategy (real-time lane battler) | Live 1v1 |
 | Realm Rivals | Strategy (kingdom builder) | Live 1v1 kingdom wars, plus the long-term Kingdom mode |
 | Box Battle | Strategy | Live 1v1 |

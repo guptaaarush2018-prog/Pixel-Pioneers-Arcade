@@ -44,7 +44,23 @@ const Arcade = (() => {
     };
     new ResizeObserver(fit).observe(stage);
     fit();
+    if (w / h > 1.25) rotateTip(stage);
     return ctx;
+  }
+
+  // Wide games are small on a phone held upright; suggest turning it (CSS shows this in portrait only).
+  function rotateTip(stage) {
+    if (!matchMedia('(pointer: coarse)').matches) return;
+    try { if (sessionStorage.getItem(PREFIX + 'rotate-tip')) return; } catch {}
+    const tip = document.createElement('button');
+    tip.type = 'button';
+    tip.className = 'rotate-tip';
+    tip.textContent = '⟳ Turn your phone sideways for a bigger view';
+    tip.addEventListener('click', () => {
+      tip.remove();
+      try { sessionStorage.setItem(PREFIX + 'rotate-tip', '1'); } catch {}
+    });
+    stage.appendChild(tip);
   }
 
   // Offscreen canvas at the same DPR, drawn back with ctx.drawImage(c, 0, 0, w, h).
@@ -73,24 +89,37 @@ const Arcade = (() => {
   });
 
   // Swipe gestures fire as soon as the finger travels far enough, so repeated swipes chain.
-  // A touch that barely moves counts as a tap.
+  // A touch that barely moves counts as a tap. Each finger is tracked on its own, and both
+  // callbacks also get where that finger first landed (0 = left edge of el, 1 = right edge),
+  // so two players can share a screen.
   function onSwipe(el, onDir, onTap) {
-    let sx = 0, sy = 0, moved = false;
+    const live = new Map();
     el.addEventListener('touchstart', e => {
-      const t = e.changedTouches[0];
-      sx = t.clientX; sy = t.clientY; moved = false;
+      const r = el.getBoundingClientRect();
+      for (const t of e.changedTouches) {
+        live.set(t.identifier, { sx: t.clientX, sy: t.clientY, moved: false, side: (t.clientX - r.left) / (r.width || 1) });
+      }
     }, { passive: true });
     el.addEventListener('touchmove', e => {
       e.preventDefault();
-      const t = e.changedTouches[0];
-      const dx = t.clientX - sx, dy = t.clientY - sy;
-      if (Math.max(Math.abs(dx), Math.abs(dy)) < 24) return;
-      onDir(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'));
-      sx = t.clientX; sy = t.clientY; moved = true;
+      for (const t of e.changedTouches) {
+        const s = live.get(t.identifier);
+        if (!s) continue;
+        const dx = t.clientX - s.sx, dy = t.clientY - s.sy;
+        if (Math.max(Math.abs(dx), Math.abs(dy)) < 24) continue;
+        onDir(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'), s.side);
+        s.sx = t.clientX; s.sy = t.clientY; s.moved = true;
+      }
     }, { passive: false });
-    el.addEventListener('touchend', () => {
-      if (!moved && onTap) onTap();
-    }, { passive: true });
+    const end = e => {
+      for (const t of e.changedTouches) {
+        const s = live.get(t.identifier);
+        live.delete(t.identifier);
+        if (s && !s.moved && onTap && e.type === 'touchend') onTap(s.side);
+      }
+    };
+    el.addEventListener('touchend', end, { passive: true });
+    el.addEventListener('touchcancel', end, { passive: true });
   }
 
   // Calls fn when the tab loses focus, so games can auto-pause.
@@ -442,7 +471,11 @@ const Arcade = (() => {
   function wireMuteButton() {
     const btn = document.getElementById('mute');
     if (!btn) return;
-    const render = () => { btn.textContent = muted ? 'Sound off' : 'Sound on'; };
+    // Phones show only the icon (see .mute-label in arcade.css).
+    const render = () => {
+      btn.innerHTML = `<span aria-hidden="true">${muted ? '🔇' : '🔊'}</span><span class="mute-label">${muted ? 'Sound off' : 'Sound on'}</span>`;
+      btn.setAttribute('aria-label', muted ? 'Sound off' : 'Sound on');
+    };
     btn.addEventListener('click', () => {
       muted = !muted;
       save('muted', muted);
@@ -452,6 +485,22 @@ const Arcade = (() => {
     render();
   }
   document.addEventListener('DOMContentLoaded', wireMuteButton);
+
+  // Groups a game's touch buttons into a left and a right half. Upright they still read as one row;
+  // on a sideways phone each half becomes a stack at its edge of the screen, clear of the canvas.
+  function splitTouchpad() {
+    const pad = document.querySelector('.touchpad');
+    if (!pad || pad.querySelector('.tp-side')) return;
+    const buttons = [...pad.children];
+    const cut = Math.floor(buttons.length / 2);
+    for (const [part, side] of [[buttons.slice(0, cut), 'left'], [buttons.slice(cut), 'right']]) {
+      const wrap = document.createElement('div');
+      wrap.className = `tp-side tp-${side}`;
+      wrap.append(...part);
+      pad.appendChild(wrap);
+    }
+  }
+  document.addEventListener('DOMContentLoaded', splitTouchpad);
 
   const rand = (a, b) => a + Math.random() * (b - a);
   const randInt = (a, b) => Math.floor(rand(a, b + 1));

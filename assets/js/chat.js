@@ -33,7 +33,12 @@ const Chat = (() => {
       <p class="chat-error" role="status"></p>
       <p class="chat-rules">Be kind. Swears are filtered, and links or personal info are blocked. Click a name to add a friend, set a nickname, or hide them.</p>
     </section>`;
-  document.body.appendChild(root);
+  // On game pages the button sits in the top bar, so it never lands on a game's touch controls.
+  const bar = document.querySelector('.topbar');
+  if (bar) {
+    root.classList.add('in-bar');
+    bar.insertBefore(root, document.getElementById('mute'));
+  } else document.body.appendChild(root);
 
   const toggle = root.querySelector('.chat-toggle'), panel = root.querySelector('.chat-panel');
   const log = root.querySelector('.chat-log'), form = root.querySelector('.chat-form');

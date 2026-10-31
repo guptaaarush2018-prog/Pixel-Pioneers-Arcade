@@ -1,64 +1,118 @@
+/* Pocket Racer: the game page. Menus (home, career, quick race, time trial, online, garage,
+   records, track builder) sit over a demo race; races use a camera that shows the whole track on
+   big screens and follows your car on small ones. Content lives in data.js, drawing in art.js
+   and sound in sound.js. */
 (() => {
-  const W = 800, H = 560, TRACK_W = 80, LAPS = 3, CAR_R = 13, STEP = 6;
-  const TURN = 2.9;       // rad/s a car can turn once its tyres have full grip
-  const GHOST_STEP = 0.1; // seconds between recorded ghost frames
+  const W = 800, H = 560, TRACK_W = RacerArt.TRACK_W, CAR_R = 13, STEP = 6;
+  const TURN = 2.9;          // rad/s a car can turn once its tyres have full grip
+  const TOP_SPEED = 300;
+  const GHOST_STEP = 0.1;    // seconds between recorded ghost frames
   const SEND_EVERY = 1 / 15; // seconds between position updates in an online race
-  const PAR_SPEED = 150;  // px/s; averaging faster than this earns a time bonus (Pro rivals average ~200)
-
-  const THEMES = [
-    { name: 'Meadow', grass: '#2d5f3a' },
-    { name: 'Pines', grass: '#3a5a2c' },
-    { name: 'Canyon', grass: '#8a6a45' },
-    { name: 'Desert', grass: '#b8935a' },
-    { name: 'Snow', grass: '#c3d3dd' },
-    { name: 'Night', grass: '#1d2540' },
-  ];
-
-  // The first point of each track is the start line, so it sits on a straight.
-  const TRACKS = [
-    { id: 'harbor', name: 'Harbor Loop', grass: '#2d5f3a', points: [[400, 90], [680, 110], [720, 280], [680, 450], [520, 470], [440, 380], [360, 380], [280, 470], [120, 450], [80, 280], [120, 110]] },
-    { id: 'pines', name: 'Pine Hills', grass: '#3a5a2c', points: [[240, 95], [330, 80], [480, 150], [650, 90], [730, 220], [640, 330], [700, 460], [500, 480], [380, 380], [250, 480], [100, 420], [90, 250], [150, 120]] },
-    { id: 'canyon', name: 'Canyon Twist', grass: '#8a6a45', points: [[400, 80], [650, 90], [730, 200], [620, 280], [700, 400], [600, 480], [400, 470], [300, 360], [200, 470], [90, 400], [110, 200], [200, 100]] },
-    { id: 'dunes', name: 'Dune Dash', grass: '#b8935a', points: [[300, 85], [560, 85], [700, 130], [720, 250], [640, 330], [700, 420], [620, 480], [430, 470], [330, 400], [210, 470], [90, 420], [100, 260], [170, 130]] },
-    { id: 'frost', name: 'Frost Switchback', grass: '#c3d3dd', points: [[260, 85], [560, 85], [700, 110], [725, 230], [720, 420], [665, 480], [600, 430], [590, 270], [520, 210], [455, 270], [450, 420], [380, 485], [250, 480], [150, 470], [80, 380], [85, 200], [140, 110]] },
-    { id: 'midnight', name: 'Midnight Circuit', grass: '#1d2540', points: [[420, 90], [640, 90], [720, 170], [650, 250], [720, 340], [700, 460], [560, 480], [500, 380], [400, 330], [300, 390], [260, 480], [110, 470], [80, 340], [200, 250], [95, 160], [190, 90]] },
-  ];
-  const RIVALS = [
-    { color: '#4f8cff', pace: 1 },
-    { color: '#3ddc84', pace: 0.97 },
-    { color: '#c77dff', pace: 0.94 },
-  ];
-  // pace scales the rivals' racing-line speeds; wander is how far (px) they drift off the line.
-  const LEVELS = [
-    { id: 'rookie', name: 'Rookie', pace: 0.64, wander: 14, points: 0.6 },
-    { id: 'pro', name: 'Pro', pace: 0.78, wander: 8, points: 1 },
-    { id: 'ace', name: 'Ace', pace: 0.97, wander: 2, points: 1.5 },
-  ];
+  const PAR_SPEED = 150;     // px/s; averaging faster than this earns an arcade time bonus
   const PLACE_POINTS = [1000, 600, 400, 200];
+  const MARGIN = 160;        // world drawn around the field, for the follow camera
+  const LAYER_SCALE = 2;     // resolution of the pre-drawn track layer
+  const D = RacerData, A = RacerArt, S = RacerSound;
+  const RIVAL_PACE = [1, 0.97, 0.94];
+  // For testing: #autopilot drives your car for you, and nothing it does is posted online.
+  const AUTOPILOT = location.hash === '#autopilot';
+  const posting = () => Online.enabled && !AUTOPILOT;
 
-  const canvas = document.getElementById('game');
-  const ctx = Arcade.setupCanvas(canvas, W, H);
-  const trackLayer = Arcade.makeLayer(W, H);
-  const ui = Arcade.overlay(document.getElementById('overlay'));
   const $ = id => document.getElementById(id);
   const esc = s => String(s).replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const angleDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
+  const fmt = t => (t == null || !isFinite(t) ? '–' : t.toFixed(2) + 's');
+  const ordinal = n => n + (['th', 'st', 'nd', 'rd'][n] || 'th');
+  const shuffle = arr => arr.map(v => [Math.random(), v]).sort((a, b) => a[0] - b[0]).map(p => p[1]);
 
-  let state = 'menu';
-  let track, path, N, trackLen, racing;
-  let cars, player, raceTime, countdown, lapStart, bestLap, recorded, recordAcc, ghost;
-  let level = LEVELS.find(l => l.id === Arcade.load('racer:level', 'pro')) || LEVELS[1];
-  let selected = TRACKS[0];
-  let edit = null;
-  let net = null;   // online race: { conn, host, names, want, sendT, target, targetAt, lag, wins, mine, theirs }
-  let raceOnline = false; // stays set if the opponent leaves mid-race, so it never scores as solo
-  const online = () => raceOnline;
-  const keys = { up: false, down: false, left: false, right: false };
-  let touchGas = false;
+  const canvas = $('game'), stage = $('stage'), screens = $('screens');
+  const ctx = canvas.getContext('2d');
+  const ui = Arcade.overlay($('overlay'));
+  const body = document.body;
 
-  // Your own tracks from the editor live in localStorage next to the built-in ones.
-  const customTracks = () => Arcade.load('tracks', []).map(t => ({ ...t, custom: true }));
-  const allTracks = () => [...TRACKS, ...customTracks()];
+  // ---------- Canvas & layers ----------
+
+  let cw = 1, ch = 1, dpr = 1;
+  const nightLayer = document.createElement('canvas');
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const r = stage.getBoundingClientRect();
+    cw = Math.max(1, r.width);
+    ch = Math.max(1, r.height);
+    canvas.width = nightLayer.width = Math.round(cw * dpr);
+    canvas.height = nightLayer.height = Math.round(ch * dpr);
+    snapCamera = true;
+  }
+  new ResizeObserver(resize).observe(stage);
+
+  const makeCanvas = (w, h) => {
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    return c;
+  };
+  const sceneLayer = makeCanvas((W + MARGIN * 2) * LAYER_SCALE, (H + MARGIN * 2) * LAYER_SCALE);
+  const skidLayer = makeCanvas(W * LAYER_SCALE, H * LAYER_SCALE);
+  const skidCtx = skidLayer.getContext('2d');
+  const miniLayer = makeCanvas(160 * 2, 112 * 2);
+  let scene = null;
+
+  // ---------- Saved progress ----------
+
+  const coins = () => Arcade.load('racer:coins', 0);
+  function addCoins(n) {
+    if (!n) return;
+    Arcade.save('racer:coins', coins() + n);
+    updateWallet(true);
+  }
+  const starsMap = () => Arcade.load('racer:stars', {});
+  const totalStars = () => Object.values(starsMap()).reduce((a, b) => a + b, 0);
+  const starsOf = id => starsMap()[id] || 0;
+  const cupDone = cup => cup.events.every((_, i) => starsOf(`${cup.id}-${i + 1}`) >= 1);
+  const cupOpen = ci => ci === 0 || cupDone(D.CUPS[ci - 1]);
+  const eventOpen = ev => cupOpen(ev.cupIndex) && (ev.index === 0 || starsOf(`${ev.cup.id}-${ev.index}`) >= 1);
+  const owned = () => Arcade.load('racer:skins', []);
+  function skinUnlocked(s) {
+    const u = s.unlock;
+    if (u.coins) return owned().includes(s.id);
+    if (u.stars) return totalStars() >= u.stars;
+    if (u.cup) return cupDone(D.CUPS.find(c => c.id === u.cup));
+    return true;
+  }
+  const unlockText = s => s.unlock.coins ? `${s.unlock.coins} coins` : s.unlock.stars ? `${s.unlock.stars} career stars` : s.unlock.cup ? `Finish the ${D.CUPS.find(c => c.id === s.unlock.cup).name}` : 'Free';
+  const mySkin = () => {
+    const s = D.SKINS.find(k => k.id === Arcade.load('racer:skin', 'sunburst'));
+    return s && skinUnlocked(s) ? s : D.SKINS[0];
+  };
+  const skinById = id => D.SKINS.find(s => s.id === id) || D.SKINS[1];
+
+  function updateWallet(bump = false) {
+    $('coins').textContent = coins().toLocaleString();
+    $('stars').textContent = totalStars();
+    if (bump) {
+      const w = $('wallet');
+      w.classList.remove('bump');
+      void w.offsetWidth;
+      w.classList.add('bump');
+    }
+  }
+
+  // Your own tracks from the builder live in localStorage. Old saves stored a grass colour.
+  const OLD_GRASS = ['#2d5f3a', '#3a5a2c', '#8a6a45', '#b8935a', '#c3d3dd', '#1d2540'];
+  const customTracks = () => Arcade.load('tracks', []).map(t => ({
+    ...t, custom: true, theme: t.theme || D.THEMES[Math.max(0, OLD_GRASS.indexOf(t.grass))].id,
+  }));
+  const findTrack = id => D.trackById(id) || customTracks().find(t => t.id === id);
+
+  // Records: best lap and best race time per track (race times per lap count).
+  const lapKey = id => 'lap:' + id;
+  const timeKey = (id, laps) => laps === 3 ? 'time:' + id : `time:${id}:${laps}`;
+  const ghostKey = (id, laps) => laps === 3 ? 'ghost:' + id : `ghost:${id}:${laps}`;
+  // World leaderboards store "higher is better", so lap times go in as 10,000,000 minus milliseconds.
+  const lapBoard = id => 'prt-' + id;
+  const toScore = t => Math.max(0, 1e7 - Math.round(t * 1000));
+  const fromScore = s => (1e7 - s) / 1000;
 
   // ---------- Track geometry ----------
 
@@ -80,7 +134,7 @@
     let carry = 0, total = 0;
     for (let i = 1; i <= raw.length; i++) {
       const a = raw[i - 1], b = raw[i % raw.length];
-      let seg = Math.hypot(b.x - a.x, b.y - a.y);
+      const seg = Math.hypot(b.x - a.x, b.y - a.y);
       total += seg;
       let along = STEP - carry;
       while (along <= seg) {
@@ -98,6 +152,13 @@
     return { path: out, length: total };
   }
 
+  const pathCache = new Map();
+  function pathOf(t) {
+    const key = t.id + ':' + t.points.join(';');
+    if (!pathCache.has(key)) pathCache.set(key, buildPath(t.points));
+    return pathCache.get(key);
+  }
+
   // Radius of the curve at each point, measured across a few neighbours either side.
   function radii(p) {
     const n = p.length, k = 3, out = new Float32Array(n);
@@ -112,7 +173,7 @@
 
   // Works out whether a layout can be raced, and where the trouble spots are so the editor can mark them.
   function checkTrack(points) {
-    if (points.length < 3) return { ok: false, msg: 'Click to place corners in driving order', bad: [], path: null };
+    if (points.length < 3) return { ok: false, msg: 'Tap to place corners in driving order', bad: [], path: null };
     const { path: p, length } = buildPath(points);
     const n = p.length, bad = [], edge = TRACK_W / 2 + 6;
     let msg = '';
@@ -136,10 +197,8 @@
   function planRacingLine() {
     const lim = TRACK_W / 2 - CAR_R - 4;
     const nx = path.map(p => Math.cos(p.a + Math.PI / 2)), ny = path.map(p => Math.sin(p.a + Math.PI / 2));
-    // In tight corners the line can't tuck in so far that it bends tighter than a car can turn
-    // (about 38px: full lock at the speed where the tyres start to grip).
     const lo = new Float32Array(N).fill(-lim), hi = new Float32Array(N).fill(lim);
-    radii(path).forEach((r, i) => {
+    rad.forEach((r, i) => {
       const room = clamp(r - 110 / TURN, -lim, lim);
       if (angleDiff(path[(i + 3) % N].a, path[(i - 3 + N) % N].a) > 0) hi[i] = Math.min(hi[i], room);
       else lo[i] = Math.max(lo[i], -room);
@@ -156,7 +215,7 @@
       }
     }
     const line = path.map((p, i) => ({ x: p.x + nx[i] * off[i], y: p.y + ny[i] * off[i] }));
-    const speed = Float32Array.from(radii(line), r => clamp(r * TURN * 0.9, 70, 300));
+    const speed = Float32Array.from(radii(line), r => clamp(r * TURN * 0.9, 70, TOP_SPEED));
     for (let k = 0; k < 2 * N; k++) {
       const i = (N * 2 - 1 - k) % N, j = (i + 1) % N;
       const ds = Math.hypot(line[j].x - line[i].x, line[j].y - line[i].y);
@@ -165,51 +224,22 @@
     return { off, nx, ny, lim, speed };
   }
 
-  function renderTrack(grass, p) {
-    const c = trackLayer.ctx;
-    c.fillStyle = grass;
-    c.fillRect(0, 0, W, H);
-    // A little texture so the grass isn't a flat fill.
-    c.fillStyle = 'rgba(255,255,255,0.035)';
-    for (let i = 0; i < 500; i++) c.fillRect((i * 97) % W, (i * 57 + (i % 7) * 31) % H, 3, 3);
-    if (!p) return;
-
-    const trace = () => {
-      c.beginPath();
-      p.forEach((pt, i) => (i ? c.lineTo(pt.x, pt.y) : c.moveTo(pt.x, pt.y)));
-      c.closePath();
-    };
-    c.lineJoin = 'round';
-    c.lineCap = 'round';
-    trace();
-    c.strokeStyle = '#e8e8e8';
-    c.lineWidth = TRACK_W + 12;
-    c.stroke();
-    c.strokeStyle = '#d64545';
-    c.setLineDash([14, 14]);
-    c.stroke();
-    c.setLineDash([]);
-    c.strokeStyle = '#3b3f47';
-    c.lineWidth = TRACK_W;
-    c.stroke();
-    c.strokeStyle = 'rgba(255,255,255,0.18)';
-    c.lineWidth = 2;
-    c.setLineDash([16, 18]);
-    c.stroke();
-    c.setLineDash([]);
-
-    // Checkered start / finish line.
-    const s = p[0];
-    c.save();
-    c.translate(s.x, s.y);
-    c.rotate(s.a + Math.PI / 2);
-    for (let i = 0; i < TRACK_W / 8; i++) {
-      for (let j = 0; j < 2; j++) {
-        c.fillStyle = (i + j) % 2 ? '#111' : '#fff';
-        c.fillRect(-TRACK_W / 2 + i * 8, -8 + j * 8, 8, 8);
-      }
-    }
-    c.restore();
+  // Draws the track once into the scene layer; the race then just copies it each frame.
+  function renderScene() {
+    const c = sceneLayer.getContext('2d');
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.clearRect(0, 0, sceneLayer.width, sceneLayer.height);
+    c.setTransform(LAYER_SCALE, 0, 0, LAYER_SCALE, MARGIN * LAYER_SCALE, MARGIN * LAYER_SCALE);
+    scene = A.buildScene(c, track, path, rad, W, H);
+    A.drawScene(c, scene);
+    skidCtx.setTransform(1, 0, 0, 1, 0, 0);
+    skidCtx.clearRect(0, 0, skidLayer.width, skidLayer.height);
+    skidCtx.setTransform(LAYER_SCALE, 0, 0, LAYER_SCALE, 0, 0);
+    // Minimap: the track outline, with the cars added each frame.
+    const m = miniLayer.getContext('2d');
+    m.setTransform(1, 0, 0, 1, 0, 0);
+    m.clearRect(0, 0, miniLayer.width, miniLayer.height);
+    A.trackThumb(m, path, miniLayer.width, miniLayer.height, { color: 'rgba(255,255,255,0.85)', width: 7, pad: 14 });
   }
 
   // Nearest path index to (x, y), searching around a hint index.
@@ -223,7 +253,21 @@
     return { i: best, d: Math.sqrt(bestD) };
   }
 
-  // ---------- Race setup ----------
+  // ---------- Race state ----------
+
+  let state = 'menu';  // menu (demo race behind the screens) · playing · paused · over · online-over · edit
+  let mode = 'demo';   // demo · career · quick · trial · online
+  let setup = null;    // what the current race was started with, for restarts
+  let track, path, N, trackLen, rad, racing, laps, level, event;
+  let cars = [], player, raceTime, countdown, lapStart, bestLap, recorded, recordAcc, ghost, finishT, lastPos;
+  let particles = [];
+  let edit = null;
+  let net = null;   // online race: { conn, host, names, skin, want, sendT, target, targetAt, lag, wins, mine, theirs }
+  let raceOnline = false; // stays set if the opponent leaves mid-race, so it never scores as solo
+  const online = () => raceOnline;
+  const keys = { up: false, down: false, left: false, right: false };
+  let touchGas = false, lastTouch = false;
+  let demoT = 0;
 
   function makeCar(slot, spec) {
     const back = 8 + Math.floor(slot / 2) * 9;
@@ -234,39 +278,82 @@
       x: p.x + Math.cos(p.a + Math.PI / 2) * side * 18,
       y: p.y + Math.sin(p.a + Math.PI / 2) * side * 18,
       a: p.a, v: 0, idx: i, dist: -back, lap: 0,
-      color: spec.color, ai: !!spec.pace, pace: (spec.pace || 1) * level.pace,
+      skin: spec.skin, name: spec.name, ai: !!spec.ai, pace: (spec.pace || 1) * level.pace,
       lane: 0, laneT: Arcade.rand(1, 3), finished: null, offTrack: false,
+      steer: 0, braking: false, gas: false, slide: 0, rear: null, puff: 0,
     };
   }
 
-  // Online races are just the two of you: no rivals, side by side on the front row.
-  function setupRace(t, vs = null, lead = 0) {
+  // Sets up the grid. Online races are just the two of you, side by side on the front row.
+  function setupRace(t, opts) {
     track = t;
-    ({ path, length: trackLen } = buildPath(t.points));
+    ({ path, length: trackLen } = pathOf(t));
     N = path.length;
+    rad = radii(path);
     racing = planRacingLine();
-    renderTrack(t.grass, path);
-    if (vs) {
-      const mine = makeCar(vs.host ? 0 : 1, { color: '#ffc53d' });
-      const theirs = makeCar(vs.host ? 1 : 0, { color: '#ff5d5d' });
+    laps = opts.laps;
+    level = opts.level;
+    event = opts.event || null;
+    mode = opts.mode;
+    renderScene();
+    const me = mySkin();
+    if (opts.vs) {
+      const vs = opts.vs;
+      const mine = makeCar(vs.host ? 0 : 1, { skin: me, name: 'You' });
+      const theirs = makeCar(vs.host ? 1 : 0, { skin: skinById(vs.skin), name: vs.names[1] });
       theirs.remote = true;
       cars = [mine, theirs];
-      vs.remote = theirs;
       vs.mine = new Map();   // track step -> race time each car first reached it, for the live gap
       vs.theirs = new Map();
+    } else if (mode === 'trial') {
+      cars = [makeCar(0, { skin: me, name: 'You' })];
+    } else if (mode === 'demo') {
+      const skins = shuffle(D.SKINS);
+      const names = shuffle(D.RIVALS);
+      cars = [0, 1, 2, 3].map(i => makeCar(i, { skin: skins[i], name: names[i], ai: true, pace: 1.02 - i * 0.03 }));
     } else {
-      cars = [makeCar(3, { color: '#ffc53d' }), ...RIVALS.map((r, i) => makeCar(i, r))];
+      const skins = shuffle(D.SKINS.filter(s => s.id !== me.id));
+      const names = shuffle(D.RIVALS);
+      cars = [makeCar(3, { skin: me, name: 'You' }), ...RIVAL_PACE.map((pace, i) => makeCar(i, { skin: skins[i], name: names[i], ai: true, pace }))];
     }
     player = cars[0];
     raceTime = 0;
-    countdown = 3.5 + lead;
+    countdown = mode === 'demo' ? 0 : 3.5 + (opts.lead || 0);
     lapStart = 0;
     bestLap = Infinity;
     recorded = [];
     recordAcc = 0;
     ghost = null;
-    if (!vs) loadGhost();
-    updateHud();
+    finishT = null;
+    lastPos = cars.length;
+    particles = [];
+    snapCamera = true;
+    if (!opts.vs && mode !== 'demo') loadGhost();
+  }
+
+  // The target time for three stars: one clean run by a rival at the cup's pace that never
+  // drifts off the racing line, simulated ahead of time. Rivals wander, so it beats them all.
+  const parCache = new Map();
+  function parTime(ev) {
+    if (parCache.has(ev.id)) return parCache.get(ev.id);
+    const saved = { track, path, N, trackLen, rad, racing, level };
+    track = D.trackById(ev.track);
+    ({ path, length: trackLen } = pathOf(track));
+    N = path.length;
+    rad = radii(path);
+    racing = planRacingLine();
+    level = { ...D.LEVELS.find(l => l.id === ev.level), wander: 0 };
+    const car = makeCar(0, { skin: D.SKINS[0], name: '', ai: true, pace: 1 });
+    let t = 0;
+    const dt = 1 / 60;
+    while (car.dist < N * ev.laps && t < 600) {
+      const input = aiInput(car, dt);
+      drive(car, dt, input.gas, input.brake, input.steer);
+      t += dt;
+    }
+    ({ track, path, N, trackLen, rad, racing, level } = saved);
+    parCache.set(ev.id, t);
+    return t;
   }
 
   // ---------- Ghosts ----------
@@ -277,25 +364,25 @@
     return { x, y, a: a / 100 };
   });
 
-  // Custom tracks only exist on this device, so their ghosts stay local too.
+  // The world ghost is the fastest 3-lap race on a built-in track; custom tracks and other
+  // lap counts keep a ghost on this device only.
   function loadGhost() {
-    const local = Arcade.load('ghost:' + track.id, null);
+    const local = Arcade.load(ghostKey(track.id, laps), null);
     const use = g => { if (g && g.frames) ghost = { ...g, frames: decode(g.frames) }; };
     use(local && { ...local, name: 'Your best' });
-    if (!Online.enabled || track.custom) return;
+    if (!Online.enabled || track.custom || laps !== 3) return;
     const forTrack = track;
     Online.getGhost(track.id)
-      .then(g => {
-        if (g && forTrack === track && (!local || g.time <= local.time)) use({ ...g, name: g.name });
-      })
+      .then(g => { if (g && forTrack === track && laps === 3 && (!local || g.time <= local.time)) use({ ...g, name: g.name }); })
       .catch(() => {});
   }
 
   function saveGhost(time) {
     const frames = encode(recorded);
-    const local = Arcade.load('ghost:' + track.id, null);
-    if (!local || time < local.time) Arcade.save('ghost:' + track.id, { time, frames });
-    if (Online.enabled && !track.custom) Online.saveGhost(track.id, time, frames).catch(() => {}); // rules keep only faster times
+    const key = ghostKey(track.id, laps);
+    const local = Arcade.load(key, null);
+    if (!local || time < local.time) Arcade.save(key, { time, frames });
+    if (posting() && !track.custom && laps === 3) Online.saveGhost(track.id, time, frames).catch(() => {}); // rules keep only faster times
   }
 
   function ghostAt(t) {
@@ -304,19 +391,15 @@
     const i = Math.floor(f);
     if (i >= ghost.frames.length - 1) return null;
     const a = ghost.frames[i], b = ghost.frames[i + 1], k = f - i;
-    let da = b.a - a.a;
-    if (da > Math.PI) da -= Math.PI * 2;
-    if (da < -Math.PI) da += Math.PI * 2;
-    return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, a: a.a + da * k };
+    return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, a: a.a + angleDiff(b.a, a.a) * k };
   }
 
   // ---------- Driving ----------
 
-  function angleDiff(a, b) { return Math.atan2(Math.sin(a - b), Math.cos(a - b)); }
-
   // Cars drive straight through each other, so rivals never get in the way of a good lap.
+  // The handling is the same as it always was, so old ghosts and records stay fair.
   function drive(car, dt, gas, brake, steer) {
-    const top = car.offTrack ? 120 : 300;
+    const top = car.offTrack ? 120 : TOP_SPEED;
     if (gas) car.v += 420 * dt;
     if (brake) car.v -= (car.v > 0 ? 700 : 300) * dt;
     car.v -= car.v * (car.offTrack ? 2.2 : 0.5) * dt;
@@ -327,6 +410,12 @@
     car.y += Math.sin(car.a) * car.v * dt;
     car.x = Math.max(CAR_R, Math.min(W - CAR_R, car.x));
     car.y = Math.max(CAR_R, Math.min(H - CAR_R, car.y));
+    // Only for looks and sound: how hard the tyres are working.
+    car.steer += (steer - car.steer) * Math.min(1, dt * 14);
+    car.gas = gas;
+    car.braking = brake && car.v > 20;
+    const work = Math.abs(steer) * grip * clamp((car.v - 150) / 130, 0, 1) + (car.braking && car.v > 160 ? 0.5 : 0);
+    car.slide += (Math.min(1, work) - car.slide) * Math.min(1, dt * 10);
 
     const near = nearest(car.x, car.y, car.idx);
     let step = near.i - car.idx;
@@ -361,93 +450,637 @@
       const before = Math.ceil(countdown);
       countdown -= dt;
       const after = Math.ceil(countdown);
-      if (after !== before && after > 0) Arcade.tone({ freq: 440, dur: 0.15, vol: 0.06 });
-      if (countdown <= 0) Arcade.tone({ freq: 880, dur: 0.35, vol: 0.07 });
+      if (after !== before && after > 0 && after <= 3) S.sfx.light();
+      if (countdown <= 0) {
+        S.sfx.go();
+        banner('GO!');
+        for (const car of cars) puff(car, 8, car.skin.smoke);
+      }
+      updateLights();
+      updateParticles(dt);
       return;
     }
     raceTime += dt;
+    updateLights();
 
     for (const car of cars) {
-      if (car.remote) { followRemote(car, dt); continue; }
-      if (car.finished !== null && car !== player) { drive(car, dt, false, true, 0); continue; }
-      const input = car.ai
-        ? aiInput(car, dt)
-        : { gas: keys.up || touchGas, brake: keys.down, steer: (keys.right ? 1 : 0) - (keys.left ? 1 : 0) };
+      if (car.remote) { followRemote(car, dt); effects(car, dt); continue; }
+      let input;
+      if (car === player && !car.ai && car.finished === null) {
+        input = { gas: keys.up || touchGas, brake: keys.down, steer: (keys.right ? 1 : 0) - (keys.left ? 1 : 0) };
+      } else if (car.finished !== null && car !== player) {
+        input = { gas: false, brake: true, steer: aiInput(car, dt).steer };
+      } else {
+        input = aiInput(car, dt); // rivals, the demo, and your car on autopilot after the flag
+      }
       drive(car, dt, input.gas, input.brake, input.steer);
+      effects(car, dt);
       const lap = Math.floor(car.dist / N);
       if (lap > car.lap) {
         car.lap = lap;
-        if (car === player && lap <= LAPS) {
-          bestLap = Math.min(bestLap, raceTime - lapStart);
-          lapStart = raceTime;
-          if (lap < LAPS) Arcade.tone({ freq: 660, to: 880, dur: 0.15, type: 'triangle', vol: 0.05 });
-        }
-        if (lap >= LAPS && car.finished === null) car.finished = raceTime;
+        if (car === player && mode !== 'demo' && lap <= laps) onPlayerLap(lap);
+        if (lap >= laps && car.finished === null) car.finished = raceTime;
       }
     }
+    updateParticles(dt);
 
-    recordAcc += dt;
-    while (recordAcc >= GHOST_STEP) {
-      recordAcc -= GHOST_STEP;
-      recorded.push({ x: player.x, y: player.y, a: player.a });
+    if (mode === 'demo') {
+      demoT -= dt;
+      if (demoT <= 0) startDemo();
+      return;
+    }
+
+    if (player.finished === null) {
+      recordAcc += dt;
+      while (recordAcc >= GHOST_STEP) {
+        recordAcc -= GHOST_STEP;
+        recorded.push({ x: player.x, y: player.y, a: player.a });
+      }
     }
 
     if (net) {
       reached(net.mine, player.dist, raceTime);
       net.sendT -= dt;
-      if (net.sendT <= 0 || player.finished !== null) {
+      if (net.sendT <= 0 || (player.finished !== null && !net.sentFinish)) {
         net.sendT = SEND_EVERY;
+        net.sentFinish = player.finished !== null;
         net.conn.state({ x: Math.round(player.x), y: Math.round(player.y), a: Math.round(player.a * 100) / 100, v: Math.round(player.v), d: player.dist, f: player.finished });
       }
     }
 
+    const pos = position(player);
+    if (pos < lastPos && player.finished === null && raceTime > 2) S.sfx.overtake();
+    lastPos = pos;
+
+    if (player.finished !== null && finishT === null) {
+      finishT = 1.6;
+      player.pace = 0.5;
+      player.ai = true;
+      const place = position(player);
+      banner(mode === 'trial' ? 'FINISH' : place === 1 ? 'WINNER!' : `${ordinal(place)} PLACE`, fmt(player.finished));
+      (place === 1 || mode === 'trial' ? S.sfx.win : place <= 3 ? S.sfx.podium : S.sfx.lose)();
+      if (place <= 3 || mode === 'trial') confetti(place === 1 ? 90 : 40);
+    }
+    if (finishT !== null && state === 'playing') {
+      finishT -= dt;
+      if (finishT <= 0) {
+        S.stopCar();
+        if (online()) finishOnline();
+        else if (mode === 'trial') finishTrial();
+        else finishRace();
+      }
+    }
     updateHud();
-    if (player.finished !== null) (online() ? finishOnline() : finishRace());
+  }
+
+  function onPlayerLap(lap) {
+    const lapTime = raceTime - lapStart;
+    lapStart = raceTime;
+    const record = Arcade.load(lapKey(track.id), null);
+    const fastest = lapTime < bestLap;
+    bestLap = Math.min(bestLap, lapTime);
+    if (lap >= laps) return;
+    if (!track.custom && (!record || lapTime < record) && fastest) {
+      banner('LAP RECORD', fmt(lapTime));
+      S.sfx.bestLap();
+    } else if (lap === laps - 1) {
+      banner('FINAL LAP', fmt(lapTime));
+      S.sfx.finalLap();
+    } else {
+      banner(`LAP ${lap + 1}/${laps}`, fmt(lapTime));
+      S.sfx.lap();
+    }
   }
 
   const position = car => 1 + cars.filter(c => c !== car && (
     (c.finished !== null && (car.finished === null || c.finished < car.finished)) ||
     (c.finished === null && car.finished === null && c.dist > car.dist))).length;
 
+  // ---------- Effects: smoke, dust, skid marks, confetti ----------
+
+  function rearWheels(car) {
+    const m = A.MODELS[car.skin.model] || A.MODELS.coupe;
+    const bx = m.wheels[0][0], by = m.wheels[0][1];
+    const c = Math.cos(car.a), s = Math.sin(car.a);
+    return [[car.x + c * bx - s * by, car.y + s * bx + c * by], [car.x + c * bx + s * by, car.y + s * bx - c * by]];
+  }
+
+  function puff(car, n, color, spread = 30) {
+    const [l, r] = rearWheels(car);
+    for (let i = 0; i < n; i++) {
+      const w = i % 2 ? l : r;
+      particles.push({
+        x: w[0], y: w[1], vx: Arcade.rand(-spread, spread) - Math.cos(car.a) * 20, vy: Arcade.rand(-spread, spread) - Math.sin(car.a) * 20,
+        life: 0, max: Arcade.rand(0.5, 0.9), size: Arcade.rand(3, 6), grow: 14, color, kind: 'smoke',
+      });
+    }
+  }
+
+  function effects(car, dt) {
+    const wheels = rearWheels(car);
+    const speed = Math.abs(car.v);
+    const sliding = car.slide > 0.3 && !car.offTrack;
+    if (car.rear && (sliding || (car.offTrack && speed > 60))) {
+      skidCtx.strokeStyle = car.offTrack ? 'rgba(40,28,12,0.16)' : `rgba(16,16,18,${0.18 + car.slide * 0.2})`;
+      skidCtx.lineWidth = 2.6;
+      skidCtx.lineCap = 'round';
+      skidCtx.beginPath();
+      for (let k = 0; k < 2; k++) {
+        skidCtx.moveTo(car.rear[k][0], car.rear[k][1]);
+        skidCtx.lineTo(wheels[k][0], wheels[k][1]);
+      }
+      skidCtx.stroke();
+    }
+    car.rear = wheels;
+    car.puff -= dt;
+    if (car.puff > 0 || particles.length > 320) return;
+    if (sliding) {
+      car.puff = 0.05;
+      puff(car, 2, car.skin.smoke, 14);
+    } else if (car.offTrack && speed > 60) {
+      car.puff = 0.06;
+      puff(car, 2, scene.theme.dust, 22);
+    } else if (car.gas && speed < 90 && raceTime < 3 && mode !== 'demo') {
+      car.puff = 0.08;
+      puff(car, 1, 'rgba(200,200,200,0.8)', 10);
+    }
+  }
+
+  function confetti(n) {
+    const colors = ['#ffc53d', '#ff4d5e', '#4f8cff', '#3ddc84', '#ffffff', '#c77dff'];
+    for (let i = 0; i < n; i++) {
+      const a = Arcade.rand(0, Math.PI * 2), sp = Arcade.rand(60, 240);
+      particles.push({
+        x: player.x, y: player.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0, max: Arcade.rand(1.2, 2.2),
+        size: Arcade.rand(2, 4), color: Arcade.pick(colors), kind: 'confetti', spin: Arcade.rand(-12, 12), r: Arcade.rand(0, 6),
+      });
+    }
+  }
+
+  function updateParticles(dt) {
+    for (const p of particles) {
+      p.life += dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      const drag = p.kind === 'confetti' ? 1.6 : 3;
+      p.vx -= p.vx * drag * dt;
+      p.vy -= p.vy * drag * dt;
+      if (p.grow) p.size += p.grow * dt;
+      if (p.spin) p.r += p.spin * dt;
+    }
+    particles = particles.filter(p => p.life < p.max);
+  }
+
+  function drawParticles(kind) {
+    for (const p of particles) {
+      if ((p.kind === 'confetti') !== (kind === 'confetti')) continue;
+      const k = 1 - p.life / p.max;
+      ctx.globalAlpha = p.kind === 'confetti' ? Math.min(1, k * 2) : k * 0.5;
+      ctx.fillStyle = p.color;
+      if (p.kind === 'confetti') {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.r);
+        ctx.fillRect(-p.size, -p.size / 2.5, p.size * 2, p.size / 1.25);
+        ctx.restore();
+      } else {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // ---------- Camera ----------
+
+  const cam = { x: W / 2, y: H / 2, z: 1 };
+  let snapCamera = true;
+  let camMode = Arcade.load('racer:cam', 'auto');
+  const fullZoom = () => Math.min(cw / (W + 16), ch / (H + 16));
+  const following = () => state !== 'edit' && (camMode === 'follow' || (camMode === 'auto' && fullZoom() < 0.72));
+
+  function updateCamera(dt) {
+    let tx = W / 2, ty = H / 2, tz = fullZoom();
+    const target = mode === 'demo' ? cars.reduce((a, b) => (b.dist > a.dist ? b : a), cars[0]) : player;
+    if (following() && target) {
+      const speed = Math.abs(target.v) / TOP_SPEED;
+      tz = Math.max(fullZoom() * 1.05, Math.min(cw, ch) / 360 * (1 - speed * 0.14));
+      tx = target.x + Math.cos(target.a) * target.v * 0.32;
+      ty = target.y + Math.sin(target.a) * target.v * 0.32;
+      // Don't look much past the edge of the world.
+      const hw = cw / 2 / tz, hh = ch / 2 / tz, slack = MARGIN * 0.9;
+      tx = hw * 2 > W + slack * 2 ? W / 2 : clamp(tx, hw - slack, W - hw + slack);
+      ty = hh * 2 > H + slack * 2 ? H / 2 : clamp(ty, hh - slack, H - hh + slack);
+    }
+    const k = snapCamera ? 1 : 1 - Math.exp(-dt * 4.5);
+    cam.x += (tx - cam.x) * k;
+    cam.y += (ty - cam.y) * k;
+    cam.z += (tz - cam.z) * (snapCamera ? 1 : 1 - Math.exp(-dt * 3));
+    snapCamera = false;
+  }
+
+  function worldMatrix() {
+    let sx = 0, sy = 0;
+    if (state === 'playing' && player && player.offTrack && Math.abs(player.v) > 80 && !player.ai) {
+      sx = Arcade.rand(-1, 1) * 1.2;
+      sy = Arcade.rand(-1, 1) * 1.2;
+    }
+    const z = cam.z * dpr;
+    return new DOMMatrix([z, 0, 0, z, dpr * (cw / 2 - cam.x * cam.z + sx), dpr * (ch / 2 - cam.y * cam.z + sy)]);
+  }
+
+  function setCamMode(m) {
+    camMode = m;
+    Arcade.save('racer:cam', m);
+    snapCamera = true;
+  }
+
+  // ---------- Drawing ----------
+
+  function draw(dt) {
+    updateCamera(dt);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#0b0d12';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (!scene) return;
+    const m = worldMatrix();
+    ctx.setTransform(m);
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(sceneLayer, -MARGIN, -MARGIN, W + MARGIN * 2, H + MARGIN * 2);
+    ctx.drawImage(skidLayer, 0, 0, W, H);
+    A.drawCrowd(ctx, scene, performance.now() / 1000, finishT !== null ? 1 : 0);
+    drawParticles('smoke');
+
+    const racingNow = state !== 'menu';
+    const g = racingNow ? ghostAt(raceTime) : null;
+    if (g) A.drawCar(ctx, mySkin(), g.x, g.y, g.a, { alpha: 0.32 });
+
+    // Rivals are see-through where they overlap you, so your own car always stays visible.
+    const others = cars.filter(c => c !== player || mode === 'demo');
+    for (const car of others) {
+      const over = mode !== 'demo' && Math.hypot(car.x - player.x, car.y - player.y) < CAR_R * 2.5;
+      A.drawCar(ctx, car.skin, car.x, car.y, car.a, { steer: car.steer, brake: car.braking, alpha: over ? 0.5 : 1 });
+    }
+    if (mode !== 'demo') A.drawCar(ctx, player.skin, player.x, player.y, player.a, { steer: player.steer, brake: player.braking });
+
+    // Labels: ghost, the online opponent, and an arrow over you on the grid.
+    ctx.textAlign = 'center';
+    ctx.font = '700 10px system-ui, sans-serif';
+    if (g) {
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.fillText(`${ghost.name} · ${ghost.time.toFixed(1)}s`, g.x, g.y - 18);
+    }
+    for (const car of cars) {
+      if (car === player || mode === 'demo' || (!car.remote && !following())) continue;
+      tag(car.name, car.x, car.y - 18, car.skin.paint);
+    }
+    if (racingNow && raceTime < 3 && mode !== 'demo') {
+      const bob = Math.sin(performance.now() / 150) * 2;
+      ctx.fillStyle = '#ffc53d';
+      ctx.beginPath();
+      ctx.moveTo(player.x - 7, player.y - 27 + bob);
+      ctx.lineTo(player.x + 7, player.y - 27 + bob);
+      ctx.lineTo(player.x, player.y - 18 + bob);
+      ctx.fill();
+    }
+    drawParticles('confetti');
+    if (scene.theme.night) A.drawNight(nightLayer, ctx, scene, cars, m);
+    drawMinimap();
+  }
+
+  function tag(text, x, y, color) {
+    const w = ctx.measureText(text).width + 10;
+    ctx.fillStyle = 'rgba(10,12,18,0.7)';
+    ctx.beginPath();
+    ctx.roundRect(x - w / 2, y - 9, w, 13, 4);
+    ctx.fill();
+    ctx.fillStyle = color;
+    ctx.fillRect(x - w / 2, y - 9, 2.5, 13);
+    ctx.fillStyle = '#fff';
+    ctx.fillText(text, x + 1, y + 1);
+  }
+
+  const mini = $('minimap'), miniCtx = mini.getContext('2d');
+  function drawMinimap() {
+    const show = state !== 'menu' && following();
+    mini.hidden = !show;
+    if (!show) return;
+    const r = window.devicePixelRatio > 1 ? 2 : 1;
+    if (mini.width !== mini.clientWidth * r) {
+      mini.width = mini.clientWidth * r;
+      mini.height = mini.clientHeight * r;
+    }
+    miniCtx.setTransform(1, 0, 0, 1, 0, 0);
+    miniCtx.clearRect(0, 0, mini.width, mini.height);
+    miniCtx.drawImage(miniLayer, 0, 0, mini.width, mini.height);
+    const s = Math.min((mini.width - 14 * mini.width / miniLayer.width * 2) / W, (mini.height - 14 * mini.height / miniLayer.height * 2) / H);
+    const ox = (mini.width - W * s) / 2, oy = (mini.height - H * s) / 2;
+    for (const car of [...cars].reverse()) {
+      miniCtx.fillStyle = car === player ? '#ffc53d' : car.skin.paint;
+      miniCtx.strokeStyle = '#000';
+      miniCtx.lineWidth = r;
+      miniCtx.beginPath();
+      miniCtx.arc(ox + car.x * s, oy + car.y * s, (car === player ? 4.5 : 3.2) * r, 0, Math.PI * 2);
+      miniCtx.fill();
+      miniCtx.stroke();
+    }
+  }
+
+  // ---------- HUD ----------
+
+  const hudCache = {};
+  const setText = (id, text) => {
+    if (hudCache[id] === text) return;
+    hudCache[id] = text;
+    $(id).textContent = text;
+  };
+  let towerT = 0;
+
+  function updateHud() {
+    const pos = position(player);
+    setText('pos', mode === 'trial' ? '–' : ordinal(pos));
+    setText('pos-of', mode === 'trial' ? '' : `/${cars.length}`);
+    setText('lap', `${Math.min(laps, Math.max(1, player.lap + 1))}/${laps}`);
+    setText('time', raceTime.toFixed(2));
+    const rec = Arcade.load(lapKey(track.id), null);
+    setText('best', `Best ${isFinite(bestLap) ? bestLap.toFixed(2) : '–'}${rec ? ` · Rec ${rec.toFixed(2)}` : ''}`);
+    const kmh = Math.round(Math.abs(player.v) * 0.8);
+    setText('speed', String(kmh));
+    $('speedo').style.setProperty('--v', (Math.abs(player.v) / TOP_SPEED).toFixed(3));
+    setText('gap', gapText());
+    towerT -= 1 / 60;
+    if (towerT <= 0) {
+      towerT = 0.25;
+      const order = [...cars].sort((a, b) => position(a) - position(b));
+      $('tower').innerHTML = mode === 'trial' ? '' : order.map((c, i) => `<li class="${c === player ? 'me' : ''}"><span class="n">${i + 1}</span><i style="background:${c.skin.paint}"></i>${esc(c.name)}${c.finished !== null ? '<span class="done">✓</span>' : ''}</li>`).join('');
+    }
+  }
+
+  function updateLights() {
+    const el = $('lights');
+    const showing = countdown > 0 && countdown <= 3.5 || (countdown <= 0 && raceTime < 0.7 && mode !== 'demo');
+    el.hidden = !showing;
+    if (!showing) return;
+    const lit = countdown > 0 ? clamp(4 - Math.ceil(countdown), 0, 3) : 3;
+    el.classList.toggle('go', countdown <= 0);
+    [...el.children].forEach((b, i) => b.classList.toggle('red', countdown > 0 && i < lit));
+  }
+
+  function banner(text, sub = '') {
+    const el = $('banner');
+    el.innerHTML = `${esc(text)}${sub ? `<small>${esc(sub)}</small>` : ''}`;
+    el.classList.remove('show');
+    void el.offsetWidth;
+    el.classList.add('show');
+  }
+
+  // Logs the first time a car reached each step up to `dist` (updates can skip a few).
+  function reached(times, dist, t) {
+    for (let d = dist; d > dist - 40 && !times.has(d); d--) times.set(d, t);
+  }
+
+  // Online: how far apart you are in seconds, from when the leader passed the trailer's spot.
+  function gapText() {
+    const rival = net && cars.find(c => c.remote);
+    if (!rival || countdown > 0 || player.finished !== null || rival.finished !== null) return '';
+    const [lead, trail, times] = player.dist >= rival.dist ? [player, rival, net.mine] : [rival, player, net.theirs];
+    const passed = times.get(trail.dist);
+    if (passed === undefined || lead.dist === trail.dist) return '';
+    return `${lead === player ? 'Ahead' : 'Behind'} ${(raceTime - passed).toFixed(1)}s`;
+  }
+
+  // ---------- Starting, pausing and finishing races ----------
+
+  function setView(v) {
+    body.classList.toggle('in-menu', v === 'menu');
+    body.classList.toggle('in-race', v === 'race');
+    body.classList.toggle('in-edit', v === 'edit');
+    $('hud').hidden = v !== 'race';
+    $('pad').hidden = v !== 'race';
+    $('help').hidden = v !== 'race';
+    $('editor').hidden = v !== 'edit';
+    if (v !== 'menu') screens.innerHTML = '';
+  }
+
+  function startDemo() {
+    const options = D.ALL_TRACKS.filter(t => t !== track);
+    level = D.LEVELS[2];
+    setupRace(Arcade.pick(options), { mode: 'demo', laps: 99, level });
+    demoT = 40;
+  }
+
+  function startRace(s) {
+    setup = s;
+    raceOnline = false;
+    for (const k in keys) keys[k] = false;
+    touchGas = lastTouch;
+    setupRace(s.track, s);
+    if (AUTOPILOT) player.ai = true;
+    state = 'playing';
+    ui.hide();
+    setView('race');
+    S.stopMusic();
+    S.startCar();
+    updateHud();
+  }
+
+  function restart() {
+    if (setup && !online()) startRace(setup);
+  }
+
+  function pause() {
+    if (state !== 'playing' || online() || finishT !== null) return;
+    state = 'paused';
+    S.stopCar();
+    ui.show({
+      title: 'Paused',
+      html: `<p>${esc(track.name)} · lap ${Math.min(laps, player.lap + 1)}/${laps}</p>
+        <div class="menu"><div class="row"><button class="btn secondary" type="button" data-restart>Restart</button><button class="btn secondary" type="button" data-quit>Quit</button></div></div>
+        <div class="settings" style="justify-content:center">${camChips()}</div>`,
+      button: 'Resume',
+      onAction: resume,
+      onRender: panel => {
+        panel.querySelector('[data-restart]').addEventListener('click', restart);
+        panel.querySelector('[data-quit]').addEventListener('click', () => toMenu());
+        wireCamChips(panel);
+      },
+    });
+  }
+
+  function resume() {
+    state = 'playing';
+    ui.hide();
+    S.startCar();
+  }
+
+  // Leaves whatever is going on and goes back to the menus, with the demo race behind them.
+  function toMenu(view = returnView, error = '') {
+    if (net) {
+      net.conn.send('quit');
+      net.conn.close();
+      net = null;
+    }
+    raceOnline = false;
+    S.stopCar();
+    state = 'menu';
+    ui.hide();
+    startDemo();
+    go(view);
+    if (error) Arcade.toast('Pocket Racer', error);
+  }
+
+  // Coins, stars and records shared by every finished race. Returns notes for the results panel.
+  function settleRecords(time) {
+    const notes = [];
+    if (track.custom) return { notes, coins: 0, newLap: false };
+    let bonus = 0;
+    const lapRec = Arcade.load(lapKey(track.id), null);
+    const newLap = isFinite(bestLap) && (!lapRec || bestLap < lapRec);
+    if (newLap) {
+      Arcade.save(lapKey(track.id), bestLap);
+      notes.push(`New lap record: ${fmt(bestLap)}`);
+      bonus += 15;
+      if (posting()) {
+        const me = Arcade.profile();
+        Online.put(`scores/${lapBoard(track.id)}/${me.id}`, { name: me.name, score: toScore(bestLap), t: Online.TIMESTAMP }).catch(() => {});
+      }
+    }
+    if (time != null) {
+      const key = timeKey(track.id, laps);
+      const prev = Arcade.load(key, null);
+      if (!prev || time < prev) {
+        Arcade.save(key, time);
+        if (prev) notes.push(`Best ${laps}-lap time: ${fmt(time)}`);
+      }
+      saveGhost(time);
+    }
+    return { notes, coins: bonus, newLap };
+  }
+
+  const unlockedIds = () => D.SKINS.filter(skinUnlocked).map(s => s.id);
+
   function finishRace() {
     state = 'over';
     const place = position(player);
     const time = player.finished;
-    const title = ['1st place!', '2nd place', '3rd place', '4th place'][place - 1];
-    const summary = `${esc(track.name)} · ${time.toFixed(2)}s · best lap ${bestLap.toFixed(2)}s`;
-    saveGhost(time);
-    const bestKey = 'time:' + track.id;
-    const prev = Arcade.load(bestKey, null);
-    if (!prev || time < prev) Arcade.save(bestKey, time);
-    Arcade.tone({ freq: 523, dur: 0.15, type: 'triangle', vol: 0.07 });
-    Arcade.tone({ freq: 784, dur: 0.3, type: 'triangle', vol: 0.07, delay: 0.15 });
+    const title = place === 1 ? '1st place!' : `${ordinal(place)} place`;
+    const before = unlockedIds();
+    const rec = settleRecords(time);
+
+    // Career stars: 1 for a podium, 2 for a win, 3 for a win inside the target time.
+    let stars = 0, par = 0;
+    if (event) {
+      par = parTime(event);
+      stars = place === 1 ? (time <= par ? 3 : 2) : place <= 3 ? 1 : 0;
+      const map = starsMap();
+      if (stars > (map[event.id] || 0)) {
+        const was = totalStars();
+        map[event.id] = stars;
+        Arcade.save('racer:stars', map);
+        if (posting() && totalStars() > was) {
+          const me = Arcade.profile();
+          Online.put(`scores/pocket-racer-stars/${me.id}`, { name: me.name, score: totalStars(), t: Online.TIMESTAMP }).catch(() => {});
+        }
+      }
+    }
+    const mult = event ? event.cup.reward : level.points;
+    const earned = track.custom ? 0 : Math.round(D.PLACE_COINS[place - 1] * mult) + rec.coins;
+    addCoins(earned);
+    const fresh = unlockedIds().filter(id => !before.includes(id)).map(id => D.SKINS.find(s => s.id === id));
+    if (fresh.length) setTimeout(() => S.sfx.unlock(), 900);
+    else if (earned) setTimeout(() => S.sfx.coin(), 700);
+
+    const order = [...cars].sort((a, b) => position(a) - position(b));
+    const table = `<ol class="results">${order.map((c, i) => `<li class="${c === player ? 'me' : ''}"><span class="n">${i + 1}</span><i style="background:${c.skin.paint}"></i><span>${esc(c.name)}</span><span class="t">${c.finished !== null ? fmt(c.finished) : 'racing'}</span></li>`).join('')}</ol>`;
+    const starHtml = event ? `<div class="big-stars">${[0, 1, 2].map(i => `<span class="${i < stars ? 'on' : ''}">★</span>`).join('')}</div><p class="muted-note">Target ${fmt(par)} · ${stars ? 'best ' + starsOf(event.id) + '★' : 'finish on the podium to unlock the next race'}</p>` : '';
+    const extras = `${starHtml}${table}
+      ${earned ? `<div class="reward"><span><span class="coin">●</span> +${earned}</span></div>` : ''}
+      ${rec.notes.map(n => `<p class="new-best">${esc(n)}</p>`).join('')}
+      ${fresh.map(s => `<p class="unlock-note">New car unlocked: ${esc(s.name)}</p>`).join('')}`;
+    const summary = `${esc(track.name)} · ${fmt(time)} · best lap ${fmt(bestLap)}`;
+
+    const next = event && D.EVENTS[D.EVENTS.indexOf(event) + 1];
+    const nextOpen = next && eventOpen(next);
+    const actionLabel = event ? (nextOpen && next.cup === event.cup ? 'Next race' : 'Career') : 'Race again';
+    const action = () => {
+      if (event && nextOpen && next.cup === event.cup) startEvent(next);
+      else if (event) toMenu('career');
+      else restart();
+    };
 
     // Anyone can build an easy track, so custom races don't score or count toward achievements.
     if (track.custom) {
       Arcade.countPlay();
       ui.show({
         title,
-        html: `<p class="big">${time.toFixed(2)}s</p>
-          ${!prev || time < prev ? '<p class="new-best">New track record</p>' : ''}
-          <p>${summary}</p>
-          <p class="muted-note">Races on your own tracks don't count toward the leaderboard.</p>`,
-        button: 'Race again',
-        onAction: showMenu,
-        delay: 600,
+        html: `<p class="big">${fmt(time)}</p>${table}<p class="muted-note">Races on your own tracks don't earn coins or records.</p>`,
+        button: 'Race again', onAction: restart, delay: 600,
+        onRender: panel => addExtraActions(panel, false),
       });
       return;
     }
 
-    const par = (trackLen * LAPS) / PAR_SPEED;
-    const score = Math.round(PLACE_POINTS[place - 1] * level.points) + Math.round(Math.max(0, par / time - 1) * 4000);
+    const arcadePar = (trackLen * laps) / PAR_SPEED;
+    const score = AUTOPILOT ? 0 : Math.round(PLACE_POINTS[place - 1] * level.points * laps / 3) + Math.round(Math.max(0, arcadePar / time - 1) * 4000);
     if (place === 1) Arcade.flag('pocket-racer-win');
     Arcade.finish(ui, {
-      score,
-      title,
-      lines: [summary, `${level.name} rivals`, '<span class="muted-note">Press R to restart on this track</span>'],
-      button: 'Race again',
-      onAction: showMenu,
+      score, title,
+      lines: [summary, `<span class="muted-note">Arcade score · ${level.name} rivals · press R to retry</span>`],
+      html: extras,
+      button: actionLabel,
+      onAction: action,
     });
+    addExtraActions($('overlay').querySelector('.panel'), true);
+  }
+
+  function addExtraActions(panel, retry) {
+    if (!panel) return;
+    panel.insertAdjacentHTML('beforeend', `<div class="extra-actions">${retry ? '<button class="btn secondary" type="button" data-retry>Retry</button>' : ''}<button class="btn secondary" type="button" data-menu>Menu</button></div>`);
+    panel.querySelector('[data-retry]')?.addEventListener('click', restart);
+    panel.querySelector('[data-menu]').addEventListener('click', () => toMenu());
+  }
+
+  // Time trial: just you and the ghost. Your best lap goes on the track's world leaderboard.
+  function finishTrial() {
+    state = 'over';
+    const time = player.finished;
+    const rec = settleRecords(time);
+    const earned = track.custom ? 0 : 15 + rec.coins;
+    addCoins(earned);
+    if (earned) setTimeout(() => S.sfx.coin(), 600);
+    Arcade.countPlay();
+    const board = !track.custom && posting();
+    ui.show({
+      title: rec.newLap ? 'New lap record!' : 'Time trial',
+      html: `<p class="big">${fmt(bestLap)}</p><p>Best lap · ${esc(track.name)}</p><p>Race ${fmt(time)} · record ${fmt(Arcade.load(lapKey(track.id), null))}</p>
+        ${earned ? `<div class="reward"><span><span class="coin">●</span> +${earned}</span></div>` : ''}
+        ${track.custom ? '<p class="muted-note">Your own tracks keep records on this device only.</p>' : ''}
+        ${board ? '<div class="board" data-board><p class="board-note">Loading the track leaderboard…</p></div>' : ''}`,
+      button: 'Go again',
+      onAction: restart,
+      delay: 600,
+      onRender: panel => addExtraActions(panel, false),
+    });
+    if (board) {
+      const id = track.id;
+      // Give our own new record a moment to land before reading the board back.
+      setTimeout(() => lapTop(id, 5).then(list => {
+        const slot = document.querySelector('[data-board]');
+        if (slot) slot.innerHTML = renderTimes(list, 'Fastest laps worldwide');
+      }).catch(() => {
+        const slot = document.querySelector('[data-board]');
+        if (slot) slot.innerHTML = '<p class="board-note">Couldn\'t reach the leaderboard.</p>';
+      }), rec.newLap ? 700 : 0);
+    }
+  }
+
+  const lapTop = (id, n = 10) => Online.top(lapBoard(id), n).then(list => list.map(r => ({ ...r, time: fromScore(r.score) })));
+
+  function renderTimes(list, title) {
+    const me = Arcade.profile().id;
+    if (!list.length) return `<p class="board-title">${title}</p><p class="board-note">No times yet. Set the first!</p>`;
+    return `<p class="board-title">${title}</p><ol class="board-list">${list.map((r, i) => `<li class="${r.id === me ? 'me' : ''}"><span class="rank">${i + 1}</span><span class="name">${esc(typeof Friends === 'undefined' ? r.name : Friends.display(r.id, r.name))}</span><b>${r.time != null ? fmt(r.time) : Number(r.score).toLocaleString()}</b></li>`).join('')}</ol>`;
   }
 
   // ---------- Online races ----------
@@ -460,9 +1093,18 @@
     if (!t) return;
     const ahead = t.f == null ? Math.min(0.25, (performance.now() - net.targetAt) / 1000 + net.lag) * (t.v || 0) : 0;
     const k = Math.min(1, dt * 12);
+    const px = car.x, py = car.y;
     car.x += (t.x + Math.cos(t.a) * ahead - car.x) * k;
     car.y += (t.y + Math.sin(t.a) * ahead - car.y) * k;
-    car.a += angleDiff(t.a, car.a) * k;
+    const turn = angleDiff(t.a, car.a) * k;
+    car.a += turn;
+    car.v = t.v || 0;
+    car.steer = clamp(turn / Math.max(dt, 1e-3) / TURN, -1, 1);
+    car.slide = clamp(Math.abs(car.steer) * (car.v - 150) / 130, 0, 1);
+    car.offTrack = nearest(car.x, car.y, car.idx).d > TRACK_W / 2 + 4;
+    car.idx = nearest(car.x, car.y, car.idx).i;
+    car.braking = Math.hypot(car.x - px, car.y - py) / Math.max(dt, 1e-3) < (car.lastSpeed || 0) - 5;
+    car.lastSpeed = Math.hypot(car.x - px, car.y - py) / Math.max(dt, 1e-3);
     reached(net.theirs, t.d, raceTime - net.lag);
     car.dist = t.d;
     car.lap = Math.floor(t.d / N);
@@ -474,46 +1116,44 @@
     const time = player.finished;
     const rival = cars.find(c => c.remote);
     let won = !rival || rival.finished === null || time <= rival.finished;
-    saveGhost(time);
+    settleRecords(time);
     Arcade.countPlay();
     if (net) {
       Arcade.flag('online-match');
       net.wins[won ? 0 : 1]++;
+      addCoins(won ? 50 : 20);
     }
     if (won && net) Arcade.flag('pocket-racer-win');
-    Arcade.tone(won ? { freq: 523, to: 1046, dur: 0.4, type: 'triangle', vol: 0.06 } : { freq: 300, to: 120, dur: 0.5, type: 'sawtooth', vol: 0.04 });
     const them = net ? esc(net.names[1]) : 'Your opponent';
     const tally = () => net ? `Match score: you ${net.wins[0]} – ${net.wins[1]} ${net.names[1]}` : '';
-    const showResult = () => {
-      const r = cars.find(c => c.remote);
-      const theirTime = r && r.finished !== null ? `${them} ${r.finished.toFixed(2)}s` : net ? `${them} is still racing…` : `${them} left`;
-      ui.show({
-        title: won ? 'You win the race!' : `${them} wins`,
-        html: `<p class="big">${time.toFixed(2)}s</p><p>${esc(track.name)} · best lap ${bestLap.toFixed(2)}s</p><p data-them>${theirTime}</p>
-          <p class="muted-note" data-tally>${esc(tally())}</p>
-          ${net ? '<div class="menu"><button class="btn secondary" type="button" data-leave>Leave</button></div><p class="muted-note" data-wait>A rematch starts when you both press it.</p>' : ''}`,
-        button: net ? 'Rematch' : 'Back to menu',
-        delay: 600,
-        onAction: () => {
-          if (!net) return showMenu();
-          net.want.me = true;
-          net.conn.send('rematch');
-          document.querySelector('[data-wait]').textContent = 'Waiting for your opponent…';
-          maybeRematch();
-        },
-        onRender: panel => panel.querySelector('[data-leave]')?.addEventListener('click', () => leaveOnline()),
-      });
-    };
-    showResult();
+    const r = cars.find(c => c.remote);
+    const theirTime = r && r.finished !== null ? `${them} ${fmt(r.finished)}` : net ? `${them} is still racing…` : `${them} left`;
+    ui.show({
+      title: won ? 'You win the race!' : `${them} wins`,
+      html: `<p class="big">${fmt(time)}</p><p>${esc(track.name)} · best lap ${fmt(bestLap)}</p><p data-them>${theirTime}</p>
+        ${net ? `<div class="reward"><span><span class="coin">●</span> +${won ? 50 : 20}</span></div>` : ''}
+        <p class="muted-note" data-tally>${esc(tally())}</p>
+        ${net ? '<div class="menu"><button class="btn secondary" type="button" data-leave>Leave</button></div><p class="muted-note" data-wait>A rematch starts when you both press it.</p>' : ''}`,
+      button: net ? 'Rematch' : 'Back to menu',
+      delay: 600,
+      onAction: () => {
+        if (!net) return toMenu('online');
+        net.want.me = true;
+        net.conn.send('rematch');
+        document.querySelector('[data-wait]').textContent = 'Waiting for your opponent…';
+        maybeRematch();
+      },
+      onRender: panel => panel.querySelector('[data-leave]')?.addEventListener('click', () => leaveOnline()),
+    });
     // Fill in their time when they cross the line. If they actually got there first (their
     // finish was still on its way when ours landed), the result flips.
     const poll = setInterval(() => {
-      const r = cars.find(c => c.remote);
+      const rr = cars.find(c => c.remote);
       const slot = document.querySelector('[data-them]');
       if (state !== 'online-over' || !slot) return clearInterval(poll);
-      if (r && r.finished !== null) {
-        slot.textContent = `${net ? net.names[1] : 'Opponent'} ${r.finished.toFixed(2)}s`;
-        if (won && r.finished < time) {
+      if (rr && rr.finished !== null) {
+        slot.textContent = `${net ? net.names[1] : 'Opponent'} ${fmt(rr.finished)}`;
+        if (won && rr.finished < time) {
           won = false;
           if (net) {
             net.wins[0]--;
@@ -527,6 +1167,8 @@
     }, 250);
   }
 
+  let onlineTrack = D.trackById(Arcade.load('racer:onlineTrack', 'harbor')) || D.TRACKS[0];
+
   async function goOnline(how, code) {
     let cancelled = false;
     const cancel = () => { cancelled = true; leaveOnline(); };
@@ -534,7 +1176,7 @@
     const handlers = {
       ready: () => {
         if (cancelled || !net) return;
-        net.conn.send('hello', { name: Arcade.profile().name });
+        net.conn.send('hello', { name: Arcade.profile().name, skin: mySkin().id });
         if (net.host) measureLag();
       },
       event: onNet,
@@ -546,21 +1188,19 @@
       left: opponentGone,
       closed: () => { if (net) opponentGone(); },
     };
-    // Online races use the built-in tracks, which both players have.
-    if (selected.custom) selected = TRACKS[0];
     try {
-      const res = how === 'quick' ? await Relay.quickMatch('racer', handlers, `Race · ${selected.name}`)
+      const res = how === 'quick' ? await Relay.quickMatch('racer', handlers, `Race · ${onlineTrack.name}`)
         : how === 'create' ? await Relay.createRoom('racer', handlers)
         : how === 'public' ? await Relay.joinPublic(code, handlers)
         : await Relay.joinRoom('racer', code, handlers);
       if (cancelled) { res.conn.close(); return; }
-      net = { conn: res.conn, host: res.slot === 1, names: [Arcade.profile().name, 'Opponent'], want: { me: false, them: false }, sendT: 0, target: null, targetAt: 0, lag: 0, wins: [0, 0] };
+      net = { conn: res.conn, host: res.slot === 1, names: [Arcade.profile().name, 'Opponent'], skin: 'cherry', want: { me: false, them: false }, sendT: 0, target: null, targetAt: 0, lag: 0, wins: [0, 0] };
       if (net.host) {
         ui.show({
           title: how === 'create' ? 'Waiting for a friend' : 'Looking for an opponent…',
           html: (how === 'create'
             ? `<p>Share this code. The race starts as soon as they join.</p><p class="code">${res.code}</p>`
-            : '<p>You\'ll be matched with the next player who presses Quick race.</p>') + `<p class="muted-note">Track: ${esc(selected.name)}</p>`,
+            : '<p>You\'ll be matched with the next player who presses Quick race.</p>') + `<p class="muted-note">Track: ${esc(onlineTrack.name)}</p>`,
           button: 'Cancel',
           onAction: cancel,
         });
@@ -568,7 +1208,7 @@
         ui.show({ title: 'Opponent found', html: '<p>Starting…</p>', button: null });
       }
     } catch (e) {
-      if (!cancelled) showMenu(e.message);
+      if (!cancelled) toMenu('online', e.message);
     }
   }
 
@@ -588,34 +1228,42 @@
     setTimeout(go, 2000);
   }
 
-  // The host picks the track (whatever was selected in their menu) and both grids start together.
+  // The host picks the track (whatever was chosen on their Online screen) and both grids start together.
   function startOnline() {
     net.want = { me: false, them: false };
-    net.conn.send('race', { track: selected.id, lag: net.lag });
-    beginOnline(selected, net.lag);
+    net.conn.send('race', { track: onlineTrack.id, lag: net.lag });
+    beginOnline(onlineTrack, net.lag);
   }
 
   function beginOnline(t, lead = 0) {
     net.target = null;
+    net.sentFinish = false;
     raceOnline = true;
-    setupRace(t, net, lead);
+    for (const k in keys) keys[k] = false;
+    touchGas = lastTouch;
+    setup = null;
+    setupRace(t, { mode: 'online', laps: 3, level: D.LEVELS[1], vs: net, lead });
     state = 'playing';
     ui.hide();
+    setView('race');
+    S.stopMusic();
+    S.startCar();
+    updateHud();
   }
 
   function onNet(name, data) {
     if (!net) return;
-    if (name === 'hello') net.names[1] = String(data?.name || 'Opponent').slice(0, 24);
-    else if (name === 'race' && !net.host) {
+    if (name === 'hello') {
+      net.names[1] = String(data?.name || 'Opponent').slice(0, 24);
+      if (D.SKINS.some(s => s.id === data?.skin)) net.skin = data.skin;
+    } else if (name === 'race' && !net.host) {
       net.lag = clamp(Number(data.lag) || 0, 0, 1);
-      beginOnline(TRACKS.find(t => t.id === data.track) || TRACKS[0]);
-    }
-    else if (name === 'ping') net.conn.send('pong');
+      beginOnline(D.trackById(data.track) || D.TRACKS[0]);
+    } else if (name === 'ping') net.conn.send('pong');
     else if (name === 'pong' && net.pong) {
       net.lag = Math.min(1, (performance.now() - net.pingAt) / 2000);
       net.pong();
-    }
-    else if (name === 'rematch') {
+    } else if (name === 'rematch') {
       net.want.them = true;
       maybeRematch();
     } else if (name === 'quit') opponentGone();
@@ -641,7 +1289,7 @@
       document.querySelector('[data-leave]')?.remove();
       document.querySelector('[data-main]').textContent = 'Back to menu';
     } else {
-      showMenu(`${name} left.`);
+      toMenu('online', `${name} left.`);
     }
   }
 
@@ -651,123 +1299,407 @@
       net.conn.close();
       net = null;
     }
-    showMenu();
+    toMenu('online');
   }
   window.addEventListener('pagehide', () => net?.conn.send('quit'));
 
-  // ---------- HUD & menu ----------
+  // ---------- Menus ----------
 
-  // Logs the first time a car reached each step up to `dist` (updates can skip a few).
-  function reached(times, dist, t) {
-    for (let d = dist; d > dist - 40 && !times.has(d); d--) times.set(d, t);
+  let returnView = 'home';
+  let spinners = [];
+  let quickPick = { trackId: Arcade.load('racer:track', 'harbor'), laps: Arcade.load('racer:laps', 3) };
+  let menuLevel = D.LEVELS.find(l => l.id === Arcade.load('racer:level', 'pro')) || D.LEVELS[1];
+  let garagePick = null;
+  let recordsPick = 'harbor', recordsTab = 'track';
+
+  const head = (title, sub = '') => `<div class="screen-head"><button class="back-btn" type="button" data-go="home" aria-label="Back">←</button><div><h2>${title}</h2>${sub ? `<p>${sub}</p>` : ''}</div></div>`;
+
+  function go(view, arg) {
+    if (state !== 'menu') return;
+    returnView = ['home', 'career', 'quick', 'trial', 'online', 'garage', 'records', 'builder'].includes(view) ? view : 'home';
+    setView('menu');
+    spinners = [];
+    const views = { home, career, quick: () => quick('race'), trial: () => quick('trial'), online: onlineView, garage, records, builder };
+    const v = (views[view] || home)(arg);
+    screens.innerHTML = `<section class="screen">${v.html}</section>`;
+    screens.scrollTop = 0;
+    screens.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => { S.sfx.back(); go(b.dataset.go); }));
+    screens.querySelectorAll('canvas[data-thumb]').forEach(c => drawThumb(c, findTrack(c.dataset.thumb)));
+    v.wire?.(screens);
+    document.querySelectorAll('#nav [data-go]').forEach(b => b.toggleAttribute('aria-current', false));
+    const navId = view === 'trial' ? 'quick' : view;
+    document.querySelector(`#nav [data-go="${navId}"]`)?.setAttribute('aria-current', 'page');
+    updateWallet();
+    S.startMusic();
+  }
+  document.querySelectorAll('#nav [data-go]').forEach(b => b.addEventListener('click', () => {
+    if (state !== 'menu') return;
+    S.sfx.select();
+    go(b.dataset.go);
+  }));
+
+  function drawThumb(cv, t) {
+    if (!t) return;
+    cv.width = 320;
+    cv.height = 224;
+    const c = cv.getContext('2d');
+    const th = D.themeOf(t);
+    const g = c.createLinearGradient(0, 0, 320, 224);
+    g.addColorStop(0, th.grass);
+    g.addColorStop(1, th.grass2);
+    c.fillStyle = g;
+    c.fillRect(0, 0, 320, 224);
+    const p = pathOf(t).path;
+    A.trackThumb(c, p, 320, 224, { color: th.night ? '#c9d2ff' : '#f2f2f2', width: 13, pad: 18 });
+    A.trackThumb(c, p, 320, 224, { color: th.night ? '#2c3040' : '#3c4049', width: 9, pad: 18 });
   }
 
-  // Online: how far apart you are in seconds, from when the leader passed the trailer's spot.
-  function gapText() {
-    const rival = net && cars.find(c => c.remote);
-    if (!rival || countdown > 0 || player.finished !== null || rival.finished !== null) return '';
-    const [lead, trail, times] = player.dist >= rival.dist ? [player, rival, net.mine] : [rival, player, net.theirs];
-    const passed = times.get(trail.dist);
-    return passed === undefined || lead.dist === trail.dist ? '' : ` · ${(raceTime - passed).toFixed(1)}s`;
-  }
-
-  function updateHud() {
-    $('lap').textContent = `${Math.min(LAPS, Math.max(1, player.lap + 1))}/${LAPS}`;
-    $('pos').textContent = `${position(player)}/${cars.length}${gapText()}`;
-    $('time').textContent = raceTime.toFixed(1);
-  }
-
-  function showMenu(error = '') {
-    if (net) {
-      net.conn.send('quit');
-      net.conn.close();
-      net = null;
-    }
-    raceOnline = false;
-    state = 'menu';
-    selected = allTracks().find(t => t.id === selected.id) || TRACKS[0];
-    setupRace(selected);
-    const chip = t => {
-      const best = Arcade.load('time:' + t.id, null);
-      return `<button class="chip" type="button" data-track="${esc(t.id)}" aria-pressed="${t.id === selected.id}">${esc(t.name)}${best ? ` · ${best.toFixed(1)}s` : ''}</button>`;
+  // A slowly turning car on a canvas, for the home screen and the garage.
+  function spinner(cv, getSkin, { speed = 0.6, zoom = 1 } = {}) {
+    return now => {
+      const r = Math.min(window.devicePixelRatio || 1, 2);
+      const w = cv.clientWidth * r, h = cv.clientHeight * r;
+      if (!w || !h) return;
+      if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+      const c = cv.getContext('2d');
+      c.setTransform(1, 0, 0, 1, 0, 0);
+      c.clearRect(0, 0, w, h);
+      const s = Math.min(w / 46, h / 30) * zoom;
+      c.setTransform(s, 0, 0, s * 0.82, w / 2, h / 2); // squashed a little, like looking across a turntable
+      c.fillStyle = 'rgba(0,0,0,0.25)';
+      c.beginPath();
+      c.ellipse(0, 3, 20, 13, 0, 0, Math.PI * 2);
+      c.fill();
+      const a = now / 1000 * speed;
+      A.drawCar(c, getSkin(), 0, 0, a, { steer: Math.sin(now / 900) * 0.6 });
     };
-    const mine = customTracks();
-    const levels = LEVELS.map(l => `<button class="chip" type="button" data-level="${l.id}" aria-pressed="${l === level}">${l.name}</button>`).join('');
-    ui.show({
-      title: 'Pocket Racer',
-      html: `<p>Three laps, three rivals. The ghost car is ${Online.enabled && !selected.custom ? 'the fastest racer in the world' : 'your own best run'} on this track.</p>
-        <div class="filters" style="justify-content:center;margin-bottom:12px">${TRACKS.map(chip).join('')}</div>
-        ${mine.length ? `<p class="muted-note" style="margin:0 0 6px">Your tracks</p><div class="filters" style="justify-content:center;margin-bottom:12px">${mine.map(chip).join('')}</div>` : ''}
-        <p class="muted-note" style="margin:0 0 6px">Rivals</p>
-        <div class="filters" style="justify-content:center;margin-bottom:16px">${levels}</div>`,
-      button: 'Start race',
-      onAction: start,
-      onRender: panel => {
-        const live = Relay.enabled && !selected.custom;
-        panel.insertAdjacentHTML('beforeend', `<div class="menu" style="margin-top:8px"><div class="row">
-          <button class="btn secondary" type="button" data-build>New track</button>
-          ${selected.custom ? '<button class="btn secondary" type="button" data-edit>Edit</button><button class="btn secondary" type="button" data-delete>Delete</button>' : ''}
+  }
+
+  function staticCar(cv, skin) {
+    const r = 2;
+    cv.width = 100 * r;
+    cv.height = 60 * r;
+    const c = cv.getContext('2d');
+    c.setTransform(3.2 * r, 0, 0, 3.2 * r, 50 * r, 30 * r);
+    A.drawCar(c, skin, 0, 0, -0.35, { steer: 0.3 });
+  }
+
+  const camChips = () => ['auto', 'follow', 'full'].map(m => `<button class="chip" type="button" data-cam="${m}" aria-pressed="${camMode === m}">Camera: ${m === 'auto' ? 'Auto' : m === 'follow' ? 'Follow' : 'Whole track'}</button>`).join('');
+  function wireCamChips(el) {
+    el.querySelectorAll('[data-cam]').forEach(b => b.addEventListener('click', () => {
+      setCamMode(b.dataset.cam);
+      el.querySelectorAll('[data-cam]').forEach(x => x.setAttribute('aria-pressed', x.dataset.cam === camMode));
+    }));
+  }
+
+  function home() {
+    const skin = mySkin();
+    const doneEvents = D.EVENTS.filter(e => starsOf(e.id) > 0).length;
+    const tile = (go, ico, title, sub, color, extra = '') => `<button class="tile ${extra}" type="button" data-go="${go}" style="--c:${color}"><span class="ico">${ico}</span><b>${title}</b><small>${sub}</small></button>`;
+    return {
+      html: `<div class="home">
+        <div class="card hero">
+          <h2 class="hero-logo">POCKET<span>RACER</span></h2>
+          <p class="tag">Top-down racing. Six cups, ${D.ALL_TRACKS.length} tracks, ${D.SKINS.length} cars.</p>
+          <div class="hero-car"><canvas id="hero-car"></canvas><span class="plate">${esc(skin.name)} · #${skin.num}</span></div>
+          <div class="hero-actions"><button class="big-btn" type="button" data-go="career" style="flex:1">${doneEvents ? 'Continue career' : 'Start career'}</button></div>
         </div>
-        ${Relay.enabled ? `<p class="muted-note" style="margin:6px 0 0">Race a real player on ${selected.custom ? 'a built-in track' : esc(selected.name)}</p>
-        <div class="row">
-          <button class="btn secondary" type="button" data-net="quick" ${live ? '' : 'disabled'}>Quick race</button>
-          <button class="btn secondary" type="button" data-net="create" ${live ? '' : 'disabled'}>Private room</button>
+        <div>
+          <div class="tiles">
+            ${tile('quick', '🏁', 'Quick race', 'Any track, three rivals', '#ff4d5e')}
+            ${tile('trial', '⏱️', 'Time trial', 'Chase the world ghost', '#4f8cff')}
+            ${tile('online', '🌐', 'Online', Relay.enabled ? 'Race a real player' : 'Not set up here', '#3ddc84')}
+            ${tile('garage', '🚗', 'Garage', `${D.SKINS.filter(skinUnlocked).length}/${D.SKINS.length} cars`, '#c77dff')}
+            ${tile('records', '🏆', 'Records', 'World leaderboards', '#ffc53d')}
+            ${tile('builder', '🛠️', 'Track builder', `${customTracks().length} of your own`, '#ff8a1f')}
+            ${tile('career', '⭐', 'Career', `${totalStars()}/${D.EVENTS.length * 3} stars · ${doneEvents}/${D.EVENTS.length} races`, '#ffc53d', 'wide')}
+          </div>
+          <div class="settings">${camChips()}<button class="chip" type="button" data-music aria-pressed="${S.musicOn()}">Music: ${S.musicOn() ? 'On' : 'Off'}</button></div>
         </div>
-        <div class="row">
-          <input class="field" id="code" maxlength="4" placeholder="CODE" autocomplete="off" aria-label="Room code">
-          <button class="btn secondary" type="button" data-net="join">Join</button>
-        </div>` : ''}
-        </div><p class="error">${esc(error)}</p><div data-waiting></div>`);
-        const code = panel.querySelector('#code');
-        panel.querySelectorAll('[data-net]').forEach(b => b.addEventListener('click', () => goOnline(b.dataset.net, code.value)));
-        code?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.stopPropagation(); goOnline('join', code.value); } });
-        Relay.showWaiting(panel.querySelector('[data-waiting]'), room => goOnline('public', room));
-        panel.querySelectorAll('[data-track]').forEach(b => b.addEventListener('click', () => {
-          selected = allTracks().find(t => t.id === b.dataset.track);
-          showMenu();
-        }));
-        panel.querySelectorAll('[data-level]').forEach(b => b.addEventListener('click', () => {
-          level = LEVELS.find(l => l.id === b.dataset.level);
-          Arcade.save('racer:level', level.id);
-          showMenu();
-        }));
-        panel.querySelector('[data-build]').addEventListener('click', () => openEditor(null));
-        panel.querySelector('[data-edit]')?.addEventListener('click', () => openEditor(selected));
-        panel.querySelector('[data-delete]')?.addEventListener('click', () => {
-          if (!confirm(`Delete "${selected.name}"?`)) return;
-          Arcade.save('tracks', Arcade.load('tracks', []).filter(t => t.id !== selected.id));
-          forgetRecords(selected.id);
-          selected = TRACKS[0];
-          showMenu();
+      </div>`,
+      wire: el => {
+        spinners.push(spinner(el.querySelector('#hero-car'), mySkin, { speed: 0.5, zoom: 0.9 }));
+        wireCamChips(el);
+        el.querySelector('[data-music]').addEventListener('click', e => {
+          S.setMusic(!S.musicOn());
+          e.target.setAttribute('aria-pressed', S.musicOn());
+          e.target.textContent = `Music: ${S.musicOn() ? 'On' : 'Off'}`;
         });
+        el.querySelector('[data-go="online"]').disabled = !Relay.enabled;
       },
+    };
+  }
+
+  function career() {
+    const cups = D.CUPS.map((cup, ci) => {
+      const open = cupOpen(ci);
+      const evs = D.EVENTS.filter(e => e.cup === cup);
+      const got = evs.reduce((n, e) => n + starsOf(e.id), 0);
+      const prize = D.SKINS.find(s => s.unlock.cup === cup.id);
+      const cards = evs.map(e => {
+        const t = D.trackById(e.track), ok = eventOpen(e), st = starsOf(e.id);
+        return `<button class="track-card event ${ok ? '' : 'locked'}" type="button" data-event="${e.id}" ${ok ? '' : 'disabled'}>
+          <canvas data-thumb="${t.id}"></canvas>${ok ? '' : '<span class="lock">🔒</span>'}
+          <span class="badge">${e.index + 1}</span>
+          <span class="meta"><b>${esc(t.name)}</b><span class="stars-row">${[0, 1, 2].map(i => `<span class="${i < st ? 'on' : ''}">★</span>`).join('')}</span></span>
+        </button>`;
+      }).join('');
+      return `<div class="card cup ${open ? '' : 'locked'}" style="--c:${cup.color}">
+        <div class="cup-head"><span class="trophy">🏆</span><div><h3>${cup.name}</h3><p>${cup.laps} laps · ${D.LEVELS.find(l => l.id === cup.level).name} rivals · ${open ? `prize: ${esc(prize.name)} car` : `finish the ${D.CUPS[ci - 1].name} to open`}</p></div><span class="stars-count">★ ${got}/${evs.length * 3}</span></div>
+        <div class="events">${cards}</div>
+        <div class="progress"><i style="width:${(got / (evs.length * 3)) * 100}%"></i></div>
+      </div>`;
+    }).join('');
+    return {
+      html: `${head('Career', 'Finish on the podium to unlock the next race. Win under the target time for three stars.')}<div class="cups">${cups}</div>`,
+      wire: el => el.querySelectorAll('[data-event]').forEach(b => b.addEventListener('click', () => {
+        S.sfx.select();
+        showEvent(D.EVENTS.find(e => e.id === b.dataset.event));
+      })),
+    };
+  }
+
+  function showEvent(ev) {
+    const t = D.trackById(ev.track);
+    const par = parTime(ev);
+    const st = starsOf(ev.id);
+    ui.show({
+      title: `${ev.cup.name} · Race ${ev.index + 1}`,
+      html: `<p class="big" style="font-size:24px">${esc(t.name)}</p>
+        <div class="big-stars" style="font-size:26px">${[0, 1, 2].map(i => `<span class="${i < st ? 'on' : ''}">★</span>`).join('')}</div>
+        <p>${ev.laps} laps · ${D.LEVELS.find(l => l.id === ev.level).name} rivals</p>
+        <p class="muted-note">★ podium · ★★ win · ★★★ win in under ${fmt(par)}</p>
+        <div class="menu"><button class="btn secondary" type="button" data-cancel>Back</button></div>`,
+      button: 'Race!',
+      onAction: () => startEvent(ev),
+      onRender: panel => panel.querySelector('[data-cancel]').addEventListener('click', () => ui.hide()),
     });
   }
 
+  function startEvent(ev) {
+    startRace({ mode: 'career', track: D.trackById(ev.track), laps: ev.laps, level: D.LEVELS.find(l => l.id === ev.level), event: ev });
+  }
+
+  function trackCard(t, selectedId) {
+    const lap = Arcade.load(lapKey(t.id), null);
+    return `<button class="track-card" type="button" data-track="${esc(t.id)}" aria-pressed="${t.id === selectedId}">
+      <canvas data-thumb="${esc(t.id)}"></canvas>
+      ${t.reverse ? '<span class="badge">Reverse</span>' : t.custom ? '<span class="badge">Yours</span>' : ''}
+      <span class="meta"><b>${esc(t.name)}</b><small>${D.themeOf(t).name}${lap ? ` · lap ${lap.toFixed(2)}s` : ''}</small></span>
+    </button>`;
+  }
+
+  function quick(kind) {
+    const all = [...D.ALL_TRACKS, ...customTracks()];
+    if (!all.some(t => t.id === quickPick.trackId)) quickPick.trackId = 'harbor';
+    const trial = kind === 'trial';
+    const levels = D.LEVELS.map(l => `<button class="chip" type="button" data-level="${l.id}" aria-pressed="${l === menuLevel}">${l.name}</button>`).join('');
+    const lapsChips = [1, 2, 3, 5].map(n => `<button class="chip" type="button" data-laps="${n}" aria-pressed="${n === quickPick.laps}">${n} lap${n > 1 ? 's' : ''}</button>`).join('');
+    return {
+      html: `${head(trial ? 'Time trial' : 'Quick race', trial ? 'Three laps alone against the ghost of the fastest racer in the world. Your best lap goes on the track\'s leaderboard.' : 'Pick a track and race three rivals.')}
+        <div class="track-grid">${all.map(t => trackCard(t, quickPick.trackId)).join('')}</div>
+        <div class="race-setup">
+          ${trial ? '' : `<div class="setup-row"><label>Rivals</label><div class="filters">${levels}</div><label>Laps</label><div class="filters">${lapsChips}</div></div>`}
+          <button class="big-btn" type="button" data-start>${trial ? 'Start time trial' : 'Start race'}</button>
+        </div>`,
+      wire: el => {
+        el.querySelectorAll('[data-track]').forEach(b => b.addEventListener('click', () => {
+          S.sfx.tick();
+          quickPick.trackId = b.dataset.track;
+          Arcade.save('racer:track', quickPick.trackId);
+          el.querySelectorAll('[data-track]').forEach(x => x.setAttribute('aria-pressed', x === b));
+        }));
+        el.querySelectorAll('[data-level]').forEach(b => b.addEventListener('click', () => {
+          menuLevel = D.LEVELS.find(l => l.id === b.dataset.level);
+          Arcade.save('racer:level', menuLevel.id);
+          el.querySelectorAll('[data-level]').forEach(x => x.setAttribute('aria-pressed', x === b));
+        }));
+        el.querySelectorAll('[data-laps]').forEach(b => b.addEventListener('click', () => {
+          quickPick.laps = +b.dataset.laps;
+          Arcade.save('racer:laps', quickPick.laps);
+          el.querySelectorAll('[data-laps]').forEach(x => x.setAttribute('aria-pressed', x === b));
+        }));
+        el.querySelector('[data-start]').addEventListener('click', () => {
+          const t = findTrack(quickPick.trackId) || D.TRACKS[0];
+          startRace(trial ? { mode: 'trial', track: t, laps: 3, level: menuLevel } : { mode: 'quick', track: t, laps: quickPick.laps, level: menuLevel });
+        });
+      },
+    };
+  }
+
+  function onlineView() {
+    if (!Relay.enabled) return { html: `${head('Online')}<div class="card" style="padding:16px"><p>Online races aren't set up on this copy of the arcade.</p></div>` };
+    return {
+      html: `${head('Online', 'Race a real player, one on one. Three laps; the first across the line wins.')}
+        <div class="online-grid">
+          <div class="card"><p class="section-title" style="margin-top:0">Track (when you host)</p>
+            <div class="track-grid">${D.ALL_TRACKS.map(t => trackCard(t, onlineTrack.id)).join('')}</div></div>
+          <div class="card">
+            <p class="section-title" style="margin-top:0">Play</p>
+            <div class="menu">
+              <button class="btn" type="button" data-net="quick">Quick race</button>
+              <button class="btn secondary" type="button" data-net="create">Private room</button>
+              <div class="row"><input class="field" id="code" maxlength="4" placeholder="CODE" autocomplete="off" aria-label="Room code"><button class="btn secondary" type="button" data-net="join">Join</button></div>
+            </div>
+            <p class="muted-note">Your opponent sees your car: <b>${esc(mySkin().name)}</b>.</p>
+            <div data-waiting></div>
+          </div>
+        </div>`,
+      wire: el => {
+        const code = el.querySelector('#code');
+        el.querySelectorAll('[data-net]').forEach(b => b.addEventListener('click', () => goOnline(b.dataset.net, code.value)));
+        code.addEventListener('keydown', e => { if (e.key === 'Enter') { e.stopPropagation(); goOnline('join', code.value); } });
+        el.querySelectorAll('[data-track]').forEach(b => b.addEventListener('click', () => {
+          onlineTrack = D.trackById(b.dataset.track);
+          Arcade.save('racer:onlineTrack', onlineTrack.id);
+          el.querySelectorAll('[data-track]').forEach(x => x.setAttribute('aria-pressed', x === b));
+        }));
+        Relay.showWaiting(el.querySelector('[data-waiting]'), room => goOnline('public', room));
+      },
+    };
+  }
+
+  function garage() {
+    garagePick = garagePick || mySkin();
+    const current = mySkin();
+    const cards = D.SKINS.map(s => {
+      const ok = skinUnlocked(s);
+      return `<button class="skin ${ok ? '' : 'locked'}" type="button" data-skin="${s.id}" aria-pressed="${s === garagePick}">
+        <canvas></canvas>${s === current ? '<span class="equipped">✓</span>' : ''}${esc(s.name)}<span class="tagline">${ok ? (s === current ? 'Driving' : 'Owned') : (s.unlock.coins ? '● ' + s.unlock.coins : s.unlock.stars ? '★ ' + s.unlock.stars : '🏆 Cup prize')}</span>
+      </button>`;
+    }).join('');
+    return {
+      html: `${head('Garage', 'Every car handles the same. Pick the one you like the look of.')}
+        <div class="garage">
+          <div class="card showroom"><h3 data-name></h3><span class="model" data-model></span><div class="spin"><canvas id="garage-car"></canvas></div><div class="buy" data-buy></div><p class="note" data-note></p></div>
+          <div class="skins">${cards}</div>
+        </div>`,
+      wire: el => {
+        D.SKINS.forEach((s, i) => staticCar(el.querySelectorAll('.skin canvas')[i], s));
+        spinners.push(spinner(el.querySelector('#garage-car'), () => garagePick, { speed: 0.7 }));
+        const show = () => {
+          const s = garagePick, ok = skinUnlocked(s), driving = s === mySkin();
+          el.querySelector('[data-name]').textContent = s.name;
+          el.querySelector('[data-model]').textContent = `${s.model} · #${s.num} · ${s.pattern}`;
+          const buy = el.querySelector('[data-buy]');
+          if (ok) buy.innerHTML = `<button class="btn" type="button" data-equip ${driving ? 'disabled' : ''}>${driving ? 'Driving this car' : 'Drive this car'}</button>`;
+          else if (s.unlock.coins) buy.innerHTML = `<button class="btn" type="button" data-purchase ${coins() >= s.unlock.coins ? '' : 'disabled'}>Buy for ● ${s.unlock.coins}</button>`;
+          else buy.innerHTML = '<button class="btn secondary" type="button" disabled>Locked</button>';
+          el.querySelector('[data-note]').textContent = ok ? '' : s.unlock.coins ? (coins() >= s.unlock.coins ? '' : `You have ${coins()} coins. Win races to earn more.`) : `Unlock: ${unlockText(s)}.`;
+          buy.querySelector('[data-equip]')?.addEventListener('click', () => {
+            Arcade.save('racer:skin', s.id);
+            S.sfx.select();
+            go('garage');
+          });
+          buy.querySelector('[data-purchase]')?.addEventListener('click', () => {
+            if (coins() < s.unlock.coins) return;
+            addCoins(-s.unlock.coins);
+            Arcade.save('racer:skins', [...owned(), s.id]);
+            Arcade.save('racer:skin', s.id);
+            S.sfx.unlock();
+            Arcade.toast('Garage', `${s.name} is yours!`);
+            go('garage');
+          });
+        };
+        el.querySelectorAll('[data-skin]').forEach(b => b.addEventListener('click', () => {
+          garagePick = D.SKINS.find(s => s.id === b.dataset.skin);
+          S.sfx.tick();
+          el.querySelectorAll('[data-skin]').forEach(x => x.setAttribute('aria-pressed', x === b));
+          show();
+        }));
+        show();
+      },
+    };
+  }
+
+  function records() {
+    const rows = D.ALL_TRACKS.map(t => {
+      const lap = Arcade.load(lapKey(t.id), null), race = Arcade.load(timeKey(t.id, 3), null);
+      return `<button class="rec-row" type="button" data-rec="${t.id}" aria-pressed="${recordsTab === 'track' && t.id === recordsPick}">
+        <canvas data-thumb="${t.id}"></canvas><span><b>${esc(t.name)}</b><small>3-lap race ${fmt(race)}</small></span><span class="t">${fmt(lap)}</span></button>`;
+    }).join('');
+    return {
+      html: `${head('Records', 'Your best laps, and the fastest in the world.')}
+        <div class="records">
+          <div class="card rec-list">
+            <div class="filters" style="padding:6px 6px 10px"><button class="chip" type="button" data-tab="stars" aria-pressed="${recordsTab === 'stars'}">Career stars</button><button class="chip" type="button" data-tab="arcade" aria-pressed="${recordsTab === 'arcade'}">Arcade score</button></div>
+            ${rows}
+          </div>
+          <div class="card rec-board" data-board></div>
+        </div>`,
+      wire: el => {
+        const board = el.querySelector('[data-board]');
+        const load = () => {
+          el.querySelectorAll('[data-rec]').forEach(x => x.setAttribute('aria-pressed', recordsTab === 'track' && x.dataset.rec === recordsPick));
+          el.querySelectorAll('[data-tab]').forEach(x => x.setAttribute('aria-pressed', x.dataset.tab === recordsTab));
+          const t = D.trackById(recordsPick);
+          const title = recordsTab === 'track' ? esc(t.name) : recordsTab === 'stars' ? 'Career stars' : 'Arcade score';
+          const mine = recordsTab === 'track' ? `Your best lap: ${fmt(Arcade.load(lapKey(t.id), null))}` : recordsTab === 'stars' ? `You have ${totalStars()} stars` : `Your best: ${Arcade.getBest('pocket-racer').toLocaleString()}`;
+          board.innerHTML = `<h3>${title}</h3><p class="muted-note">${mine}</p><div data-list>${Online.enabled ? '<p class="board-note">Loading…</p>' : '<p class="board-note">World leaderboards aren\'t set up on this copy of the arcade.</p>'}</div>
+            ${recordsTab === 'track' ? `<div class="menu" style="margin-top:12px"><button class="btn" type="button" data-trial>Time trial on this track</button></div>` : ''}`;
+          board.querySelector('[data-trial]')?.addEventListener('click', () => startRace({ mode: 'trial', track: t, laps: 3, level: menuLevel }));
+          if (!Online.enabled) return;
+          const want = recordsTab + recordsPick;
+          const fetch = recordsTab === 'track' ? lapTop(t.id, 10) : Online.top(recordsTab === 'stars' ? 'pocket-racer-stars' : 'pocket-racer', 10);
+          fetch.then(list => {
+            if (want !== recordsTab + recordsPick || !board.isConnected) return;
+            board.querySelector('[data-list]').innerHTML = renderTimes(list, recordsTab === 'track' ? 'Fastest laps' : 'Top 10');
+          }).catch(() => {
+            if (board.isConnected) board.querySelector('[data-list]').innerHTML = '<p class="board-note">Couldn\'t reach the leaderboard.</p>';
+          });
+        };
+        el.querySelectorAll('[data-rec]').forEach(b => b.addEventListener('click', () => {
+          recordsTab = 'track';
+          recordsPick = b.dataset.rec;
+          S.sfx.tick();
+          load();
+        }));
+        el.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => {
+          recordsTab = b.dataset.tab;
+          S.sfx.tick();
+          load();
+        }));
+        load();
+      },
+    };
+  }
+
+  function builder() {
+    const mine = customTracks();
+    const cards = mine.map(t => `<div class="track-card" style="cursor:default">
+        <canvas data-thumb="${esc(t.id)}"></canvas>
+        <span class="meta"><b>${esc(t.name)}</b><small>${D.themeOf(t).name}${Arcade.load(lapKey(t.id), null) ? ` · lap ${Arcade.load(lapKey(t.id), null).toFixed(2)}s` : ''}</small>
+          <span class="filters" style="margin-top:8px"><button class="chip" type="button" data-race="${esc(t.id)}">Race</button><button class="chip" type="button" data-edit="${esc(t.id)}">Edit</button><button class="chip" type="button" data-del="${esc(t.id)}">Delete</button></span></span>
+      </div>`).join('');
+    return {
+      html: `${head('Track builder', 'Tap to drop corners in driving order, drag to move them. The first corner is the start line.')}
+        <div class="track-grid">
+          <button class="tile" type="button" data-new style="min-height:180px;--c:#ff8a1f"><span class="ico">＋</span><b>New track</b><small>Up to 30 corners</small></button>
+          ${cards}
+        </div>
+        ${mine.length ? '' : '<p class="muted-note" style="margin-top:14px">Tracks you build are saved on this device. Races on them don\'t earn coins or records.</p>'}`,
+      wire: el => {
+        el.querySelector('[data-new]').addEventListener('click', () => openEditor(null));
+        el.querySelectorAll('[data-edit]').forEach(b => b.addEventListener('click', () => openEditor(findTrack(b.dataset.edit))));
+        el.querySelectorAll('[data-race]').forEach(b => b.addEventListener('click', () => startRace({ mode: 'quick', track: findTrack(b.dataset.race), laps: quickPick.laps, level: menuLevel })));
+        el.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
+          const t = findTrack(b.dataset.del);
+          if (!confirm(`Delete "${t.name}"?`)) return;
+          Arcade.save('tracks', Arcade.load('tracks', []).filter(x => x.id !== t.id));
+          forgetRecords(t.id);
+          go('builder');
+        }));
+      },
+    };
+  }
+
   function forgetRecords(id) {
-    Arcade.save('ghost:' + id, null);
-    Arcade.save('time:' + id, null);
-  }
-
-  function start() {
-    raceOnline = false;
-    setupRace(selected);
-    state = 'playing';
-    ui.hide();
-  }
-
-  function pause() {
-    if (state !== 'playing' || online()) return;
-    state = 'paused';
-    ui.show({ title: 'Paused', button: 'Resume', onAction: resume });
-  }
-
-  function resume() {
-    state = 'playing';
-    ui.hide();
+    for (const key of [lapKey(id), ...[1, 2, 3, 5].flatMap(n => [timeKey(id, n), ghostKey(id, n)])]) Arcade.save(key, null);
   }
 
   // ---------- Track editor ----------
+
+  const editLayer = makeCanvas(W * LAYER_SCALE, H * LAYER_SCALE);
 
   // Corners are placed in driving order; a new one goes in right after the selected corner.
   function openEditor(t) {
@@ -776,33 +1708,62 @@
     edit = {
       id: t ? t.id : null,
       name: t ? t.name : `My Track ${customTracks().length + 1}`,
-      theme: Math.max(0, THEMES.findIndex(th => th.grass === (t && t.grass))),
+      theme: Math.max(0, D.THEMES.findIndex(th => th.id === (t && t.theme))),
       points, history: [], sel: points.length - 1, drag: -1, moved: false,
     };
     ui.hide();
-    $('editor').hidden = false;
-    $('help').style.display = 'none';
-    $('touchpad').style.display = 'none';
+    setView('edit');
     canvas.style.touchAction = 'none';
+    snapCamera = true;
     refreshEditor();
   }
 
   function closeEditor() {
     edit = null;
-    $('editor').hidden = true;
-    $('help').style.display = '';
-    $('touchpad').style.display = '';
     canvas.style.touchAction = '';
-    showMenu();
+    state = 'menu';
+    setView('menu');
+    startDemo();
+    go('builder');
+  }
+
+  // A quick drawing of the layout (the full scenery is built when you race it).
+  function renderEditTrack(theme, p) {
+    const c = editLayer.getContext('2d');
+    c.setTransform(LAYER_SCALE, 0, 0, LAYER_SCALE, 0, 0);
+    c.fillStyle = theme.grass;
+    c.fillRect(0, 0, W, H);
+    c.fillStyle = theme.grass2;
+    for (let i = -H; i < W; i += 60) {
+      c.beginPath();
+      c.moveTo(i, 0); c.lineTo(i + 30, 0); c.lineTo(i + 30 + H, H); c.lineTo(i + H, H);
+      c.fill();
+    }
+    if (!p) return;
+    c.beginPath();
+    p.forEach((pt, i) => (i ? c.lineTo(pt.x, pt.y) : c.moveTo(pt.x, pt.y)));
+    c.closePath();
+    c.lineJoin = 'round';
+    c.strokeStyle = '#f2f2f2';
+    c.lineWidth = TRACK_W + 6;
+    c.stroke();
+    c.strokeStyle = theme.night ? '#2c3040' : '#3c4049';
+    c.lineWidth = TRACK_W;
+    c.stroke();
+    c.strokeStyle = 'rgba(255,255,255,0.22)';
+    c.lineWidth = 1.6;
+    c.setLineDash([16, 18]);
+    c.stroke();
+    c.setLineDash([]);
   }
 
   function refreshEditor() {
     edit.check = checkTrack(edit.points);
-    renderTrack(THEMES[edit.theme].grass, edit.check.path);
+    renderEditTrack(D.THEMES[edit.theme], edit.check.path);
     $('ed-undo').disabled = !edit.history.length;
     $('ed-delete').disabled = edit.sel < 0;
     $('ed-save').disabled = !edit.check.ok;
-    $('ed-theme').textContent = `Theme: ${THEMES[edit.theme].name}`;
+    $('ed-theme').textContent = `Theme: ${D.THEMES[edit.theme].name}`;
   }
 
   function remember() {
@@ -810,16 +1771,18 @@
     if (edit.history.length > 60) edit.history.shift();
   }
 
-  function toCanvas(e) {
+  function toWorld(e) {
     const r = canvas.getBoundingClientRect();
-    return [clamp((e.clientX - r.left) * W / r.width, 20, W - 20), clamp((e.clientY - r.top) * H / r.height, 20, H - 20)];
+    const x = (e.clientX - r.left - (cw / 2 - cam.x * cam.z)) / cam.z;
+    const y = (e.clientY - r.top - (ch / 2 - cam.y * cam.z)) / cam.z;
+    return [clamp(x, 20, W - 20), clamp(y, 20, H - 20)];
   }
 
   canvas.addEventListener('pointerdown', e => {
     if (state !== 'edit' || !$('overlay').hidden) return;
     e.preventDefault();
-    const [x, y] = toCanvas(e);
-    const reach = Math.max(14, 16 * W / canvas.getBoundingClientRect().width);
+    const [x, y] = toWorld(e);
+    const reach = Math.max(14, 18 / cam.z);
     let hit = -1, hitD = reach;
     edit.points.forEach((p, i) => {
       const d = Math.hypot(p[0] - x, p[1] - y);
@@ -833,7 +1796,7 @@
     } else if (edit.points.length < 30) {
       edit.points.splice(edit.sel + 1, 0, [Math.round(x), Math.round(y)]);
       edit.sel++;
-      Arcade.tone({ freq: 520, dur: 0.05, vol: 0.03 });
+      S.sfx.tick();
     } else {
       edit.history.pop();
     }
@@ -841,7 +1804,7 @@
   });
   canvas.addEventListener('pointermove', e => {
     if (!edit || edit.drag < 0) return;
-    const [x, y] = toCanvas(e);
+    const [x, y] = toWorld(e);
     edit.points[edit.drag] = [Math.round(x), Math.round(y)];
     edit.moved = true;
     refreshEditor();
@@ -881,7 +1844,7 @@
       refreshEditor();
     },
     'ed-theme': () => {
-      edit.theme = (edit.theme + 1) % THEMES.length;
+      edit.theme = (edit.theme + 1) % D.THEMES.length;
       refreshEditor();
     },
     'ed-clear': () => {
@@ -906,7 +1869,7 @@
       title: edit.id ? 'Save changes' : 'Name your track',
       html: `<div class="menu"><input class="field" id="track-name" maxlength="24" autocomplete="off" aria-label="Track name" value="${esc(edit.name)}"></div>
         <p class="error">${error}</p>
-        ${edit.id ? '<p class="muted-note">Saving clears this track\'s best time and ghost, since the layout changed.</p>' : ''}`,
+        ${edit.id ? '<p class="muted-note">Saving clears this track\'s best times and ghost, since the layout changed.</p>' : ''}`,
       button: 'Save track',
       onAction: saveTrack,
       onRender: panel => {
@@ -930,7 +1893,7 @@
     const t = {
       id: edit.id || 'custom-' + Date.now().toString(36),
       name,
-      grass: THEMES[edit.theme].grass,
+      theme: D.THEMES[edit.theme].id,
       points: edit.points.map(p => [Math.round(p[0]), Math.round(p[1])]),
     };
     const at = stored.findIndex(s => s.id === t.id);
@@ -941,132 +1904,17 @@
       stored.push(t);
     }
     Arcade.save('tracks', stored);
-    selected = t;
+    ui.hide();
     closeEditor();
   }
 
-  // ---------- Input ----------
-
-  const KEYMAP = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right' };
-  window.addEventListener('keydown', e => {
-    if (state === 'edit') {
-      if (e.target.tagName === 'INPUT' || !$('overlay').hidden) return;
-      if (e.code === 'Delete' || e.code === 'Backspace') deleteCorner();
-      if (e.code === 'KeyZ' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); undo(); }
-      return;
-    }
-    if (e.code === 'KeyP' || e.code === 'Escape') {
-      if (state === 'playing') pause();
-      else if (state === 'paused') resume();
-      return;
-    }
-    // Instant restart on the same track, for speedrunners. Not in online races.
-    if (e.code === 'KeyR' && !online() && ['playing', 'paused', 'over'].includes(state) && e.target.tagName !== 'INPUT') {
-      for (const k in keys) keys[k] = false;
-      start();
-      return;
-    }
-    if (KEYMAP[e.code]) keys[KEYMAP[e.code]] = true;
-  });
-  window.addEventListener('keyup', e => { if (KEYMAP[e.code]) keys[KEYMAP[e.code]] = false; });
-
-  // On touch screens the car accelerates on its own; you steer and brake.
-  function hold(id, key) {
-    const el = $(id);
-    el.addEventListener('pointerdown', e => {
-      e.preventDefault();
-      el.setPointerCapture(e.pointerId);
-      touchGas = true;
-      keys[key] = true;
-    });
-    for (const ev of ['pointerup', 'pointercancel']) el.addEventListener(ev, () => { keys[key] = false; });
-  }
-  hold('left', 'left');
-  hold('right', 'right');
-  hold('brake', 'down');
-
-  Arcade.onBlur(() => {
-    for (const k in keys) keys[k] = false;
-    pause();
-  });
-
-  // ---------- Drawing ----------
-
-  function drawCar(x, y, a, color, alpha = 1) {
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.translate(x, y);
-    ctx.rotate(a);
-    ctx.fillStyle = 'rgba(0,0,0,0.3)';
-    ctx.fillRect(-12, -7, 26, 16);
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.roundRect(-13, -8, 26, 16, 5);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(20,24,32,0.85)';
-    ctx.fillRect(-3, -6, 8, 12);
-    ctx.fillStyle = '#111';
-    ctx.fillRect(-10, -10, 6, 3);
-    ctx.fillRect(-10, 7, 6, 3);
-    ctx.fillRect(5, -10, 6, 3);
-    ctx.fillRect(5, 7, 6, 3);
-    ctx.restore();
-  }
-
-  function draw() {
-    ctx.drawImage(trackLayer.canvas, 0, 0, W, H);
-
-    const g = state === 'playing' || state === 'paused' || state === 'over' || state === 'online-over' ? ghostAt(raceTime) : null;
-    if (g) {
-      drawCar(g.x, g.y, g.a, '#ffffff', 0.35);
-      ctx.font = '600 11px system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillStyle = 'rgba(255,255,255,0.7)';
-      ctx.fillText(`${ghost.name} · ${ghost.time.toFixed(1)}s`, g.x, g.y - 18);
-    }
-    // Rivals are see-through where they overlap you, so your own car always stays visible.
-    for (const car of cars.slice(1)) {
-      const over = Math.hypot(car.x - player.x, car.y - player.y) < CAR_R * 2.5;
-      drawCar(car.x, car.y, car.a, car.color, over ? 0.45 : 1);
-      if (car.remote && net) {
-        ctx.font = '600 11px system-ui, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = 'rgba(255,255,255,0.85)';
-        ctx.fillText(net.names[1], car.x, car.y - 18);
-      }
-    }
-    drawCar(player.x, player.y, player.a, player.color);
-
-    // Little arrow over the player so you can find yourself on the grid.
-    if (raceTime < 4 && state !== 'menu') {
-      ctx.fillStyle = '#ffc53d';
-      ctx.beginPath();
-      ctx.moveTo(player.x - 6, player.y - 24);
-      ctx.lineTo(player.x + 6, player.y - 24);
-      ctx.lineTo(player.x, player.y - 16);
-      ctx.fill();
-    }
-
-    if (state === 'playing' && countdown > 0) {
-      const n = Math.ceil(countdown);
-      ctx.fillStyle = 'rgba(0,0,0,0.45)';
-      ctx.fillRect(0, 0, W, H);
-      ctx.font = '700 96px system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#fff';
-      ctx.fillText(n > 3 ? '' : n, W / 2, H / 2);
-      ctx.textBaseline = 'alphabetic';
-    } else if (state === 'playing' && raceTime < 0.8) {
-      ctx.font = '700 72px system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillStyle = `rgba(255,197,61,${1 - raceTime / 0.8})`;
-      ctx.fillText('GO!', W / 2, H / 2 + 24);
-    }
-  }
-
   function drawEditor() {
-    ctx.drawImage(trackLayer.canvas, 0, 0, W, H);
+    updateCamera(0);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#0b0d12';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(worldMatrix());
+    ctx.drawImage(editLayer, 0, 0, W, H);
     const { points, sel, check } = edit;
 
     // Driving direction, shown as chevrons along the road.
@@ -1124,29 +1972,100 @@
       ctx.fillText(i === 0 ? 'S' : i + 1, p[0], p[1] + 0.5);
     });
 
+    // Status message, in screen space so it stays readable at any zoom.
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const msg = check.ok ? `Looks good · ${Math.round(check.length)} px per lap · press Save to race it` : check.msg;
     ctx.font = '600 13px system-ui, sans-serif';
-    const w = ctx.measureText(msg).width + 24;
-    ctx.fillStyle = 'rgba(14,16,20,0.8)';
+    const w = Math.min(cw - 16, ctx.measureText(msg).width + 24);
+    ctx.fillStyle = 'rgba(14,16,20,0.85)';
     ctx.beginPath();
-    ctx.roundRect(W / 2 - w / 2, 10, w, 28, 8);
+    ctx.roundRect(cw / 2 - w / 2, 10, w, 28, 8);
     ctx.fill();
     ctx.fillStyle = check.ok ? '#3ddc84' : '#fff';
-    ctx.fillText(msg, W / 2, 24.5);
+    ctx.fillText(msg, cw / 2, 24.5, w - 12);
     ctx.textBaseline = 'alphabetic';
   }
+
+  // ---------- Input ----------
+
+  const KEYMAP = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right' };
+  window.addEventListener('pointerdown', e => { lastTouch = e.pointerType === 'touch'; }, true);
+  window.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT') return;
+    if (state === 'edit') {
+      if (!$('overlay').hidden) return;
+      if (e.code === 'Delete' || e.code === 'Backspace') deleteCorner();
+      if (e.code === 'KeyZ' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); undo(); }
+      return;
+    }
+    if (e.code === 'KeyP' || e.code === 'Escape') {
+      if (state === 'playing') pause();
+      else if (state === 'paused') resume();
+      return;
+    }
+    if (e.code === 'KeyC' && state !== 'menu') {
+      const next = { auto: 'follow', follow: 'full', full: 'auto' }[camMode];
+      setCamMode(next);
+      Arcade.toast('Camera', next === 'auto' ? 'Auto' : next === 'follow' ? 'Follow your car' : 'Whole track');
+      return;
+    }
+    // Instant restart on the same track, for speedrunners. Not in online races.
+    if (e.code === 'KeyR' && !online() && setup && ['playing', 'paused', 'over'].includes(state)) {
+      restart();
+      return;
+    }
+    if (KEYMAP[e.code]) {
+      keys[KEYMAP[e.code]] = true;
+      lastTouch = false;
+      if (KEYMAP[e.code] === 'up') touchGas = false;
+      if (state === 'playing') e.preventDefault();
+    }
+  });
+  window.addEventListener('keyup', e => { if (KEYMAP[e.code]) keys[KEYMAP[e.code]] = false; });
+
+  // On touch screens the car accelerates on its own; you steer and brake.
+  document.querySelectorAll('#pad [data-key]').forEach(el => {
+    const key = el.dataset.key;
+    el.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      el.setPointerCapture(e.pointerId);
+      touchGas = true;
+      keys[key] = true;
+      el.classList.add('on');
+    });
+    for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) el.addEventListener(ev, () => {
+      keys[key] = false;
+      el.classList.remove('on');
+    });
+    el.addEventListener('contextmenu', e => e.preventDefault());
+  });
+  $('pause').addEventListener('click', () => (state === 'paused' ? resume() : pause()));
+
+  Arcade.onBlur(() => {
+    for (const k in keys) keys[k] = false;
+    pause();
+  });
+
+  // ---------- Main loop ----------
 
   let last = performance.now();
   function frame(now) {
     const dt = Math.min(0.033, (now - last) / 1000);
     last = now;
-    if (state === 'playing') update(dt);
+    if (state === 'playing' || state === 'over' || state === 'online-over' || state === 'menu') update(dt);
     if (state === 'edit') drawEditor();
-    else draw();
+    else draw(dt);
+    if (state === 'playing' && player && !player.remote) {
+      S.updateCar({ speed: Math.abs(player.v) / TOP_SPEED, gas: player.gas, slide: player.slide, offTrack: player.offTrack });
+    }
+    for (const s of spinners) s(now);
     requestAnimationFrame(frame);
   }
 
-  showMenu();
+  resize();
+  updateWallet();
+  startDemo();
+  go('home');
   const invite = Relay.takeInvite();
   if (invite) goOnline('public', invite);
   requestAnimationFrame(frame);
