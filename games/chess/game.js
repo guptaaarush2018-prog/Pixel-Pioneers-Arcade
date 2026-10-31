@@ -8,6 +8,16 @@
   // Crystal Chess: a piece that lands on a crystal levels up. A queen becomes an Amazon (queen + knight).
   const LEVEL_UP = { p: 'n', n: 'b', b: 'r', r: 'q', q: 'a' };
   const CRYSTAL_EVERY = 6, CRYSTAL_MAX = 2;
+  // The k-th crystal is due at ply 6k, or 6k + 1 for odd k, so each side gets the first move after
+  // half of them. Crystals that appear alternate between Black's half (ranks 5–6) and White's
+  // (ranks 3–4). Picking from the whole middle used to favour Black: White moves first and fills
+  // its own half sooner, leaving most empty squares on Black's side.
+  const spawnAt = k => CRYSTAL_EVERY * k + (k % 2);
+  const nextSpawn = ply => {
+    let k = Math.max(1, Math.floor(ply / CRYSTAL_EVERY));
+    while (spawnAt(k) <= ply) k++;
+    return spawnAt(k);
+  };
   const START = 'rnbqkbnrpppppppp' + '.'.repeat(32) + 'PPPPPPPPRNBQKBNR';
   const KNIGHT = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
   const KING = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
@@ -45,7 +55,7 @@
   const as = (col, t) => (col === 'w' ? t.toUpperCase() : t);
   const on = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
 
-  const fresh = v => ({ b: START.split(''), turn: 'w', castle: 'KQkq', ep: -1, half: 0, ply: 0, crystals: [], variant: v });
+  const fresh = v => ({ b: START.split(''), turn: 'w', castle: 'KQkq', ep: -1, half: 0, ply: 0, crystals: [], spawned: 0, variant: v });
 
   function attacked(s, sq, by) {
     const r = sq >> 3, c = sq & 7, b = s.b;
@@ -162,12 +172,19 @@
     }
     const n = {
       b, turn: other(me), castle, ep: m.dbl ? (m.f + m.t) / 2 : -1,
-      half: typeOf(p) === 'p' || capture ? 0 : s.half + 1, ply: s.ply + 1, crystals, variant: s.variant,
+      half: typeOf(p) === 'p' || capture ? 0 : s.half + 1, ply: s.ply + 1, crystals, spawned: s.spawned || 0, variant: s.variant,
     };
-    if (n.variant === 'crystal' && n.ply % CRYSTAL_EVERY === 0 && crystals.length < CRYSTAL_MAX) {
-      const spots = [];
-      for (let i = 16; i < 48; i++) if (b[i] === '.' && !crystals.includes(i)) spots.push(i);
-      if (spots.length) n.crystals = crystals.concat(spots[hash(b.join('') + n.ply) % spots.length]);
+    const k = Math.floor(n.ply / CRYSTAL_EVERY);
+    if (n.variant === 'crystal' && k >= 1 && n.ply === spawnAt(k) && crystals.length < CRYSTAL_MAX) {
+      // Black's half and White's half in turn; if that half is full, the other one.
+      const half = n.spawned % 2;
+      const empty = (from, to) => { const out = []; for (let i = from; i < to; i++) if (b[i] === '.' && !crystals.includes(i)) out.push(i); return out; };
+      let spots = half === 0 ? empty(16, 32) : empty(32, 48);
+      if (!spots.length) spots = half === 0 ? empty(32, 48) : empty(16, 32);
+      if (spots.length) {
+        n.crystals = crystals.concat(spots[hash(b.join('') + n.ply) % spots.length]);
+        n.spawned++;
+      }
     }
     return n;
   }
@@ -751,7 +768,7 @@
     if (state === 'playing') {
       const who = mode === 'local' ? `${names[playerOf(g.turn)]} (${g.turn === 'w' ? 'white' : 'black'})` : Match.mine(playerOf(g.turn)) ? 'Your move' : `${names[playerOf(g.turn)]} is thinking…`;
       ctx.fillStyle = g.turn === 'w' ? '#f6f2e7' : '#9aa3b2';
-      const next = g.variant === 'crystal' && g.crystals.length < CRYSTAL_MAX ? ` · crystal in ${CRYSTAL_EVERY - (g.ply % CRYSTAL_EVERY)}` : '';
+      const next = g.variant === 'crystal' && g.crystals.length < CRYSTAL_MAX ? ` · crystal in ${nextSpawn(g.ply) - g.ply}` : '';
       ctx.fillText(`${who}${check >= 0 ? ' · Check!' : ''}${next}`, W / 2, 24);
     } else if (endWhy) {
       ctx.fillStyle = '#ffc53d';
