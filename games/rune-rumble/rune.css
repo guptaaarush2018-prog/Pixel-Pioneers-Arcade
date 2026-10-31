@@ -1,0 +1,275 @@
+/* Rune Rumble's own look, on top of the arcade's shared styles. */
+.rune {
+  --rbg: #151225;
+  --rcard: rgba(32, 27, 54, .94);
+  --rline: rgba(255, 255, 255, .09);
+  --gold: #ffc53d;
+  --mana: #d06bff;
+  --blue: #4f8cff;
+  --red: #ff5d5d;
+  --common: #9aa7b8;
+  --rare: #ff9a3d;
+  --epic: #c45cff;
+  --legendary: #3de0c8;
+  background: var(--rbg) radial-gradient(ellipse at top, #2a2148, transparent 60%) no-repeat;
+}
+
+/* ---------- Header ---------- */
+
+.rune .topbar { background: #1b1630; gap: 14px; }
+.rune .topbar h1 { flex: 1; }
+.rlogo { font: 900 19px var(--font); letter-spacing: .04em; color: #f4e7c4; text-shadow: 0 2px 0 #5a3a10; }
+.rlogo b { margin-left: 4px; color: var(--gold); }
+.purse { display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px; border-radius: 999px; background: rgba(0, 0, 0, .3); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.purse b { font-weight: 800; margin-right: 6px; }
+.purse b:last-child { margin-right: 0; }
+.gold-ico { color: var(--gold); }
+.purse.bump { animation: rbump .5s; }
+@keyframes rbump { 30% { transform: scale(1.15); } }
+
+/* ---------- Stage ---------- */
+
+.rune .stage { padding: 0; display: block; overflow: hidden; }
+.rune .stage canvas#game { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; border-radius: 0; }
+.in-menu .stage canvas#game { filter: brightness(.45) saturate(.8) blur(2px); }
+.rune .overlay { z-index: 10; }
+.rune .panel { max-width: min(420px, 100%); background: #221c3a; border-color: var(--rline); }
+
+.screens { position: absolute; inset: 0; z-index: 3; overflow-y: auto; overscroll-behavior: contain; padding: 18px 16px 30px; }
+.screens:empty { display: none; }
+.rscreen { max-width: 900px; margin: 0 auto; animation: rrise .3s ease-out; }
+@keyframes rrise { from { opacity: 0; transform: translateY(12px); } }
+.rcard { position: relative; border: 1px solid var(--rline); border-radius: 16px; background: var(--rcard); }
+.rtitle { margin: 0 0 12px; font: 900 24px var(--font); color: #f4e7c4; }
+.rsub { margin: -6px 0 14px; color: var(--muted); font-size: 14px; }
+.rsection { margin: 20px 0 10px; font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; align-items: baseline; }
+
+/* ---------- Battle (home) screen ---------- */
+
+.arena-banner { position: relative; overflow: hidden; padding: 0; text-align: center; }
+.arena-banner canvas { display: block; width: 100%; height: 170px; }
+.arena-banner .label { position: absolute; left: 0; right: 0; bottom: 0; padding: 30px 12px 12px; background: linear-gradient(transparent, rgba(16, 12, 30, .92)); }
+.arena-banner .label small { display: block; color: var(--muted); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
+.arena-banner .label b { font: 900 24px var(--font); color: #f4e7c4; }
+.trophy-bar { margin: 10px 16px 0; height: 10px; border-radius: 99px; background: rgba(0, 0, 0, .35); overflow: hidden; }
+.trophy-bar i { display: block; height: 100%; background: linear-gradient(90deg, #ffb100, #ffd86b); border-radius: inherit; }
+.trophy-line { display: flex; justify-content: space-between; margin: 4px 16px 0; font-size: 12px; color: var(--muted); }
+
+.battle-btn {
+  display: block;
+  width: 100%;
+  margin: 14px 0 0;
+  padding: 18px;
+  border: 0;
+  border-radius: 16px;
+  background: linear-gradient(#ffd25e, #ffa600);
+  color: #3a2200;
+  font: 900 26px var(--font);
+  letter-spacing: .04em;
+  cursor: pointer;
+  box-shadow: 0 6px 0 #a35f00, 0 10px 26px rgba(255, 166, 0, .3);
+  transition: transform .08s, box-shadow .08s;
+}
+.battle-btn small { display: block; font-size: 12px; font-weight: 700; letter-spacing: .02em; opacity: .7; }
+.battle-btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #a35f00; }
+.mode-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.mode-row .btn { justify-content: center; }
+
+.chests { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.chest-slot {
+  position: relative;
+  min-height: 112px;
+  padding: 8px 6px;
+  border: 2px dashed rgba(255, 255, 255, .12);
+  border-radius: 14px;
+  background: rgba(0, 0, 0, .2);
+  color: var(--text);
+  font: 600 11px var(--font);
+  text-align: center;
+  cursor: pointer;
+}
+.chest-slot.full { border-style: solid; border-color: var(--rline); background: var(--rcard); }
+.chest-slot.ready { border-color: var(--gold); box-shadow: 0 0 16px rgba(255, 197, 61, .35); animation: rglow 1.4s infinite; }
+@keyframes rglow { 50% { box-shadow: 0 0 26px rgba(255, 197, 61, .6); } }
+.chest-slot canvas { display: block; width: 64px; height: 56px; margin: 0 auto 4px; }
+.chest-slot small { display: block; color: var(--muted); font-weight: 500; }
+.chest-slot .when { color: var(--gold); font-weight: 800; }
+.free-chest { display: flex; align-items: center; gap: 12px; margin-top: 10px; padding: 10px 14px; }
+.free-chest canvas { width: 54px; height: 46px; }
+.free-chest div { flex: 1; font-size: 14px; }
+.free-chest small { display: block; color: var(--muted); }
+
+/* ---------- Cards / deck ---------- */
+
+.deck-tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+.deck { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; padding: 10px; }
+.avg { font-size: 13px; color: var(--muted); }
+.avg b { color: var(--mana); }
+.collection { display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 8px; }
+
+.ccard {
+  position: relative;
+  display: block;
+  padding: 0;
+  border: 3px solid var(--rc, var(--common));
+  border-radius: 10px;
+  background: #0f0c1c;
+  color: var(--text);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform .12s;
+}
+.ccard:hover { transform: translateY(-2px); }
+.ccard canvas { display: block; width: 100%; aspect-ratio: 5 / 6; }
+.ccard .cost { position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #f0b6ff, var(--mana) 60%, #7a2aa8); color: #fff; font-weight: 900; font-size: 12px; text-shadow: 0 1px 0 rgba(0, 0, 0, .5); }
+.ccard .lvl { display: block; padding: 2px 0 3px; background: rgba(0, 0, 0, .45); font-size: 11px; font-weight: 800; }
+.ccard .bar { display: block; height: 4px; background: rgba(255, 255, 255, .1); }
+.ccard .bar i { display: block; height: 100%; background: #3ddc84; }
+.ccard .bar.full i { background: var(--gold); }
+.ccard.locked { filter: grayscale(1) brightness(.5); cursor: default; }
+.ccard.locked:hover { transform: none; }
+.ccard.selected { outline: 3px solid #fff; outline-offset: 2px; animation: rwiggle .5s infinite; }
+@keyframes rwiggle { 25% { transform: rotate(-2deg); } 75% { transform: rotate(2deg); } }
+.ccard .upg { position: absolute; top: 3px; right: 3px; padding: 1px 5px; border-radius: 6px; background: #3ddc84; color: #04220f; font-size: 10px; font-weight: 900; animation: rbounce 1s infinite; }
+@keyframes rbounce { 50% { transform: translateY(-2px); } }
+.ccard .name { display: block; padding: 3px 2px 0; font-size: 10.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: rgba(0, 0, 0, .45); }
+.swap-note { margin: 8px 0 0; padding: 8px 12px; border-radius: 10px; background: rgba(255, 197, 61, .12); color: var(--gold); font-size: 13px; font-weight: 700; text-align: center; }
+
+.card-info { text-align: left; }
+.card-info .top { display: flex; gap: 14px; align-items: center; }
+.card-info .top .ccard { width: 92px; flex: 0 0 auto; cursor: default; }
+.card-info .rar { font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.card-info h3 { margin: 2px 0 4px; font: 900 22px var(--font); }
+.card-info p { margin: 0; }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 14px 0; }
+.stats div { padding: 6px 10px; border-radius: 8px; background: rgba(255, 255, 255, .05); font-size: 12px; color: var(--muted); }
+.stats b { display: block; color: var(--text); font-size: 15px; }
+.stats .up { color: #3ddc84; font-size: 11px; margin-left: 4px; }
+
+/* ---------- Trophy road ---------- */
+
+.road { position: relative; padding-left: 26px; }
+.road::before { content: ''; position: absolute; left: 10px; top: 0; bottom: 0; width: 4px; border-radius: 4px; background: rgba(255, 255, 255, .1); }
+.road .fill { position: absolute; left: 10px; top: 0; width: 4px; border-radius: 4px; background: var(--gold); }
+.milestone { position: relative; display: flex; align-items: center; gap: 12px; margin-bottom: 8px; padding: 10px 12px; }
+.milestone::before { content: ''; position: absolute; left: -22px; width: 12px; height: 12px; border-radius: 50%; background: #3a3354; border: 2px solid #5a5274; }
+.milestone.got::before { background: var(--gold); border-color: #fff3c4; }
+.milestone .t { width: 58px; font-weight: 900; color: var(--gold); font-variant-numeric: tabular-nums; }
+.milestone .what { flex: 1; font-size: 14px; }
+.milestone .what small { display: block; color: var(--muted); }
+.milestone canvas { width: 46px; height: 40px; }
+.milestone.arena { background: linear-gradient(90deg, rgba(255, 197, 61, .18), var(--rcard)); }
+.milestone.arena .what b { font-size: 16px; }
+.milestone.locked { opacity: .6; }
+
+/* ---------- Battle HUD ---------- */
+
+.bhud { position: absolute; top: 8px; left: 8px; right: 8px; z-index: 2; display: flex; align-items: flex-start; justify-content: center; gap: 8px; pointer-events: none; }
+.bhud[hidden] { display: none; }
+.bhud-side { display: flex; flex-direction: column; align-items: center; min-width: 96px; padding: 5px 10px; border-radius: 12px; background: rgba(12, 10, 24, .72); }
+.bhud-side.them { border-bottom: 3px solid var(--red); }
+.bhud-side.me { border-bottom: 3px solid var(--blue); }
+.bname { max-width: 120px; font-size: 11px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.crowns { font-size: 18px; letter-spacing: 1px; color: rgba(255, 255, 255, .18); line-height: 1.1; }
+.crowns .on { color: var(--gold); text-shadow: 0 0 10px rgba(255, 197, 61, .7); display: inline-block; animation: rcrown .6s; }
+@keyframes rcrown { 0% { transform: scale(3) rotate(-30deg); } 60% { transform: scale(.8); } }
+.clock { padding: 4px 14px; border-radius: 12px; background: rgba(12, 10, 24, .82); text-align: center; line-height: 1.05; }
+.clock b { font: 900 22px var(--font); font-variant-numeric: tabular-nums; }
+.clock.ot b { color: #ff7a7a; }
+.clock small { display: block; font-size: 10px; font-weight: 800; color: var(--mana); letter-spacing: .06em; }
+.bpause { position: absolute; right: 0; top: 0; width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--rline); background: rgba(12, 10, 24, .72); color: var(--text); pointer-events: auto; cursor: pointer; }
+
+.bbanner { position: absolute; top: 40%; left: 0; right: 0; z-index: 2; text-align: center; font: 900 clamp(28px, 7vw, 54px) var(--font); color: #fff; text-shadow: 0 3px 0 rgba(0, 0, 0, .4); opacity: 0; pointer-events: none; }
+.bbanner small { display: block; font-size: .4em; color: var(--gold); }
+.bbanner.show { animation: rbanner 1.8s ease-out forwards; }
+@keyframes rbanner { 0% { opacity: 0; transform: scale(1.8); } 12% { opacity: 1; transform: scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-30px); } }
+
+/* ---------- Hand ---------- */
+
+.hand-bar { display: grid; grid-template-columns: 64px minmax(0, 1fr); grid-template-areas: "next cards" "mana mana"; gap: 6px 10px; padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); background: #1b1630; border-top: 1px solid var(--rline); }
+.hand-bar[hidden] { display: none; }
+.hand-bar .next { grid-area: next; text-align: center; font-size: 10px; color: var(--muted); font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.hand-bar .next canvas { display: block; width: 52px; height: 62px; margin: 2px auto 0; border-radius: 6px; opacity: .85; }
+.hand-bar .cards { grid-area: cards; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; max-width: 520px; }
+.hand-bar .ccard { transition: transform .15s, filter .15s; }
+.hand-bar .ccard.pick { transform: translateY(-10px) scale(1.04); outline: 3px solid #fff; box-shadow: 0 8px 20px rgba(0, 0, 0, .5); }
+.hand-bar .ccard.poor { filter: grayscale(.8) brightness(.6); }
+.hand-bar .ccard.fresh { animation: rdeal .35s ease-out; }
+@keyframes rdeal { from { transform: translateY(40px) scale(.7); opacity: 0; } }
+.hand-bar .mana { grid-area: mana; display: flex; align-items: center; gap: 8px; }
+.mana-bar { position: relative; flex: 1; height: 18px; border-radius: 99px; background: rgba(0, 0, 0, .45); overflow: hidden; border: 1px solid rgba(208, 107, 255, .35); }
+.mana-bar i { position: absolute; inset: 0 auto 0 0; background: linear-gradient(#e7a3ff, var(--mana) 55%, #9a3ad6); border-radius: inherit; }
+.mana-bar span { position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 calc(10% - 2px), rgba(0, 0, 0, .35) calc(10% - 2px) 10%); }
+.mana b { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #f0b6ff, var(--mana) 60%, #7a2aa8); font-size: 16px; font-weight: 900; }
+
+/* ---------- Bottom tabs (menus) ---------- */
+
+.tabs { display: flex; justify-content: center; gap: 4px; padding: 6px 10px calc(6px + env(safe-area-inset-bottom)); background: #1b1630; border-top: 1px solid var(--rline); }
+.in-battle .tabs { display: none; }
+.tabs button { flex: 0 1 140px; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 4px; border: 0; border-radius: 12px; background: transparent; color: var(--muted); font: 700 12px var(--font); cursor: pointer; }
+.tabs button span { font-size: 22px; transition: transform .15s; }
+.tabs button[aria-current="page"] { background: rgba(255, 255, 255, .08); color: var(--text); }
+.tabs button[aria-current="page"] span { transform: scale(1.15) translateY(-2px); }
+
+/* ---------- Chest opening ---------- */
+
+.open-chest { text-align: center; }
+.open-chest canvas.big { width: 160px; height: 140px; cursor: pointer; }
+.open-chest canvas.big.shake { animation: rshake .35s; }
+@keyframes rshake { 20% { transform: rotate(-8deg) scale(1.05); } 40% { transform: rotate(8deg); } 60% { transform: rotate(-5deg); } 80% { transform: rotate(4deg); } }
+.reveal { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.reveal .ccard { width: 120px; animation: rflip .5s ease-out; cursor: default; }
+.reveal .ccard.legendary-glow, .reveal .ccard.epic-glow { box-shadow: 0 0 30px var(--rc); }
+@keyframes rflip { from { transform: rotateY(90deg) scale(.6); } }
+.reveal .count { font: 900 26px var(--font); color: #fff; animation: rpop .4s .2s backwards; }
+@keyframes rpop { from { transform: scale(0); } }
+.reveal .new { color: var(--gold); font-weight: 900; letter-spacing: .1em; }
+.loot-left { color: var(--muted); font-size: 13px; }
+.loot-summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; margin: 10px 0; }
+.loot-summary .ccard { cursor: default; }
+
+.result-crowns { font-size: 44px; letter-spacing: 6px; color: rgba(255, 255, 255, .15); }
+.result-crowns .on { color: var(--gold); display: inline-block; animation: rcrown .6s backwards; text-shadow: 0 0 18px rgba(255, 197, 61, .6); }
+.result-crowns .on:nth-child(2) { animation-delay: .25s; }
+.result-crowns .on:nth-child(3) { animation-delay: .5s; }
+.rewards { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.rewards span { padding: 6px 12px; border-radius: 999px; background: rgba(255, 255, 255, .07); font-weight: 800; }
+
+/* ---------- Narrow screens ---------- */
+
+@media (max-width: 700px) {
+  .deck { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .collection { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .rune .topbar { grid-template-columns: auto minmax(0, 1fr) auto auto auto; grid-template-areas: "back title purse chat mute"; }
+  .rune .purse { grid-area: purse; padding: 4px 8px; font-size: 12px; }
+  .rlogo { font-size: 15px; }
+  .screens { padding: 14px 12px 24px; }
+  .chest-slot { min-height: 100px; }
+  .chest-slot canvas { width: 52px; height: 46px; }
+  .bhud-side { min-width: 70px; padding: 4px 6px; }
+  .bname { max-width: 80px; }
+  .bpause { top: 52px; }
+}
+@media (orientation: landscape) and (max-height: 540px) {
+  .hand-bar { grid-template-columns: 56px minmax(0, 1fr) 200px; grid-template-areas: "next cards mana"; padding: 4px 12px calc(4px + env(safe-area-inset-bottom)); }
+  .hand-bar .cards { max-width: none; grid-template-columns: repeat(4, minmax(0, 70px)); justify-content: center; }
+  .hand-bar .ccard canvas { aspect-ratio: 5 / 4; }
+  .hand-bar .next canvas { width: 40px; height: 46px; }
+  .tabs { padding: 2px 10px; }
+  .tabs button { flex-direction: row; gap: 6px; padding: 4px 10px; }
+  .tabs button span { font-size: 16px; }
+  .arena-banner canvas { height: 110px; }
+}
+@media (max-width: 420px) {
+  .rlogo { font-size: 13px; letter-spacing: 0; }
+  .rlogo b { margin-left: 2px; }
+}
+@media (orientation: landscape) and (max-height: 540px) {
+  .rune .panel { padding: 14px 18px; }
+  .rune .panel h2 { margin-bottom: 6px; }
+  .card-info .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}

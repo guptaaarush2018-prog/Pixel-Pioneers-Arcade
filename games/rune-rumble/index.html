@@ -2,29 +2,47 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#151225">
   <title>Rune Rumble · Pixel Pioneers Arcade</title>
   <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="../../assets/css/arcade.css">
+  <link rel="stylesheet" href="rune.css">
 </head>
-<body class="game" data-game="rune-rumble">
+<body class="game rune in-menu" data-game="rune-rumble">
   <header class="topbar">
     <a class="back" href="../../index.html">← All games</a>
-    <h1>Rune Rumble</h1>
-    <div class="stats">
-      <span>Time<b id="time">3:00</b></span>
-      <span>Your crowns<b id="you">0</b></span>
-      <span>Theirs<b id="them">0</b></span>
-    </div>
+    <h1><span class="rlogo">RUNE<b>RUMBLE</b></span></h1>
+    <span class="purse" title="Gold and trophies"><span class="gold-ico">◆</span><b id="gold">0</b><span class="trophy-ico">🏆</span><b id="trophies">0</b></span>
     <button class="icon-btn" id="mute" type="button">Sound on</button>
   </header>
 
-  <main class="stage">
+  <main class="stage" id="stage">
     <canvas id="game"></canvas>
+
+    <div class="bhud" id="bhud" hidden>
+      <div class="bhud-side them"><span class="bname" id="them-name">Opponent</span><span class="crowns" id="them-crowns"></span></div>
+      <div class="clock" id="clock"><b id="time">3:00</b><small id="clock-note"></small></div>
+      <div class="bhud-side me"><span class="bname" id="me-name">You</span><span class="crowns" id="me-crowns"></span></div>
+      <button class="bpause" id="pause" type="button" aria-label="Pause">❚❚</button>
+    </div>
+    <div class="bbanner" id="bbanner"></div>
+
+    <div class="screens" id="screens"></div>
     <div class="overlay" id="overlay" hidden></div>
   </main>
 
-  <p class="help">Pick a card (click or <kbd>1</kbd>–<kbd>4</kbd>), then click a lane on your side · Fireball can land anywhere · click your troops, then another lane (or <kbd>↑</kbd>/<kbd>↓</kbd>) to switch lanes · <kbd>P</kbd> pause</p>
+  <div class="hand-bar" id="hand" hidden>
+    <div class="next"><small>Next</small><canvas id="next-card" width="80" height="96"></canvas></div>
+    <div class="cards" id="cards"></div>
+    <div class="mana"><div class="mana-bar"><i id="mana-fill"></i><span id="mana-ticks"></span></div><b id="mana-num">5</b></div>
+  </div>
+
+  <nav class="tabs" id="tabs" aria-label="Rune Rumble">
+    <button type="button" data-tab="cards"><span>🃏</span>Cards</button>
+    <button type="button" data-tab="battle"><span>⚔️</span>Battle</button>
+    <button type="button" data-tab="road"><span>🏆</span>Road</button>
+  </nav>
 
   <script src="../../assets/js/config.js"></script>
   <script src="../../assets/js/catalog.js"></script>
@@ -35,6 +53,9 @@
   <script src="../../assets/js/chat.js"></script>
   <script src="../../assets/js/invites.js"></script>
   <script src="../../assets/js/relay.js"></script>
+  <script src="data.js"></script>
+  <script src="sound.js"></script>
+  <script src="art.js"></script>
   <script src="game.js"></script>
 </body>
 </html>
