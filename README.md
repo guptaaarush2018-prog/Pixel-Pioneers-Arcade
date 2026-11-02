@@ -8,9 +8,12 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | --- | --- | --- |
 | Stickman Evolution: The 95th | Fighting | Linked from the hub; hosted at [pixel-pioneers-studios.github.io/Stickman-Battles](https://pixel-pioneers-studios.github.io/Stickman-Battles/) |
 | Paintball Arena | Fighting (platform shooter) | Linked from the hub; hosted at [plzgimmeaname.github.io/paintball-web](https://plzgimmeaname.github.io/paintball-web/) |
-| Pixel Pitch | Sports (4-a-side football) | Live 1v1 |
-| Hoop Duel | Sports (1v1 basketball) | Live 1v1 |
-| Pixel Gridiron | Sports (top-down football, season mode) | Online duel |
+| Pixel Pitch | Sports (4-a-side football, knockout Cup with golden goal) | Live 1v1 |
+| Hoop Duel | Sports (1v1 basketball, On Fire streaks) | Live 1v1 |
+| Pixel Gridiron | Sports (top-down football, season mode, play cards with route diagrams) | Online duel |
+| Ice Clash | Sports (3-on-3 hockey with goalies, slapshots, sudden-death overtime) | Online duel |
+| Apex GP | Racing (pseudo-3D Grand Prix: 8 circuits, slipstream, tyre wear, pit stops, championship) | Online duel |
+| Grand Slam | Sports (arcade baseball: pitch selection, timed swings, fielding plays) | Online duel |
 | Light Trail | Arcade (trail duel, shrinking arena) | Live 1v1, two on one keyboard |
 | Quick Draw | Arcade (reaction standoff, outlaw ladder) | Live 1v1, two on one keyboard |
 | Pocket Racer | Racing | Its own mini-site: six-cup career with stars, 38 tracks, garage of 17 unlockable cars, time trials with per-track world leaderboards, track builder, synthesized engine sound and music, follow camera on phones, live 1v1 races, world-record ghost |

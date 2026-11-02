@@ -23,6 +23,13 @@
   const $ = id => document.getElementById(id);
   const esc = s => Online.escape(s);
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const fx = Sports.particles();
+  const shake = Sports.shaker();
+  const crowd = Sports.makeCrowd(W, 150, { seed: 4, size: 7, colors: ['#ffc53d', '#ffc53d', '#4f8cff', '#4f8cff', '#e6e9ef', '#2b3247', '#ff5d5d'] });
+  // Test hook: #autopilot lets a bot play for you too and posts no score.
+  const AUTOPILOT = location.hash === '#autopilot';
+  const FIRE_AT = 3;                       // baskets in a row to catch fire
+  let excite = 0, trail = [], swish = [0, 0];
 
   let state = 'menu', mode = 'bot', level = Arcade.load('hoop:level', 1), me = 0;
   let g = null, net = null, snaps = [];
@@ -36,6 +43,7 @@
       ball: { x: 0, y: 0, vx: 0, vy: 0, owner: null, shooter: -1, three: false, block: -1, blockT: 0, dribble: 0, scored: false, perfect: false },
       input: [blank(), blank()],
       possession: Math.random() < 0.5 ? 0 : 1,
+      streak: [0, 0], fire: [false, false],
     };
     resetPossession(g.possession);
   }
@@ -53,7 +61,7 @@
 
   const hoopOf = p => HOOPS[p.i];
   const grounded = p => p.y >= FLOOR - 0.5;
-  const isHuman = p => mode !== 'bot' || p.i === 0;
+  const isHuman = p => mode !== 'bot' || (p.i === 0 && !AUTOPILOT);
 
   function placeBall() {
     const b = g.ball, p = g.players[b.owner];
@@ -78,7 +86,8 @@
     const T = 0.62 + Math.abs(dx) / 1100;
     let vx = dx / T, vy = (dy - 0.5 * G * T * T) / T;
     const err = quality.err;
-    const perfect = Math.abs(err) < 0.04;
+    // On fire, the gold zone is more than twice as forgiving.
+    const perfect = Math.abs(err) < (g.fire[p.i] ? 0.1 : 0.04);
     const k = perfect ? 1 : 1 + err * 0.16 + Arcade.rand(-0.015, 0.015);
     vx *= k;
     vy *= perfect ? 1 : 1 + err * 0.05;
@@ -87,6 +96,7 @@
     p.charging = false;
     p.shotT = 0.4;
     g.events.push(perfect ? 'perfect' : 'shot');
+    g.events.push('q' + p.i + (perfect ? 'perfect' : err < -0.12 ? 'early' : err > 0.12 ? 'late' : 'good'));
   }
 
   function dunk(p) {
@@ -245,7 +255,8 @@
       b.vy = -Math.abs(b.vy) * 0.62;
       b.vx *= 0.85;
       if (Math.abs(b.vy) > 60) g.events.push('bounce');
-      // A missed shot hitting the floor is a live rebound.
+      // A missed shot hitting the floor is a live rebound, and cools the shooter off.
+      if (b.shooter >= 0 && !b.scored) cool(b.shooter);
       b.shooter = -1;
     }
     if (b.x < BALL_R || b.x > W - BALL_R) {
@@ -270,6 +281,11 @@
     }
   }
 
+  function cool(i) {
+    g.streak[i] = 0;
+    if (g.fire[i]) { g.fire[i] = false; g.events.push('cold' + i); }
+  }
+
   function bounceOff(b, cx, cy, r, rest) {
     const dx = b.x - cx, dy = b.y - cy, d = Math.hypot(dx, dy), min = BALL_R + r;
     if (d >= min || d === 0) return;
@@ -292,8 +308,15 @@
     g.possession = 1 - h;
     g.pause = 1.2;
     g.banner = { text: b.perfect && pts === 3 ? 'PERFECT 3!' : b.perfect ? 'SWISH!' : pts === 3 ? '3 POINTS' : '2 POINTS', team: h, t: 1.2 };
-    g.events.push('score' + h);
+    g.events.push('score' + h + (pts === 3 ? 'three' : g.players[h].dunk > 0 ? 'dunk' : ''));
     b.vx *= 0.2;
+    cool(1 - h);
+    if (++g.streak[h] >= FIRE_AT && !g.fire[h]) {
+      g.fire[h] = true;
+      g.events.push('fire' + h);
+      g.banner = { text: 'ON FIRE!', team: h, t: 1.2 };
+      if (isHuman(g.players[h]) && mode === 'bot') Arcade.flag('hoop-duel-fire');
+    }
     if (isHuman(g.players[h]) && mode === 'bot' && pts === 3) Arcade.flag('hoop-duel-three');
     if (g.score[h] >= WIN_AT) {
       g.over = true;
@@ -362,6 +385,7 @@
 
   function endGame() {
     state = 'over';
+    Sports.stopCrowd();
     const mine = g.score[me], theirs = g.score[1 - me];
     if (mode === 'bot') {
       const L_ = LEVELS[level];
@@ -369,7 +393,7 @@
       if (won) Arcade.flag('hoop-duel-win');
       if (won && level === 2) Arcade.flag('hoop-duel-hard');
       Arcade.finish(ui, {
-        score: Math.round((mine * 15 + (won ? 300 : mine === theirs ? 100 : 0)) * L_.mult),
+        score: AUTOPILOT ? 0 : Math.round((mine * 15 + (won ? 300 : mine === theirs ? 100 : 0)) * L_.mult),
         title: won ? 'You win!' : mine === theirs ? "It's a tie" : 'You lost',
         lines: [`${mine} – ${theirs} · ${L_.name} bot`],
         button: 'Menu',
@@ -388,7 +412,10 @@
     newGame();
     state = 'playing';
     ui.hide();
-    Arcade.tone({ freq: 660, to: 990, dur: 0.25, type: 'triangle', vol: 0.05 });
+    fx.clear();
+    trail = [];
+    Sports.startCrowd();
+    Sports.sfx.whistle();
   }
 
   function startBot(lv) {
@@ -454,6 +481,7 @@
       bn: g.banner ? [g.banner.text, g.banner.team ?? -1] : null,
       p: g.players.map(p => [Math.round(p.x), Math.round(p.y), p.face, Math.round(p.charge * 100) / 100, p.charging ? 1 : 0, p.dunk > 0 ? 1 : 0, p.shotT > 0 ? 1 : 0, p.stealT > 0.3 ? 1 : 0]),
       b: [Math.round(g.ball.x), Math.round(g.ball.y), g.ball.owner ?? -1],
+      f: g.fire.map(Number),
       e: net.events.splice(0),
       over: state === 'over' ? 1 : 0,
     };
@@ -466,6 +494,7 @@
     g.pause = s.pz;
     g.banner = s.bn ? { text: s.bn[0], team: s.bn[1] < 0 ? undefined : s.bn[1] } : null;
     s.p.forEach(([, , face, charge, charging, dunked, shot, swipe], i) => Object.assign(g.players[i], { face, charge, charging: !!charging, dunk: dunked ? 0.1 : 0, shotT: shot ? 0.1 : 0, stealT: swipe ? 0.4 : 0 }));
+    if (s.f) g.fire = s.f.map(Boolean);
     sounds(s.e);
     if (s.over && state === 'playing') {
       state = 'over';
@@ -652,20 +681,42 @@
 
   // ---------- Sound ----------
 
+  // Sounds and effects for what just happened. The guest gets the same events from the host.
   function sounds(events) {
+    const S = Sports.sfx, b = g.ball;
     for (const e of events) {
-      if (e === 'bounce') Arcade.tone({ freq: 110, to: 70, dur: 0.06, type: 'square', vol: 0.03 });
-      else if (e === 'rim') Arcade.tone({ freq: 700, to: 500, dur: 0.08, type: 'triangle', vol: 0.04 });
-      else if (e === 'board') Arcade.tone({ freq: 180, dur: 0.06, type: 'square', vol: 0.04 });
-      else if (e === 'shot' || e === 'perfect') Arcade.tone({ freq: e === 'perfect' ? 880 : 440, dur: 0.06, vol: 0.03 });
-      else if (e === 'dunk') Arcade.tone({ freq: 160, to: 60, dur: 0.25, type: 'sawtooth', vol: 0.06 });
-      else if (e === 'block' || e === 'steal') Arcade.tone({ freq: 240, to: 120, dur: 0.12, type: 'sawtooth', vol: 0.05 });
-      else if (e === 'swipe') Arcade.tone({ freq: 500, to: 300, dur: 0.04, vol: 0.02 });
-      else if (e === 'jump') Arcade.tone({ freq: 300, to: 420, dur: 0.06, type: 'triangle', vol: 0.02 });
-      else if (e.startsWith('score')) {
-        const good = +e.slice(5) === me;
-        Arcade.tone(good ? { freq: 523, to: 1046, dur: 0.35, type: 'triangle', vol: 0.06 } : { freq: 330, to: 200, dur: 0.3, type: 'sawtooth', vol: 0.04 });
-      } else if (e === 'buzz') Arcade.tone({ freq: 140, dur: 0.8, type: 'sawtooth', vol: 0.06 });
+      if (e === 'bounce') S.bounce();
+      else if (e === 'rim') { S.clank(); fx.sparks(b.x, b.y, 6, '#ff9a5a', 90); }
+      else if (e === 'board') S.thud(0.5);
+      else if (e === 'shot' || e === 'perfect') Sports.noise(0.1, { vol: 0.04, from: 1500, to: 600, type: 'bandpass' });
+      else if (e === 'dunk') { S.thud(1.4); S.clank(); shake.kick(9); excite = 1; S.cheer(1.2); }
+      else if (e === 'block') { S.thud(1); fx.text(b.x, b.y - 24, 'BLOCKED!', '#ff7a7a', 26); S.cheer(0.6); shake.kick(4); }
+      else if (e === 'steal') { S.pop(); fx.text(b.x, b.y - 24, 'STOLEN!', '#5ec8d8', 24); S.cheer(0.4); }
+      else if (e === 'swipe') Sports.noise(0.06, { vol: 0.03, from: 2500, to: 1200, type: 'bandpass' });
+      else if (e === 'jump') Sports.tone(300, { to: 420, dur: 0.06, type: 'triangle', vol: 0.02 });
+      else if (e[0] === 'q') {
+        // Shot timing label over the shooter's head.
+        const p = g.players[+e[1]], kind = e.slice(2);
+        const [txt, col] = { perfect: ['PERFECT', '#ffc53d'], early: ['EARLY', '#7ab8ff'], late: ['LATE', '#ff7a7a'], good: ['GOOD', '#e6e9ef'] }[kind];
+        fx.text(p.x, p.y - 140, txt, col, kind === 'perfect' ? 24 : 18);
+      } else if (e.startsWith('score')) {
+        const h = +e[5], big = e.endsWith('three') || e.endsWith('dunk');
+        S.swish();
+        swish[h] = 1;
+        excite = big ? 1 : 0.6;
+        S.cheer(big ? 1.3 : 0.7);
+        if (h !== me && mode !== 'bot') S.groan();
+        if (big) {
+          fx.confetti(HOOPS[h], RIM_Y - 20, 90, [COLORS[h][0], '#ffffff', '#ff5d5d', '#3ddc84']);
+          shake.kick(4);
+        }
+      } else if (e.startsWith('fire')) {
+        const h = +e[4];
+        S.horn();
+        for (let i = 0; i < 4; i++) setTimeout(() => fx.firework(Arcade.rand(160, W - 160), Arcade.rand(70, 170), Arcade.pick(['#ff8a3d', '#ffc53d', '#ff5d5d'])), i * 200);
+        fx.text(g.players[h].x, g.players[h].y - 150, 'ON FIRE', '#ff8a3d', 28);
+      } else if (e.startsWith('cold')) fx.text(g.players[+e[4]].x, g.players[+e[4]].y - 150, 'cooled off', '#7ab8ff', 16);
+      else if (e === 'buzz') S.buzzer();
     }
   }
 
@@ -678,25 +729,73 @@
     sky.addColorStop(1, '#232a3d');
     c.fillStyle = sky;
     c.fillRect(0, 0, W, FLOOR);
-    // Crowd in the stands.
-    for (let row = 0; row < 5; row++) {
-      for (let i = 0; i < 40; i++) {
-        const x = i * 25 + (row % 2) * 12, y = 60 + row * 34;
-        c.fillStyle = ['#2b3247', '#333b52', '#3a2f4a', '#2f3e4a'][(i + row) % 4];
-        c.beginPath(); c.arc(x, y, 9, 0, Math.PI * 2); c.fill();
-        c.fillRect(x - 11, y + 8, 22, 18);
-      }
+    // Roof truss and spotlights above the stands (the crowd itself is drawn live).
+    c.fillStyle = '#0c0f18';
+    c.fillRect(0, 0, W, 44);
+    c.strokeStyle = '#262c3d';
+    c.lineWidth = 2;
+    for (let x = 0; x < W; x += 40) { c.beginPath(); c.moveTo(x, 6); c.lineTo(x + 20, 38); c.lineTo(x + 40, 6); c.stroke(); }
+    c.strokeRect(-2, 6, W + 4, 32);
+    for (const x of [120, 330, 630, 840]) {
+      const glow = c.createRadialGradient(x, 30, 2, x, 30, 60);
+      glow.addColorStop(0, 'rgba(255,250,230,0.9)');
+      glow.addColorStop(1, 'rgba(255,250,230,0)');
+      c.fillStyle = glow;
+      c.fillRect(x - 60, 0, 120, 90);
     }
-    c.fillStyle = '#1a1f2c';
-    c.fillRect(0, 230, W, 20);
+    // LED ad boards at courtside.
+    c.fillStyle = '#0d1018';
+    c.fillRect(0, 190, W, 30);
+    const ads = [['PIXEL PIONEERS', '#ffc53d'], ['HOOP DUEL', '#ff7a5a'], ['ICE CLASH', '#5ec8d8'], ['APEX GP', '#3ddc84'], ['GRAND SLAM', '#c77dff']];
+    c.font = '900 15px system-ui, sans-serif';
+    c.textAlign = 'center';
+    ads.forEach(([t, col], i) => {
+      const x = 96 + i * 192;
+      c.fillStyle = 'rgba(255,255,255,0.04)';
+      c.fillRect(x - 90, 193, 180, 24);
+      c.fillStyle = col;
+      c.fillText(t, x, 211);
+    });
+    c.fillStyle = 'rgba(255,255,255,0.12)';
+    c.fillRect(0, 190, W, 2);
     const wood = c.createLinearGradient(0, FLOOR, 0, H);
     wood.addColorStop(0, '#c98e52');
     wood.addColorStop(1, '#a5703c');
     c.fillStyle = wood;
     c.fillRect(0, FLOOR - 40, W, H - FLOOR + 40);
+    // Arena wall behind the baseline, with championship banners.
+    const wall = c.createLinearGradient(0, 220, 0, FLOOR - 40);
+    wall.addColorStop(0, '#151a28');
+    wall.addColorStop(1, '#232a3d');
+    c.fillStyle = wall;
+    c.fillRect(0, 220, W, FLOOR - 260);
+    [[250, '#ffc53d', '7'], [370, '#4f8cff', '23'], [590, '#ff7a5a', '11'], [710, '#3ddc84', '32']].forEach(([x, col, n]) => {
+      c.fillStyle = col;
+      c.beginPath(); c.moveTo(x - 22, 228); c.lineTo(x + 22, 228); c.lineTo(x + 22, 300); c.lineTo(x, 288); c.lineTo(x - 22, 300); c.fill();
+      c.fillStyle = 'rgba(0,0,0,0.6)';
+      c.font = '900 20px system-ui, sans-serif';
+      c.textAlign = 'center';
+      c.fillText(n, x, 266);
+    });
+    c.fillStyle = 'rgba(255,255,255,0.05)';
+    c.fillRect(0, FLOOR - 70, W, 30);
     c.strokeStyle = 'rgba(0,0,0,0.12)';
     c.lineWidth = 1;
     for (let x = 0; x < W; x += 38) { c.beginPath(); c.moveTo(x, FLOOR - 40); c.lineTo(x - 30, H); c.stroke(); }
+    // Varnish: a soft band of light across the boards.
+    const gloss = c.createLinearGradient(0, FLOOR - 40, 0, H);
+    gloss.addColorStop(0, 'rgba(255,255,255,0.18)');
+    gloss.addColorStop(0.35, 'rgba(255,255,255,0.04)');
+    gloss.addColorStop(1, 'rgba(0,0,0,0.12)');
+    c.fillStyle = gloss;
+    c.fillRect(0, FLOOR - 40, W, H - FLOOR + 40);
+    // Centre court logo.
+    c.fillStyle = 'rgba(255,197,61,0.25)';
+    c.beginPath(); c.ellipse(W / 2, FLOOR + 10, 70, 22, 0, 0, Math.PI * 2); c.fill();
+    c.fillStyle = 'rgba(28,21,0,0.55)';
+    c.font = '900 italic 22px system-ui, sans-serif';
+    c.textAlign = 'center';
+    c.fillText('PP', W / 2, FLOOR + 18);
     c.strokeStyle = 'rgba(255,255,255,0.8)';
     c.lineWidth = 3;
     c.beginPath(); c.moveTo(W / 2, FLOOR - 40); c.lineTo(W / 2, H); c.stroke();
@@ -730,64 +829,96 @@
     const hx = HOOPS[h];
     ctx.strokeStyle = 'rgba(255,255,255,0.75)';
     ctx.lineWidth = 1.5;
-    const sway = g.ball.scored && Math.abs(g.ball.x - hx) < 40 && g.pause > 0.8 ? Math.sin(performance.now() / 40) * 3 : 0;
+    // After a basket the net whips down and ripples back.
+    const k = swish[h], tt = performance.now() / 45;
+    const stretch = 40 + k * 14, sway = k * Math.sin(tt) * 4;
     for (let i = 0; i <= 6; i++) {
       const x0 = hx - RIM_R + (i * RIM_R * 2) / 6;
-      const x1 = hx - RIM_R * 0.55 + (i * RIM_R * 1.1) / 6 + sway;
-      ctx.beginPath(); ctx.moveTo(x0, RIM_Y); ctx.lineTo(x1, RIM_Y + 40); ctx.stroke();
+      const x1 = hx - RIM_R * (0.55 - k * 0.2) + (i * RIM_R * (1.1 - k * 0.4)) / 6 + sway;
+      ctx.beginPath(); ctx.moveTo(x0, RIM_Y); ctx.quadraticCurveTo((x0 + x1) / 2 + sway * 0.5, RIM_Y + stretch * 0.5, x1, RIM_Y + stretch); ctx.stroke();
     }
-    ctx.beginPath(); ctx.moveTo(hx - RIM_R * 0.8, RIM_Y + 14); ctx.lineTo(hx + RIM_R * 0.8, RIM_Y + 14); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(hx - RIM_R * 0.65, RIM_Y + 28); ctx.lineTo(hx + RIM_R * 0.65, RIM_Y + 28); ctx.stroke();
+    for (const f of [0.35, 0.7]) {
+      const w = RIM_R * (0.85 - f * 0.3 - k * 0.15);
+      ctx.beginPath(); ctx.moveTo(hx - w + sway * f, RIM_Y + stretch * f); ctx.lineTo(hx + w + sway * f, RIM_Y + stretch * f); ctx.stroke();
+    }
     ctx.strokeStyle = '#ff6a2b';
     ctx.lineWidth = 4;
     ctx.beginPath(); ctx.ellipse(hx, RIM_Y, RIM_R, 5, 0, 0, Math.PI * 2); ctx.stroke();
   }
 
-  function drawPlayer(p) {
+  function drawPlayer(p, mirror = false) {
     const [shirt, dark] = COLORS[p.i];
     const x = p.x, y = p.y;
     const air = !grounded(p);
-    ctx.fillStyle = 'rgba(0,0,0,0.3)';
-    ctx.beginPath(); ctx.ellipse(x, FLOOR + 4, 22 - (FLOOR - y) * 0.05, 6, 0, 0, Math.PI * 2); ctx.fill();
     const t = performance.now() / 120;
     const run = grounded(p) && Math.abs(g.input[p.i].mx || 0) > 0 && state === 'playing' ? Math.sin(t) * 8 : 0;
-    // Legs.
-    ctx.strokeStyle = '#5a3a2a';
-    ctx.lineWidth = 7;
+    const skin = p.i === 0 ? '#8a5a3c' : '#c99068';
+    const skinDark = p.i === 0 ? '#6a4028' : '#a87050';
+    // On fire: flames lick up around the player.
+    if (!mirror && g.fire[p.i] && Math.random() < 0.6) fx.dust(x + Arcade.rand(-14, 14), y - Arcade.rand(20, 90), 1, Arcade.pick(['rgba(255,138,61,0.7)', 'rgba(255,197,61,0.7)', 'rgba(255,93,93,0.6)']), 30);
+    // Legs with socks and sneakers.
     ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(x - 6, y - 34); ctx.lineTo(x - 7 + run, y - (air ? 8 : 2)); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x + 6, y - 34); ctx.lineTo(x + 7 - run, y - (air ? 8 : 2)); ctx.stroke();
-    ctx.fillStyle = '#eceef2';
-    ctx.fillRect(x - 12 + run, y - 4, 10, 5);
-    ctx.fillRect(x + 2 - run, y - 4, 10, 5);
-    // Shorts and jersey.
+    for (const [sd, off] of [[-1, run], [1, -run]]) {
+      const fx0 = x + sd * 7 + off, fy = y - (air ? 8 : 3);
+      ctx.strokeStyle = skinDark;
+      ctx.lineWidth = 7;
+      ctx.beginPath(); ctx.moveTo(x + sd * 6, y - 34); ctx.lineTo(fx0, fy - 6); ctx.stroke();
+      ctx.strokeStyle = '#f4f4f4';
+      ctx.lineWidth = 7.5;
+      ctx.beginPath(); ctx.moveTo(fx0 - (fx0 - x - sd * 6) * 0.2, fy - 12); ctx.lineTo(fx0, fy - 3); ctx.stroke();
+      ctx.fillStyle = shirt;
+      ctx.beginPath(); ctx.roundRect(fx0 - 6 + p.face * 2, fy - 3, 13, 6, 3); ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(fx0 - 6 + p.face * 2, fy + 1, 13, 2);
+    }
+    // Shorts with a side stripe.
     ctx.fillStyle = dark;
-    ctx.fillRect(x - 13, y - 44, 26, 14);
+    ctx.beginPath(); ctx.roundRect(x - 14, y - 46, 28, 17, 3); ctx.fill();
     ctx.fillStyle = shirt;
+    ctx.fillRect(x - 14, y - 46, 3, 17);
+    ctx.fillRect(x + 11, y - 46, 3, 17);
+    // Jersey, shaded on the side away from the lights.
+    const jg = ctx.createLinearGradient(x - 14, 0, x + 14, 0);
+    jg.addColorStop(0, shirt);
+    jg.addColorStop(1, shade(shirt, -0.25));
+    ctx.fillStyle = jg;
     ctx.beginPath(); ctx.roundRect(x - 14, y - 82, 28, 40, 6); ctx.fill();
+    ctx.strokeStyle = dark;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x - 6, y - 82); ctx.lineTo(x, y - 75); ctx.lineTo(x + 6, y - 82); ctx.stroke();
     ctx.fillStyle = dark;
-    ctx.font = '800 15px system-ui, sans-serif';
+    ctx.font = '900 15px system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(p.i === 0 ? '7' : '23', x, y - 56);
     // Arms: up when shooting, blocking or dunking; out front when swiping.
-    ctx.strokeStyle = '#7a4e36';
-    ctx.lineWidth = 6;
     const up = p.charging || p.shotT > 0 || p.dunk > 0 || (air && g.ball.owner !== p.i);
     const reach = p.stealT > 0.3;
     for (const sd of [-1, 1]) {
-      ctx.beginPath();
-      ctx.moveTo(x + sd * 12, y - 76);
-      if (up) ctx.lineTo(x + sd * 6 + p.face * 6, y - 112);
-      else if (reach) ctx.lineTo(x + p.face * 34, y - 64);
-      else ctx.lineTo(x + sd * 16, y - 50);
-      ctx.stroke();
+      let hx2, hy2;
+      if (up) { hx2 = x + sd * 6 + p.face * 6; hy2 = y - 114; }
+      else if (reach) { hx2 = x + p.face * 36; hy2 = y - 64; }
+      else { hx2 = x + sd * 16; hy2 = y - 50; }
+      ctx.strokeStyle = shirt;
+      ctx.lineWidth = 8;
+      ctx.beginPath(); ctx.moveTo(x + sd * 11, y - 78); ctx.lineTo(x + sd * 12 + (hx2 - x - sd * 12) * 0.15, y - 78 + (hy2 - y + 78) * 0.15); ctx.stroke();
+      ctx.strokeStyle = skin;
+      ctx.lineWidth = 6;
+      ctx.beginPath(); ctx.moveTo(x + sd * 12, y - 76); ctx.lineTo(hx2, hy2); ctx.stroke();
+      ctx.fillStyle = skin;
+      ctx.beginPath(); ctx.arc(hx2, hy2, 4, 0, Math.PI * 2); ctx.fill();
     }
-    // Head.
-    ctx.fillStyle = '#7a4e36';
+    // Head: ear, eye, hair and a headband in the team colour.
+    ctx.fillStyle = skin;
     ctx.beginPath(); ctx.arc(x, y - 94, 11, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = dark;
+    ctx.fillStyle = skinDark;
+    ctx.beginPath(); ctx.arc(x - p.face * 3, y - 93, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#1a1a1a';
+    ctx.beginPath(); ctx.arc(x + p.face * 6, y - 96, 1.6, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y - 97, 11, Math.PI * 1.05, Math.PI * 1.95); ctx.fill();
+    ctx.fillStyle = g.fire[p.i] ? '#ff8a3d' : shirt;
     ctx.fillRect(x - 11, y - 101, 22, 4);
-    if (p.i === me) {
+    if (mirror) return;
+    if (p.i === me && !AUTOPILOT) {
       ctx.fillStyle = '#fff';
       ctx.beginPath(); ctx.moveTo(x - 6, y - 128); ctx.lineTo(x + 6, y - 128); ctx.lineTo(x, y - 120); ctx.fill();
     }
@@ -805,8 +936,20 @@
     }
   }
 
+  function shade(hex, k) {
+    const n = parseInt(hex.slice(1), 16), f = c => Math.round(clamp(k < 0 ? c * (1 + k) : c + (255 - c) * k, 0, 255));
+    return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`;
+  }
+
   function drawBall() {
     const b = g.ball;
+    // A comet tail while it's in the air; flames when the shooter is on fire.
+    const hot = b.owner === null && b.shooter >= 0 && g.fire[b.shooter];
+    trail.forEach((q, i) => {
+      const k = i / trail.length;
+      ctx.fillStyle = hot ? `rgba(255,${120 + k * 100 | 0},40,${k * 0.6})` : `rgba(255,255,255,${k * 0.22})`;
+      ctx.beginPath(); ctx.arc(q.x, q.y, BALL_R * (0.3 + k * 0.6) * (hot ? 1.3 : 1), 0, Math.PI * 2); ctx.fill();
+    });
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
     ctx.beginPath(); ctx.ellipse(b.x, FLOOR + 4, BALL_R * (0.5 + 0.5 * (b.y / FLOOR)), 4, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#e8762b';
@@ -816,24 +959,71 @@
     ctx.beginPath(); ctx.moveTo(b.x - BALL_R, b.y); ctx.lineTo(b.x + BALL_R, b.y); ctx.stroke();
     ctx.beginPath(); ctx.arc(b.x, b.y, BALL_R, -0.9, 0.9); ctx.stroke();
     ctx.beginPath(); ctx.arc(b.x, b.y, BALL_R, Math.PI - 0.9, Math.PI + 0.9); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.beginPath(); ctx.arc(b.x - 4, b.y - 4, 3.5, 0, Math.PI * 2); ctx.fill();
   }
 
-  function draw() {
-    ctx.drawImage(court.canvas, 0, 0, W, H);
-    // Scoreboard.
-    ctx.fillStyle = 'rgba(10,12,16,0.85)';
-    ctx.beginPath(); ctx.roundRect(W / 2 - 120, 12, 240, 50, 10); ctx.fill();
-    ctx.font = '800 28px system-ui, sans-serif';
+  // The jumbotron hanging over centre court.
+  function drawJumbotron() {
+    const x = W / 2, y = 8, w = 280, h = 70;
+    ctx.strokeStyle = '#3a4050';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x - 100, 0); ctx.lineTo(x - 100, y); ctx.moveTo(x + 100, 0); ctx.lineTo(x + 100, y); ctx.stroke();
+    ctx.fillStyle = '#1b2030';
+    ctx.beginPath(); ctx.roundRect(x - w / 2 - 6, y, w + 12, h + 10, 8); ctx.fill();
+    ctx.fillStyle = '#05070c';
+    ctx.fillRect(x - w / 2, y + 5, w, h);
     ctx.textAlign = 'center';
-    ctx.fillStyle = COLORS[0][0];
-    ctx.fillText(g.score[0], W / 2 - 80, 48);
-    ctx.fillStyle = COLORS[1][0];
-    ctx.fillText(g.score[1], W / 2 + 80, 48);
+    for (const i of [0, 1]) {
+      const cx = x + (i ? 92 : -92);
+      ctx.fillStyle = g.fire[i] ? '#ff8a3d' : COLORS[i][0];
+      ctx.font = '800 11px system-ui, sans-serif';
+      ctx.fillText(g.fire[i] ? 'ON FIRE' : i === 0 ? 'HOME' : 'AWAY', cx, y + 22);
+      ctx.fillStyle = COLORS[i][0];
+      ctx.font = '900 32px ui-monospace, monospace';
+      ctx.shadowColor = COLORS[i][0];
+      ctx.shadowBlur = 10;
+      ctx.fillText(String(g.score[i]).padStart(2, '0'), cx, y + 58);
+      ctx.shadowBlur = 0;
+    }
     const t = Math.max(0, Math.ceil(g.time));
-    ctx.fillStyle = '#ff7a5a';
-    ctx.font = '700 22px ui-monospace, monospace';
-    ctx.fillText(`${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`, W / 2, 46);
+    ctx.fillStyle = t <= 10 && state === 'playing' ? '#ff5d5d' : '#ff9a5a';
+    ctx.font = '700 24px ui-monospace, monospace';
+    ctx.shadowColor = ctx.fillStyle;
+    ctx.shadowBlur = 8;
+    ctx.fillText(`${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`, x, y + 46);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#5a6278';
+    ctx.font = '700 10px system-ui, sans-serif';
+    ctx.fillText(`FIRST TO ${WIN_AT}`, x, y + 66);
+    // Scanlines.
+    ctx.fillStyle = 'rgba(255,255,255,0.03)';
+    for (let yy = y + 5; yy < y + 5 + h; yy += 3) ctx.fillRect(x - w / 2, yy, w, 1);
+  }
 
+  function draw(dt = 0) {
+    excite = Math.max(0, excite - dt * 0.35);
+    swish = swish.map(v => Math.max(0, v - dt * 1.4));
+    const b0 = g.ball;
+    if (b0.owner === null && dt > 0) { trail.push({ x: b0.x, y: b0.y }); if (trail.length > 10) trail.shift(); }
+    else if (b0.owner !== null) trail = [];
+    shake.apply(ctx, dt);
+    ctx.drawImage(court.canvas, 0, 0, W, H);
+    crowd.draw(ctx, 0, 42, state === 'playing' ? excite : 0, performance.now() / 1000);
+    drawJumbotron();
+
+    // Reflections in the varnished floor.
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, FLOOR, W, H - FLOOR); ctx.clip();
+    ctx.globalAlpha = 0.13;
+    ctx.translate(0, FLOOR * 2 + 6);
+    ctx.scale(1, -1);
+    for (const p of g.players) drawPlayer(p, true);
+    ctx.restore();
+    for (const p of g.players) {
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.beginPath(); ctx.ellipse(p.x, FLOOR + 4, 22 - (FLOOR - p.y) * 0.05, 6, 0, 0, Math.PI * 2); ctx.fill();
+    }
     for (const p of g.players) drawPlayer(p);
     const b = g.ball;
     // The ball goes behind the net when it's dropping through.
@@ -843,12 +1033,25 @@
     drawHoopFront(1);
     if (!behind) drawBall();
 
+    fx.update(dt);
+    fx.draw(ctx);
+    ctx.restore();
+    Sports.lighting(ctx, W, H, 0.22);
+
     if (g.banner) {
-      ctx.font = '800 54px system-ui, sans-serif';
+      ctx.font = '900 italic 54px system-ui, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillStyle = 'rgba(10,12,16,0.6)';
+      const band = ctx.createLinearGradient(0, 0, W, 0);
+      band.addColorStop(0, 'rgba(10,12,16,0)');
+      band.addColorStop(0.2, 'rgba(10,12,16,0.75)');
+      band.addColorStop(0.8, 'rgba(10,12,16,0.75)');
+      band.addColorStop(1, 'rgba(10,12,16,0)');
+      ctx.fillStyle = band;
       ctx.fillRect(0, 140, W, 80);
-      ctx.fillStyle = g.banner.team !== undefined ? COLORS[g.banner.team][0] : '#fff';
+      ctx.fillStyle = g.banner.text.includes('FIRE') ? '#ff8a3d' : g.banner.team !== undefined ? COLORS[g.banner.team][0] : '#fff';
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+      ctx.strokeText(g.banner.text, W / 2, 198);
       ctx.fillText(g.banner.text, W / 2, 198);
     }
     if (net && state === 'playing') {
@@ -877,7 +1080,7 @@
         guestPositions();
       } else {
         Object.assign(g.input[0], local);
-        acc += dt;
+        acc += AUTOPILOT ? dt * 2 : dt;
         while (acc >= STEP) {
           step(STEP);
           acc -= STEP;
@@ -895,7 +1098,7 @@
         }
       }
     }
-    draw();
+    draw(state === 'paused' ? 0 : dt);
     if (g) updateHud();
     requestAnimationFrame(frame);
   }

@@ -48,6 +48,14 @@
   const ctx = Arcade.setupCanvas(canvas, W, H);
   const ui = Arcade.overlay(document.getElementById('overlay'));
   const $ = id => document.getElementById(id);
+  const fx = Sports.particles();
+  const shake = Sports.shaker();
+  // Test hook: #autopilot calls plays and throws for you, and posts no score.
+  const AUTOPILOT = location.hash === '#autopilot';
+  const shade = (hex, k) => {
+    const n = parseInt(hex.slice(1), 16), f = c => Math.round(clamp(k < 0 ? c * (1 + k) : c + (255 - c) * k, 0, 255));
+    return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`;
+  };
   const esc = s => String(s).replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -81,6 +89,7 @@
   let burst = 0, burstCool = 0, kickMeter = null;
   const held = { up: false, down: false, left: false, right: false };
   let steer = null; // world point the runner heads for while a finger or mouse is down
+  let trail = [], celebrate = 0, autoT = 0;
 
   const ord = n => ['1st', '2nd', '3rd', '4th'][n - 1] || `${n}th`;
   const downText = () => `${ord(down)} & ${toGo >= 100 ? 'Goal' : Math.max(1, Math.round(toGo - los))}`;
@@ -89,6 +98,9 @@
 
   function newGame() {
     team = teamSheet();
+    fx.clear();
+    Sports.startCrowd();
+    Sports.sfx.whistle(true);
     us = them = 0;
     quarter = 1;
     clock = QUARTER;
@@ -145,8 +157,11 @@
     play = null;
     burst = burstCool = 0;
     steer = null;
+    trail = [];
+    celebrate = 0;
+    autoT = 0;
     lineUp();
-    cards = PLAYS.map((p, i) => ({ label: p.name, sub: p.sub, key: String(i + 1), act: () => snap(p) }));
+    cards = PLAYS.map((p, i) => ({ label: p.name, sub: p.sub, key: String(i + 1), play: p, act: () => snap(p) }));
     if (down === 4) {
       cards.push({ label: 'Punt', sub: 'Pin them deep', key: '5', act: punt });
       const kickDist = Math.round(100 - los + 17);
@@ -168,7 +183,8 @@
     players.filter(d => d.role === 'DL').forEach(d => {
       d.shed = (1.6 + 0.45 * team.line) * Arcade.rand(0.7, 1.3) * (1.15 - 0.3 * team.rating);
     });
-    Arcade.tone({ freq: 220, dur: 0.06, vol: 0.05 });
+    Sports.sfx.clack();
+    Sports.tone(180, { to: 140, dur: 0.12, type: 'square', vol: 0.05 });
   }
 
   // ---------- Movement ----------
@@ -181,6 +197,7 @@
     p.vy += ((d ? dy / d : 0) * want - p.vy) * k;
     p.x += p.vx * dt;
     p.y += p.vy * dt;
+    p.step = (p.step || 0) + Math.hypot(p.vx, p.vy) * dt;
   }
 
   function runRoute(p, dt) {
@@ -268,10 +285,16 @@
       if (burst > 0 && !d.broke && Math.random() < 0.4) {
         d.broke = true;
         d.stun = 1;
-        Arcade.tone({ freq: 160, dur: 0.08, type: 'square', vol: 0.05 });
+        Sports.sfx.thud(0.7);
+        fx.sparks(sx(d.x), sy(d.y), 10, '#ffffff', 120);
+        fx.text(sx(carrier.x), sy(carrier.y) - 20, 'BROKEN!', '#ffc53d', 16);
         continue;
       }
       const sack = carrier.role === 'QB' && carrier.y < los && !play.run;
+      carrier.down = Math.atan2(carrier.y - d.y, carrier.x - d.x);
+      d.down = carrier.down;
+      fx.dust(sx(carrier.x), sy(carrier.y), 12, 'rgba(200,230,190,0.75)', 60);
+      shake.kick(sack ? 6 : 3);
       return endPlay({ type: sack ? 'sack' : 'tackle', y: carrier.y });
     }
     if (carrier.x < 0 || carrier.x > FW) return endPlay({ type: 'out', y: carrier.y });
@@ -357,7 +380,8 @@
     const target = elig.sort((a, b) => Math.hypot(a.x - tx, a.y - ty) - Math.hypot(b.x - tx, b.y - ty))[0];
     ball = { state: 'air', from: { x: qb.x, y: qb.y }, to: { x: tx, y: ty }, t: 0, T: d / speed + 0.2, h: d * 0.18, target, air: ty - los };
     carrier = null;
-    Arcade.tone({ freq: 500, to: 300, dur: 0.12, type: 'triangle', vol: 0.04 });
+    Sports.noise(0.22, { vol: 0.06, from: 2400, to: 700, type: 'bandpass' });
+    trail = [];
   }
 
   // Keys 1-4 throw to a receiver, leading him to where he'll be when the ball arrives.
@@ -394,9 +418,11 @@
     carrier.x = at.x;
     carrier.y = at.y;
     carrier.route = null;
-    if (ball.air >= 35) Arcade.flag('blitz-bowl-bomb');
-    ball = { state: 'held' };
-    Arcade.tone({ freq: 660, dur: 0.08, type: 'triangle', vol: 0.05 });
+    const air = ball.air;
+    if (air >= 35) Arcade.flag('blitz-bowl-bomb');
+    ball = { state: 'held', air };
+    Sports.sfx.pop();
+    if (air >= 20) Sports.sfx.cheer(0.5);
     if (carrier.y >= 100) endPlay({ type: 'td' });
   }
 
@@ -423,7 +449,11 @@
     kickMeter.done = true;
     kickMeter.good = good;
     kickMeter.needle = needle;
-    Arcade.tone(good ? { freq: 523, to: 784, dur: 0.25, type: 'triangle', vol: 0.06 } : { freq: 300, to: 150, dur: 0.3, type: 'sawtooth', vol: 0.04 });
+    Sports.sfx.kick(1.2);
+    setTimeout(() => {
+      if (good) { Sports.sfx.good(); Sports.sfx.cheer(1); for (let i = 0; i < 3; i++) fx.firework(W / 2 + (i - 1) * 110, 120 + (i % 2) * 30, ['#ffc53d', '#3ddc84', '#ffffff'][i]); }
+      else Sports.sfx.groan();
+    }, 350);
     setTimeout(() => {
       if (good) {
         us += 3;
@@ -452,15 +482,22 @@
       tackle: gain >= 0 ? `Gain of ${Math.round(gain)}` : `Loss of ${Math.round(-gain)}`,
       out: `Out of bounds. ${gain >= 0 ? 'Gain' : 'Loss'} of ${Math.abs(Math.round(gain))}`,
     };
-    say(msgs[result.type], 1.3);
+    say(msgs[result.type], result.type === 'td' ? 2.2 : 1.3);
+    Sports.sfx.whistle();
     if (result.type === 'td') {
-      Arcade.tone({ freq: 523, dur: 0.12, type: 'triangle', vol: 0.07 });
-      Arcade.tone({ freq: 659, dur: 0.12, type: 'triangle', vol: 0.07, delay: 0.12 });
-      Arcade.tone({ freq: 784, dur: 0.3, type: 'triangle', vol: 0.07, delay: 0.24 });
+      deadT = 2.2;
+      celebrate = 2.2;
+      Sports.sfx.horn();
+      Sports.sfx.cheer(1.6);
+      shake.kick(8);
+      fx.confetti(W / 2, 140, 120, [ME.color, '#ffffff', ME.dark, '#ff5d5d', '#4f8cff']);
+      for (let i = 0; i < 5; i++) setTimeout(() => fx.firework(Arcade.rand(60, W - 60), Arcade.rand(90, 260), Arcade.pick([ME.color, '#ffffff', '#ff5d5d', '#4fd1ff'])), 150 + i * 260);
     } else if (result.type === 'int' || result.type === 'sack') {
-      Arcade.tone({ freq: 260, to: 110, dur: 0.4, type: 'sawtooth', vol: 0.05 });
-    } else {
-      Arcade.tone({ freq: 180, dur: 0.08, vol: 0.04 });
+      Sports.sfx.groan();
+      if (result.type === 'int') shake.kick(4);
+    } else if (result.type === 'tackle' || result.type === 'out') {
+      Sports.sfx.thud();
+      if (result.y - los >= 10) Sports.sfx.cheer(0.6);
     }
   }
 
@@ -568,6 +605,8 @@
   function finishGame() {
     state = 'over';
     const won = us > them;
+    Sports.stopCrowd();
+    (won ? Sports.sfx.win : Sports.sfx.lose)();
     const opp = team.opp.name;
     if (won) Arcade.flag('blitz-bowl-win');
     if (won && them === 0) Arcade.flag('blitz-bowl-shutout');
@@ -580,7 +619,7 @@
       record = `Season record ${season.wins}-${season.losses} · +${won ? 3 : 1} coach points`;
     }
     Arcade.finish(ui, {
-      score: us * 100 + (won ? 1500 : 0),
+      score: AUTOPILOT ? 0 : us * 100 + (won ? 1500 : 0),
       title: won ? 'Victory!' : 'Defeat',
       lines: [`${ME.name} ${us} – ${them} ${esc(opp)}`, record].filter(Boolean),
       button: 'Continue',
@@ -592,6 +631,13 @@
 
   function update(dt) {
     if (banner && (banner.t -= dt) <= 0) banner = null;
+    celebrate = Math.max(0, celebrate - dt);
+    if (AUTOPILOT) autopilot(dt);
+    if (ball && ball.state === 'air') {
+      const k = Math.min(1, ball.t / ball.T);
+      trail.push({ x: ball.from.x + (ball.to.x - ball.from.x) * k, y: ball.from.y + (ball.to.y - ball.from.y) * k, h: Math.sin(k * Math.PI) * ball.h });
+      if (trail.length > 14) trail.shift();
+    }
     if (state === 'live') updateLive(dt);
     if (state === 'dead' && (deadT -= dt) <= 0) resolve();
     if (state === 'kick' && !kickMeter.done) kickMeter.t += dt;
@@ -603,6 +649,15 @@
       else if (carrier) focus = carrier.y + (runner() ? 8 : 9);
     }
     cam += (focus - cam) * Math.min(1, dt * 4);
+  }
+
+  function autopilot(dt) {
+    autoT += dt;
+    if (state === 'presnap' && autoT > 0.8) {
+      const c = cards.find(c => c.label === 'Field goal') || (down === 4 ? cards.find(c => c.label === 'Punt') : null) || Arcade.pick(cards.slice(0, 4));
+      c.act();
+    } else if (state === 'kick' && !kickMeter.done && Math.abs(Math.sin(kickMeter.t * kickMeter.speed)) < kickMeter.win * 0.5) kick();
+    else if (state === 'live' && canThrow() && liveT > 1.3) throwToReceiver(Arcade.randInt(0, 3));
   }
 
   function updateHud() {
@@ -643,7 +698,8 @@
     if (state !== 'live' || !runner() || burstCool > 0) return;
     burst = 0.7;
     burstCool = 4;
-    Arcade.tone({ freq: 300, to: 600, dur: 0.12, type: 'triangle', vol: 0.04 });
+    Sports.tone(300, { to: 600, dur: 0.12, type: 'triangle', vol: 0.04 });
+    fx.dust(sx(carrier.x), sy(carrier.y) + 4, 6, 'rgba(200,230,190,0.6)', 40);
   }
 
   window.addEventListener('keydown', e => {
@@ -687,124 +743,311 @@
 
   // ---------- Drawing ----------
 
+  // A tile of speckled turf, laid over the stripes so the grass doesn't look flat.
+  const turf = (() => {
+    const l = Arcade.makeLayer(64, 64), c = l.ctx, rnd = Sports.seeded(3);
+    for (let i = 0; i < 260; i++) {
+      c.fillStyle = rnd() < 0.5 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.07)';
+      c.fillRect(rnd() * 64, rnd() * 64, 1, 1 + rnd() * 2);
+    }
+    return ctx.createPattern(l.canvas, 'repeat');
+  })();
   const sx = x => X0 + x * S;
   const sy = y => EYE - (y - cam) * S;
 
   function drawField() {
-    ctx.fillStyle = '#1f4a2c';
+    // Sideline apron and the bench areas either side.
+    ctx.fillStyle = '#1d3f27';
     ctx.fillRect(0, 0, W, H);
+    for (const [x0, col] of [[0, ME.color], [X0 + FW * S + 6, team.opp.color]]) {
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.fillRect(x0, 0, X0 - 6, H);
+      // Benches scroll past with the field.
+      for (let y = 20; y <= 80; y += 15) {
+        const top = sy(y + 5), bot = sy(y - 5);
+        if (bot < 0 || top > H) continue;
+        ctx.fillStyle = shade(col, -0.45);
+        ctx.fillRect(x0 + 4, top, X0 - 14, bot - top);
+        ctx.fillStyle = col;
+        for (let k = 0; k < 5; k++) { ctx.beginPath(); ctx.arc(x0 + 4 + (X0 - 14) / 2, top + 8 + k * ((bot - top - 16) / 4), 3, 0, Math.PI * 2); ctx.fill(); }
+      }
+    }
     // Grass stripes every 5 yards, end zones at each end.
     for (let y = -10; y < 110; y += 5) {
       const top = sy(y + 5), bot = sy(y);
       if (bot < 0 || top > H) continue;
-      ctx.fillStyle = y < 0 ? '#2b3f7a' : y >= 100 ? team.opp.color : (Math.floor(y / 5) % 2 ? '#2f7a43' : '#2a6e3c');
-      ctx.globalAlpha = y >= 100 ? 0.55 : 1;
+      ctx.fillStyle = y < 0 ? '#25407e' : y >= 100 ? shade(team.opp.color, -0.35) : (Math.floor(y / 5) % 2 ? '#2f7a43' : '#2a6e3c');
       ctx.fillRect(sx(0), top, FW * S, bot - top);
-      ctx.globalAlpha = 1;
     }
-    ctx.strokeStyle = 'rgba(255,255,255,0.75)';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(sx(0), sy(110), FW * S, 120 * S);
-    ctx.font = '700 15px system-ui, sans-serif';
+    // End zone hatching.
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(sx(0), sy(0), FW * S, 10 * S);
+    ctx.rect(sx(0), sy(110), FW * S, 10 * S);
+    ctx.clip();
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 6;
+    for (let k = -100; k < W + 100; k += 22) {
+      for (const y of [sy(0), sy(100)]) { ctx.beginPath(); ctx.moveTo(k, y); ctx.lineTo(k + 80, y - 80); ctx.stroke(); }
+    }
+    ctx.restore();
+    // Turf texture, pinned to the field as it scrolls.
+    ctx.save();
+    ctx.translate(0, sy(0) % 64);
+    ctx.fillStyle = turf;
+    ctx.fillRect(sx(0), -64, FW * S, H + 128);
+    ctx.restore();
+    // Thick white boundary.
+    ctx.strokeStyle = '#f4f4f4';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(sx(0) - 2, sy(110) - 2, FW * S + 4, 120 * S + 4);
     ctx.textAlign = 'center';
     for (let y = 0; y <= 100; y += 5) {
       const py = sy(y);
-      if (py < -20 || py > H + 20) continue;
-      ctx.strokeStyle = y % 10 === 0 ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.4)';
+      if (py < -30 || py > H + 30) continue;
+      ctx.strokeStyle = y % 10 === 0 ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.45)';
+      ctx.lineWidth = y === 0 || y === 100 ? 4 : 2;
       ctx.beginPath();
       ctx.moveTo(sx(0), py);
       ctx.lineTo(sx(FW), py);
       ctx.stroke();
       if (y % 10 === 0 && y > 0 && y < 100) {
         const n = String(y <= 50 ? y : 100 - y);
-        ctx.fillStyle = 'rgba(255,255,255,0.55)';
-        ctx.fillText(n, sx(7), py - 4);
-        ctx.fillText(n, sx(FW - 7), py - 4);
+        ctx.font = '800 20px system-ui, sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.save(); ctx.translate(sx(6), py); ctx.rotate(Math.PI / 2); ctx.fillText(n, 0, 7); ctx.restore();
+        ctx.save(); ctx.translate(sx(FW - 6), py); ctx.rotate(-Math.PI / 2); ctx.fillText(n, 0, 7); ctx.restore();
       }
       // Hash marks.
-      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
       for (let k = 1; k < 5; k++) {
         const hy = sy(y + k);
         if (y + k >= 100) break;
-        ctx.fillRect(sx(FW / 2 - 9.25) - 3, hy, 6, 1);
-        ctx.fillRect(sx(FW / 2 + 9.25) - 3, hy, 6, 1);
+        ctx.fillRect(sx(FW / 2 - 9.25) - 3, hy, 6, 1.5);
+        ctx.fillRect(sx(FW / 2 + 9.25) - 3, hy, 6, 1.5);
+        ctx.fillRect(sx(0.6), hy, 5, 1.5);
+        ctx.fillRect(sx(FW - 0.6) - 5, hy, 5, 1.5);
       }
     }
-    ctx.font = '800 22px system-ui, sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
-    ctx.fillText(ME.name.toUpperCase(), W / 2, sy(-5) + 8);
-    ctx.fillText(team.opp.name.split(' ').pop().toUpperCase(), W / 2, sy(105) + 8);
-  }
-
-  function drawPlayer(p) {
-    const x = sx(p.x), y = sy(p.y);
-    if (y < -20 || y > H + 20) return;
-    const mine = p.side === 'off';
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    ctx.beginPath();
-    ctx.ellipse(x + 2, y + 3, 7, 4, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = mine ? ME.color : team.opp.color;
-    ctx.strokeStyle = mine ? ME.dark : 'rgba(0,0,0,0.6)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(x, y, 6.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    if (p.stun > 0) {
-      ctx.fillStyle = '#fff';
-      ctx.font = '700 10px system-ui, sans-serif';
-      ctx.fillText('✶', x, y - 9);
+    // Midfield logo.
+    const my = sy(50);
+    if (my > -60 && my < H + 60) {
+      ctx.fillStyle = 'rgba(255,197,61,0.22)';
+      ctx.beginPath(); ctx.arc(W / 2, my, 34, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.font = '900 22px system-ui, sans-serif';
+      ctx.fillText('PP', W / 2, my + 8);
+    }
+    // End zone names.
+    ctx.font = '900 30px system-ui, sans-serif';
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    for (const [y, text] of [[-5, ME.name.toUpperCase()], [105, team.opp.name.split(' ').pop().toUpperCase()]]) {
+      if (sy(y) < -40 || sy(y) > H + 40) continue;
+      ctx.strokeText(text, W / 2, sy(y) + 11);
+      ctx.fillText(text, W / 2, sy(y) + 11);
+    }
+    // Goalposts on the end lines, seen from above, leaning "up" the screen with their shadows.
+    for (const [y, dir] of [[110, -1], [-10, 1]]) {
+      const py = sy(y);
+      if (py < -90 || py > H + 90) continue;
+      const half = 3.1 * S, lift = 46 * -dir;
+      ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+      ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(W / 2 - half + 18, py); ctx.lineTo(W / 2 + half + 18, py); ctx.moveTo(W / 2 - half + 18, py); ctx.lineTo(W / 2 - half + 36, py - lift * 0.4); ctx.moveTo(W / 2 + half + 18, py); ctx.lineTo(W / 2 + half + 36, py - lift * 0.4); ctx.stroke();
+      ctx.strokeStyle = '#ffd93d';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(W / 2, py + 10 * dir); ctx.lineTo(W / 2, py);
+      ctx.moveTo(W / 2 - half, py); ctx.lineTo(W / 2 + half, py);
+      ctx.moveTo(W / 2 - half, py); ctx.lineTo(W / 2 - half, py - lift);
+      ctx.moveTo(W / 2 + half, py); ctx.lineTo(W / 2 + half, py - lift);
+      ctx.stroke();
     }
   }
 
-  function drawBall(x, y, h = 0) {
-    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  // Top-down footballer: helmet, shoulder pads and pumping legs, facing the way he runs.
+  function drawPlayer(p) {
+    const x = sx(p.x), y = sy(p.y);
+    if (y < -24 || y > H + 24) return;
+    const mine = p.side === 'off';
+    const col = mine ? ME.color : team.opp.color;
+    const big = (p.role === 'OL' || p.role === 'DL' ? 1.18 : 1) * 1.15;
+    const spd = Math.hypot(p.vx, p.vy);
+    const face = spd > 0.6 ? Math.atan2(-p.vy, p.vx) : mine ? -Math.PI / 2 : Math.PI / 2;
+    // Touchdown: the whole offence jumps up and down.
+    const hop = celebrate > 0 && mine ? Math.abs(Math.sin(celebrate * 9 + p.x)) * 5 : 0;
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
     ctx.beginPath();
-    ctx.ellipse(sx(x), sy(y) + 2, 4, 2.5, 0, 0, Math.PI * 2);
+    ctx.ellipse(x + 3, y + 4, 8 * big, 5 * big, 0, 0, Math.PI * 2);
     ctx.fill();
+    ctx.save();
+    ctx.translate(x, y - hop);
+    if (p.down !== undefined && state === 'dead') {
+      // Tackled: flat on the turf.
+      ctx.rotate(-p.down);
+      ctx.fillStyle = shade(col, -0.25);
+      ctx.beginPath(); ctx.ellipse(0, 0, 9 * big, 5 * big, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(7 * big, 0, 4.4, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      return;
+    }
+    ctx.rotate(face + Math.PI / 2);
+    ctx.scale(big, big);
+    // Legs stride along the facing direction.
+    const st = Math.sin((p.step || 0) * 2.4) * Math.min(1, spd / 3) * 4;
+    ctx.fillStyle = '#e8e8e8';
+    ctx.beginPath(); ctx.ellipse(-2.6, st, 1.8, 3, 0, 0, Math.PI * 2); ctx.ellipse(2.6, -st, 1.8, 3, 0, 0, Math.PI * 2); ctx.fill();
+    // Arms.
+    ctx.fillStyle = mine ? '#c98e5a' : '#8a5a3a';
+    ctx.beginPath(); ctx.arc(-7, -st * 0.6, 2, 0, Math.PI * 2); ctx.arc(7, st * 0.6, 2, 0, Math.PI * 2); ctx.fill();
+    // Shoulder pads.
+    ctx.fillStyle = col;
+    ctx.strokeStyle = shade(col, -0.5);
+    ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.ellipse(0, 0, 7, 4.2, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.beginPath(); ctx.ellipse(-2, -1.2, 3.5, 1.6, 0, 0, Math.PI * 2); ctx.fill();
+    // Helmet with a centre stripe and facemask.
+    ctx.fillStyle = mine ? '#1c1500' : shade(col, -0.55);
+    ctx.beginPath(); ctx.arc(0, -0.5, 3.9, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = col;
+    ctx.fillRect(-0.8, -4.2, 1.6, 6.5);
+    ctx.strokeStyle = '#cfd4dc';
+    ctx.lineWidth = 1.1;
+    ctx.beginPath(); ctx.arc(0, -0.5, 4.6, -Math.PI * 0.8, -Math.PI * 0.2); ctx.stroke();
+    ctx.restore();
+    if (p.stun > 0) {
+      ctx.fillStyle = '#fff';
+      ctx.font = '700 11px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('✶', x, y - 11);
+    }
+  }
+
+  // The ball: a spinning spiral that grows as it rises, casting its shadow on the turf.
+  function drawBall(x, y, h = 0, ang = -Math.PI / 2) {
+    const k = 1 + h * 0.035;
+    ctx.fillStyle = `rgba(0,0,0,${0.32 - Math.min(0.2, h * 0.012)})`;
+    ctx.beginPath();
+    ctx.ellipse(sx(x) + h * 0.4, sy(y) + 2, 4 + h * 0.05, 2.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    const bx = sx(x), by = sy(y) - h * S * 0.5;
+    ctx.save();
+    ctx.translate(bx, by);
+    ctx.rotate(ang + Math.PI / 2);
     ctx.fillStyle = '#8b4a22';
-    ctx.beginPath();
-    ctx.ellipse(sx(x), sy(y) - h * S * 0.5, 3.5 + h * 0.04, 5 + h * 0.06, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#fff';
+    ctx.strokeStyle = '#4a2410';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(sx(x), sy(y) - h * S * 0.5 - 2);
-    ctx.lineTo(sx(x), sy(y) - h * S * 0.5 + 2);
+    ctx.ellipse(0, 0, 3.4 * k, 5.4 * k, 0, 0, Math.PI * 2);
+    ctx.fill();
     ctx.stroke();
+    ctx.strokeStyle = '#ffffff';
+    ctx.beginPath(); ctx.moveTo(0, -2.2 * k); ctx.lineTo(0, 2.2 * k); ctx.stroke();
+    const sp = h > 0 ? Math.sin(performance.now() / 30) : 0;
+    for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.moveTo(-1.2 * k * (0.5 + 0.5 * Math.abs(sp)), i * 1.1 * k); ctx.lineTo(1.2 * k * (0.5 + 0.5 * Math.abs(sp)), i * 1.1 * k); ctx.stroke(); }
+    ctx.restore();
+  }
+
+  // A play card's chalkboard: receivers at the line and their routes.
+  function drawRoutes(c, x, y, w, h) {
+    ctx.fillStyle = 'rgba(255,255,255,0.06)';
+    ctx.beginPath(); ctx.roundRect(x, y, w, h, 6); ctx.fill();
+    const losY = y + h - 12;
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x + 3, losY); ctx.lineTo(x + w - 3, losY); ctx.stroke();
+    const px = fx2 => x + 4 + (fx2 / FW) * (w - 8);
+    const yk = (h - 18) / 26;
+    if (c.play) {
+      const starts = { WR1: [6, -0.8], SLOT: [38, -1.5], WR2: [47, -0.8], RB: [FW / 2, -7] };
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.arc(px(FW / 2 + i * 2.5), losY + 2, 1.6, 0, Math.PI * 2); ctx.fill(); }
+      for (const [role, [x0, y0]] of Object.entries(starts)) {
+        const r = c.play.routes[role];
+        let cx = px(x0), cy = Math.min(y + h - 3, losY - y0 * yk * 0.6);
+        ctx.strokeStyle = role === 'RB' && c.play.run ? '#ff8a8a' : ME.color;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        let lx = cx, ly = cy, ax = cx, ay = cy;
+        for (const [dx, dy] of r.p) {
+          ax = lx; ay = ly;
+          lx = px(x0 + dx);
+          ly = Math.max(y + 4, cy - dy * yk);
+          ctx.lineTo(lx, ly);
+        }
+        ctx.stroke();
+        // Arrowhead, or a bar for a route that stops.
+        const a = Math.atan2(ly - ay, lx - ax);
+        ctx.beginPath();
+        if (r.stop) { ctx.moveTo(lx + Math.cos(a + Math.PI / 2) * 3, ly + Math.sin(a + Math.PI / 2) * 3); ctx.lineTo(lx - Math.cos(a + Math.PI / 2) * 3, ly - Math.sin(a + Math.PI / 2) * 3); ctx.stroke(); }
+        else { ctx.fillStyle = ctx.strokeStyle; ctx.moveTo(lx + Math.cos(a) * 4, ly + Math.sin(a) * 4); ctx.lineTo(lx + Math.cos(a + 2.4) * 4, ly + Math.sin(a + 2.4) * 4); ctx.lineTo(lx + Math.cos(a - 2.4) * 4, ly + Math.sin(a - 2.4) * 4); ctx.fill(); }
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath(); ctx.arc(cx, cy, 2, 0, Math.PI * 2); ctx.fill();
+      }
+    } else if (c.label === 'Punt') {
+      ctx.strokeStyle = '#5ec8d8';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath(); ctx.moveTo(x + w / 2, losY + 6); ctx.quadraticCurveTo(x + w / 2 + 6, y - 6, x + w / 2 + 2, y + 8); ctx.stroke();
+    } else {
+      ctx.strokeStyle = '#ffd93d';
+      ctx.lineWidth = 2;
+      const gx = x + w / 2, gy = y + h * 0.55;
+      ctx.beginPath(); ctx.moveTo(gx, losY + 6); ctx.lineTo(gx, gy); ctx.moveTo(gx - 9, gy); ctx.lineTo(gx + 9, gy); ctx.moveTo(gx - 9, gy); ctx.lineTo(gx - 9, y + 5); ctx.moveTo(gx + 9, gy); ctx.lineTo(gx + 9, y + 5); ctx.stroke();
+    }
   }
 
   function drawCards() {
     const n = cards.length, perRow = Math.min(n, 3), rows = Math.ceil(n / perRow);
-    const cw = 136, ch = 50, gap = 10;
+    const cw = 146, ch = 62, gap = 8;
     cards.forEach((c, i) => {
       const row = Math.floor(i / perRow), col = i % perRow, inRow = Math.min(perRow, n - row * perRow);
       c.w = cw; c.h = ch;
       c.x = W / 2 - (inRow * cw + (inRow - 1) * gap) / 2 + col * (cw + gap);
-      c.y = H - 16 - (rows - row) * (ch + gap) + gap;
-      ctx.fillStyle = 'rgba(18,21,27,0.88)';
-      ctx.strokeStyle = c.label === 'Punt' || c.label === 'Field goal' ? '#5ec8d8' : ME.color;
+      c.y = H - 14 - (rows - row) * (ch + gap) + gap;
+      const special = c.label === 'Punt' || c.label === 'Field goal';
+      const g = ctx.createLinearGradient(0, c.y, 0, c.y + ch);
+      g.addColorStop(0, 'rgba(30,34,46,0.95)');
+      g.addColorStop(1, 'rgba(14,16,22,0.95)');
+      ctx.fillStyle = g;
+      ctx.strokeStyle = special ? '#5ec8d8' : ME.color;
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.roundRect(c.x, c.y, cw, ch, 8);
+      ctx.roundRect(c.x, c.y, cw, ch, 9);
       ctx.fill();
       ctx.stroke();
+      drawRoutes(c, c.x + 6, c.y + 6, 48, ch - 12);
       ctx.textAlign = 'left';
       ctx.fillStyle = '#eceef2';
-      ctx.font = '700 14px system-ui, sans-serif';
-      ctx.fillText(c.label, c.x + 28, c.y + 22);
-      ctx.fillStyle = '#8d94a1';
-      ctx.font = '500 11px system-ui, sans-serif';
-      ctx.fillText(c.sub, c.x + 28, c.y + 38);
-      ctx.fillStyle = ctx.strokeStyle;
       ctx.font = '800 14px system-ui, sans-serif';
-      ctx.fillText(c.key, c.x + 10, c.y + 30);
+      ctx.fillText(c.label, c.x + 62, c.y + 26);
+      ctx.fillStyle = '#8d94a1';
+      // Shrink the subtitle until it fits beside the diagram.
+      let fs = 11;
+      do ctx.font = `500 ${fs}px system-ui, sans-serif`; while (ctx.measureText(c.sub).width > cw - 68 && --fs > 8);
+      ctx.fillText(c.sub, c.x + 62, c.y + 43);
+      ctx.fillStyle = special ? '#5ec8d8' : ME.color;
+      ctx.beginPath(); ctx.roundRect(c.x + cw - 22, c.y + 6, 16, 16, 4); ctx.fill();
+      ctx.fillStyle = '#12151b';
+      ctx.font = '800 11px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(c.key, c.x + cw - 14, c.y + 18);
     });
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#eceef2';
     ctx.font = '700 13px system-ui, sans-serif';
-    ctx.fillText(`${downText()} · ball on ${spotText(los)} · pick a play`, W / 2, H - 22 - rows * (ch + gap));
+    const msg = `${downText()} · ball on ${spotText(los)} · pick a play`;
+    const tw = ctx.measureText(msg).width + 24, ty = H - 20 - rows * (ch + gap);
+    ctx.fillStyle = 'rgba(12,14,22,0.8)';
+    ctx.beginPath(); ctx.roundRect(W / 2 - tw / 2, ty - 16, tw, 24, 12); ctx.fill();
+    ctx.fillStyle = '#eceef2';
+    ctx.fillText(msg, W / 2, ty);
   }
 
   function drawKick() {
@@ -836,20 +1079,34 @@
     ctx.fillText(k.done ? (k.good ? "It's good!" : 'Wide!') : 'Press Space or tap when the ball is between the posts', cx, cy + 58);
   }
 
-  function draw() {
+  function draw(dt = 0) {
+    shake.apply(ctx, dt);
     drawField();
 
     if (state !== 'menu') {
-      // Line of scrimmage and the line to gain.
-      ctx.fillStyle = '#4f8cff';
-      ctx.fillRect(sx(0), sy(los) - 1.5, FW * S, 3);
+      // Line of scrimmage and the line to gain, glowing like a broadcast overlay.
+      ctx.fillStyle = 'rgba(79,140,255,0.85)';
+      ctx.fillRect(sx(0), sy(los) - 2, FW * S, 4);
       if (toGo < 100) {
-        ctx.fillStyle = '#ffe14d';
-        ctx.fillRect(sx(0), sy(toGo) - 1.5, FW * S, 3);
+        ctx.fillStyle = 'rgba(255,225,77,0.9)';
+        ctx.fillRect(sx(0), sy(toGo) - 2, FW * S, 4);
+        // Chain crew markers on the sideline.
+        for (const yy of [toGo - 10, toGo]) {
+          ctx.fillStyle = '#ff8a3d';
+          ctx.fillRect(sx(FW) + 4, sy(yy) - 3, 12, 6);
+        }
+        ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(sx(FW) + 10, sy(toGo - 10)); ctx.lineTo(sx(FW) + 10, sy(toGo)); ctx.stroke();
       }
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '800 11px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(down, sx(FW) + 10, sy(los) + 4);
     }
 
-    for (const p of players) drawPlayer(p);
+    // Lower players first so overlaps look right.
+    for (const p of [...players].sort((a, b) => b.y - a.y)) drawPlayer(p);
 
     if (state === 'live' || state === 'dead') {
       if (carrier && ball.state === 'held') {
@@ -858,18 +1115,26 @@
         ctx.beginPath();
         ctx.arc(sx(carrier.x), sy(carrier.y), 10, 0, Math.PI * 2);
         ctx.stroke();
-        drawBall(carrier.x + 0.6, carrier.y + 0.3);
+        if (carrier.down === undefined) drawBall(carrier.x + 0.6, carrier.y + 0.3);
       }
       if (ball.state === 'air') {
         const k = Math.min(1, ball.t / ball.T);
         const x = ball.from.x + (ball.to.x - ball.from.x) * k, y = ball.from.y + (ball.to.y - ball.from.y) * k;
-        ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+        ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+        ctx.lineWidth = 2;
         ctx.setLineDash([3, 5]);
         ctx.beginPath();
-        ctx.arc(sx(ball.to.x), sy(ball.to.y), 9, 0, Math.PI * 2);
+        ctx.arc(sx(ball.to.x), sy(ball.to.y), 9 + Math.sin(performance.now() / 120) * 1.5, 0, Math.PI * 2);
         ctx.stroke();
         ctx.setLineDash([]);
-        drawBall(x, y, Math.sin(k * Math.PI) * ball.h);
+        // Vapour trail behind the spiral.
+        trail.forEach((t, i) => {
+          ctx.fillStyle = `rgba(255,255,255,${(i / trail.length) * 0.35})`;
+          ctx.beginPath();
+          ctx.arc(sx(t.x), sy(t.y) - t.h * S * 0.5, 1 + (i / trail.length) * 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        drawBall(x, y, Math.sin(k * Math.PI) * ball.h, Math.atan2(-(ball.to.y - ball.from.y), ball.to.x - ball.from.x));
       }
       // Receiver numbers while you can still throw.
       if (state === 'live' && canThrow()) {
@@ -889,6 +1154,11 @@
       drawBall(FW / 2, los);
     }
 
+    fx.update(dt);
+    fx.draw(ctx);
+    ctx.restore();
+    Sports.lighting(ctx, W, H, 0.22);
+
     if (state === 'presnap') drawCards();
     if (state === 'kick') drawKick();
 
@@ -900,13 +1170,32 @@
     }
 
     if (banner) {
+      const td = banner.text === 'TOUCHDOWN!';
       ctx.globalAlpha = Math.min(1, banner.t * 3);
-      ctx.fillStyle = 'rgba(18,21,27,0.8)';
-      ctx.fillRect(0, 56, W, 40);
-      ctx.fillStyle = banner.text === 'TOUCHDOWN!' ? ME.color : '#eceef2';
-      ctx.font = '800 20px system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(banner.text, W / 2, 83);
+      ctx.fillStyle = td ? 'rgba(18,21,27,0.9)' : 'rgba(18,21,27,0.8)';
+      ctx.fillRect(0, td ? 120 : 56, W, td ? 90 : 40);
+      if (td) {
+        // Pop in, then a gentle pulse.
+        const age = 2.2 - banner.t, sc = age < 0.25 ? 0.4 + age * 2.6 : 1 + Math.sin(age * 8) * 0.03;
+        ctx.fillStyle = ME.color;
+        ctx.fillRect(0, 120, W, 3);
+        ctx.fillRect(0, 207, W, 3);
+        ctx.save();
+        ctx.translate(W / 2, 178);
+        ctx.scale(sc, sc);
+        ctx.font = '900 italic 46px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.lineWidth = 6;
+        ctx.strokeStyle = '#1c1500';
+        ctx.strokeText('TOUCHDOWN!', 0, 0);
+        ctx.fillText('TOUCHDOWN!', 0, 0);
+        ctx.restore();
+      } else {
+        ctx.fillStyle = '#eceef2';
+        ctx.font = '800 20px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(banner.text, W / 2, 83);
+      }
       ctx.globalAlpha = 1;
     }
   }
@@ -915,8 +1204,9 @@
   function frame(now) {
     const dt = Math.min(0.033, (now - last) / 1000);
     last = now;
-    if (state !== 'menu' && state !== 'paused' && state !== 'over' && state !== 'cpu') update(dt);
-    draw();
+    const run = state !== 'menu' && state !== 'paused' && state !== 'over' && state !== 'cpu';
+    if (run) for (let i = 0; i < (AUTOPILOT ? 3 : 1); i++) update(dt);
+    draw(run ? dt : 0);
     requestAnimationFrame(frame);
   }
 
@@ -945,7 +1235,7 @@
         season.points -= cost;
         season[id]++;
         saveSeason();
-        Arcade.tone({ freq: 600, to: 900, dur: 0.12, type: 'triangle', vol: 0.05 });
+        Sports.sfx.select();
         render();
       }));
       box.querySelector('[data-reset]').addEventListener('click', () => {

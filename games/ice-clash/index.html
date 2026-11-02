@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Ice Clash · Pixel Pioneers Arcade</title>
+  <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../assets/css/arcade.css">
+</head>
+<body class="game" data-game="ice-clash">
+  <header class="topbar">
+    <a class="back" href="../../index.html">← All games</a>
+    <h1>Ice Clash</h1>
+    <div class="stats">
+      <span>Score<b id="score">0 – 0</b></span>
+      <span>Period<b id="period">P1</b></span>
+      <span>Clock<b id="clock">1:00</b></span>
+    </div>
+    <button class="icon-btn" id="mute" type="button">Sound on</button>
+  </header>
+
+  <main class="stage">
+    <canvas id="game"></canvas>
+    <div class="overlay" id="overlay" hidden></div>
+  </main>
+
+  <p class="help"><kbd>←</kbd><kbd>↑</kbd><kbd>→</kbd><kbd>↓</kbd> skate · <kbd>Shift</kbd> burst · tap <kbd>Space</kbd> wrist shot, hold for a slapshot · <kbd>Z</kbd> pass / switch · <kbd>P</kbd> pause</p>
+  <div class="touchpad">
+    <button id="t-burst" type="button">Burst</button>
+    <button id="t-pass" type="button">Pass</button>
+    <button id="t-shoot" type="button">Shoot</button>
+  </div>
+
+  <script src="../../assets/js/config.js"></script>
+  <script src="../../assets/js/catalog.js"></script>
+  <script src="../../assets/js/arcade.js"></script>
+  <script src="../../assets/js/filter.js"></script>
+  <script src="../../assets/js/friends.js"></script>
+  <script src="../../assets/js/online.js"></script>
+  <script src="../../assets/js/chat.js"></script>
+  <script src="../../assets/js/invites.js"></script>
+  <script src="../../assets/js/relay.js"></script>
+  <script src="../../assets/js/versus.js"></script>
+  <script src="../../assets/js/sports.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

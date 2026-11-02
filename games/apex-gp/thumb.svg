@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5fb4ff"/><stop offset="1" stop-color="#bfe4ff"/></linearGradient></defs>
+  <rect width="320" height="200" fill="url(#s)"/>
+  <circle cx="250" cy="40" r="16" fill="#fff6c8"/>
+  <path d="M0 96 L40 74 L90 90 L140 62 L200 88 L250 70 L320 92 V110 H0 Z" fill="#7fa8c9"/>
+  <rect y="104" width="320" height="96" fill="#5db04a"/>
+  <path d="M0 116 H320 M0 134 H320 M0 158 H320" stroke="#55a444" stroke-width="10"/>
+  <path d="M150 104 L170 104 L300 200 L20 200 Z" fill="#6b6f78"/>
+  <path d="M150 104 L146 104 L6 200 L20 200 Z M170 104 L174 104 L314 200 L300 200 Z" fill="#e03a3a"/>
+  <path d="M159 112 L161 112 L163 124 L157 124 Z M157 136 L163 136 L166 156 L154 156 Z M152 172 L168 172 L172 200 L148 200 Z" fill="#f4f4f4"/>
+  <g transform="translate(196 118) scale(.5)"><rect x="-26" y="-12" width="52" height="20" rx="5" fill="#2f6fd6"/><rect x="-30" y="-20" width="60" height="6" fill="#ffd86b"/><rect x="-34" y="2" width="14" height="14" rx="3" fill="#1b1e24"/><rect x="20" y="2" width="14" height="14" rx="3" fill="#1b1e24"/></g>
+  <g transform="translate(160 168)"><path d="M-52 -6 L52 -6 L46 -22 L-46 -22 Z" fill="#ffc53d"/><rect x="-58" y="-34" width="116" height="9" rx="2" fill="#1c1500"/><rect x="-14" y="-30" width="28" height="12" rx="6" fill="#1c1500"/><circle cy="-30" r="7" fill="#ffc53d" stroke="#1c1500" stroke-width="2"/><rect x="-66" y="-14" width="26" height="26" rx="5" fill="#1b1e24"/><rect x="40" y="-14" width="26" height="26" rx="5" fill="#1b1e24"/><rect x="-40" y="-6" width="80" height="12" fill="#1c1500"/><rect x="-6" y="6" width="12" height="5" fill="#ff5d5d"/></g>
+  <g transform="translate(60 92)"><rect x="-3" y="-6" width="6" height="16" fill="#8a5a34"/><circle cy="-10" r="10" fill="#3a8a3a"/></g>
+  <rect x="246" y="78" width="46" height="22" fill="#e03a3a"/><text x="269" y="93" font-family="system-ui,sans-serif" font-size="8" font-weight="900" fill="#fff" text-anchor="middle">TURBO</text>
+</svg>

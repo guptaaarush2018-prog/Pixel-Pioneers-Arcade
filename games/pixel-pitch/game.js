@@ -7,8 +7,17 @@
   const MATCH = 180;                               // seconds
   const STEP = 1 / 60;
   const SEND_EVERY = 1 / 15;
+  // Team 1's kit changes with the opponent in a Cup run, so these are filled in per match.
   const COLORS = ['#ffc53d', '#4f8cff'];
   const KITS = ['#1c1500', '#0b1a33'];
+  const KEEPERS = ['#ff8f3d', '#3dd6c4'];
+  const BLUE = { name: 'Blue', color: '#4f8cff', kit: '#0b1a33', keeper: '#3dd6c4' };
+  // The Cup: three knockout rounds against tougher sides. A draw goes to golden goal.
+  const CUP = [
+    { round: 'Quarter-final', level: 0, len: 120, team: { name: 'Harbor Rovers', color: '#ff6b6b', kit: '#3a0d0d', keeper: '#9be15d' } },
+    { round: 'Semi-final', level: 1, len: 120, team: { name: 'Metro United', color: '#c77dff', kit: '#24103a', keeper: '#ffe14d' } },
+    { round: 'Final', level: 2, len: 150, team: { name: 'Summit City', color: '#e8e8e8', kit: '#1b1e24', keeper: '#ff5dc8' } },
+  ];
   const LEVELS = [
     { name: 'Easy', speed: 0.82, react: 0.45, aim: 70, tackle: 1.2, mult: 0.7 },
     { name: 'Normal', speed: 0.93, react: 0.28, aim: 45, tackle: 2, mult: 1 },
@@ -30,6 +39,17 @@
   const esc = s => Online.escape(s);
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   const len = (x, y) => Math.hypot(x, y);
+  const fx = Sports.particles();
+  const shake = Sports.shaker();
+  const crowdTop = Sports.makeCrowd(W, 26, { seed: 9, size: 5, colors: ['#ffc53d', '#ffc53d', '#4f8cff', '#e6e9ef', '#2b3247', '#ff5d5d'] });
+  const crowdBot = Sports.makeCrowd(W, 26, { seed: 17, size: 5, colors: ['#ffc53d', '#4f8cff', '#4f8cff', '#e6e9ef', '#2b3247', '#3ddc84'] });
+  // Test hook: #autopilot lets the bots play both sides and posts no score.
+  const AUTOPILOT = location.hash === '#autopilot';
+  let excite = 0, bulge = [0, 0, 0], ballSpin = 0, ballTrail = [];
+  let cup = Arcade.load('pitch:cup', null);      // { round } while a Cup run is on
+  let cupMatch = false;
+  const setRival = r => { COLORS[1] = r.color; KITS[1] = r.kit; KEEPERS[1] = r.keeper; rivalName = r.name; };
+  let rivalName = BLUE.name;
 
   let state = 'menu';     // menu, playing, paused, over
   let mode = null;        // 'bot' | 'host' | 'guest'
@@ -47,8 +67,8 @@
 
   function newMatch() {
     m = {
-      time: MATCH, score: [0, 0], players: [], ball: null,
-      ctrl: [2, 2], pause: 0, banner: null, kickoff: 0, events: [],
+      time: cupMatch ? CUP[cup.round].len : MATCH, score: [0, 0], players: [], ball: null,
+      ctrl: [2, 2], pause: 0, banner: null, kickoff: 0, events: [], len: cupMatch ? CUP[cup.round].len : MATCH, golden: false,
       input: [blankInput(), blankInput()],
     };
     for (let team = 0; team < 2; team++) {
@@ -65,7 +85,7 @@
   const blankInput = () => ({ mx: 0, my: 0, sprint: false, shoot: false, pass: 0, sw: 0, charge: 0, held: false, seenPass: 0, seenSw: 0 });
   const team = t => m.players.filter(p => p.team === t);
   const ctrlOf = t => m.players[t * 4 + m.ctrl[t]];
-  const humanTeams = () => (mode === 'bot' ? [0] : [0, 1]);
+  const humanTeams = () => (mode === 'bot' ? (AUTOPILOT ? [] : [0]) : [0, 1]);
 
   function kickoff(t) {
     for (const p of m.players) {
@@ -83,6 +103,7 @@
     Object.assign(m.ball, { x: W / 2, y: H / 2, vx: 0, vy: 0, z: 0, vz: 0, owner: null, last: t, block: null });
     for (const tt of [0, 1]) m.ctrl[tt] = 2;
     m.kickoff = 1;
+    m.events.push('k');
   }
 
   // ---------- Ball ----------
@@ -208,8 +229,9 @@
 
   function goal(t) {
     m.score[t]++;
-    m.pause = 2.2;
-    m.banner = { text: 'GOAL!', team: t, t: 2.2 };
+    m.pause = 2.6;
+    m.banner = { text: m.golden ? 'GOLDEN GOAL!' : 'GOAL!', team: t, t: 2.6 };
+    if (m.golden) m.time = 0;
     m.events.push('g' + t);
     m.ball.vx *= 0.2;
     m.ball.vy *= 0.2;
@@ -458,39 +480,80 @@
     if (m.pause > 0) {
       m.pause -= dt;
       if (m.banner) m.banner.t -= dt;
-      updateBall(dt);
+      // Restart before moving the ball, or a ball resting in the net would count again.
       if (m.pause <= 0) {
         m.banner = null;
-        if (m.time <= 0) return endMatch();
+        if (m.time <= 0 && (!m.golden || m.score[0] !== m.score[1])) return endMatch();
         kickoff(m.next);
+        return;
       }
+      updateBall(dt);
       return;
     }
     if (m.kickoff > 0) m.kickoff = Math.max(0, m.kickoff - dt);
-    m.time -= dt;
+    if (!m.golden) m.time -= dt;
     for (const p of m.players) updatePlayer(p, dt);
     separate();
     updateBall(dt);
-    if (m.time <= 0 && m.pause <= 0) {
+    if (m.time <= 0 && m.pause <= 0 && !m.golden) {
+      if (cupMatch && m.score[0] === m.score[1]) {
+        // Knockout: play on until someone scores.
+        m.golden = true;
+        m.time = 0;
+        m.banner = { text: 'Golden goal!', t: 1.4 };
+        m.events.push('end');
+        return;
+      }
       m.time = 0;
       m.pause = 1.5;
       m.banner = { text: 'Full time', t: 1.5 };
       m.events.push('end');
     }
+    if (m.golden && m.banner && (m.banner.t -= dt) <= 0) m.banner = null;
   }
 
   function endMatch() {
     state = 'over';
     const mine = m.score[me], theirs = m.score[1 - me];
     const won = mine > theirs, draw = mine === theirs;
+    Sports.stopCrowd();
+    (won ? Sports.sfx.win : Sports.sfx.lose)();
     if (mode === 'bot') {
       const L_ = LEVELS[level];
-      const score = Math.round((mine * 100 + (won ? 500 : draw ? 200 : 0) + Math.max(0, mine - theirs) * 100) * L_.mult);
+      let score = Math.round((mine * 100 + (won ? 500 : draw ? 200 : 0) + Math.max(0, mine - theirs) * 100) * L_.mult);
       if (won) Arcade.flag('pixel-pitch-win');
       if (won && level === 2) Arcade.flag('pixel-pitch-hard');
       if (won && theirs === 0) Arcade.flag('pixel-pitch-clean');
+      if (cupMatch) {
+        const c = CUP[cup.round];
+        let title, line, button, next;
+        if (won && cup.round === CUP.length - 1) {
+          Arcade.flag('pixel-pitch-cup');
+          score += Math.round(1000 * L_.mult);
+          title = 'Cup winners!';
+          line = `You beat ${c.team.name} in the Final and lift the Pixel Cup.`;
+          cup = null;
+          button = 'Menu';
+          next = () => showMenu();
+        } else if (won) {
+          cup.round++;
+          title = `Through to the ${CUP[cup.round].round}`;
+          line = `Next up: ${CUP[cup.round].team.name}.`;
+          button = 'Next round';
+          next = () => startCup();
+        } else {
+          title = `Out in the ${c.round}`;
+          line = `${c.team.name} knock you out. Start a new Cup run from the menu.`;
+          cup = null;
+          button = 'Menu';
+          next = () => showMenu();
+        }
+        Arcade.save('pitch:cup', cup);
+        Arcade.finish(ui, { score: AUTOPILOT ? 0 : score, title, lines: [`${mine} – ${theirs} vs ${c.team.name}${m.golden ? ' (golden goal)' : ''}`, line], button, onAction: next });
+        return;
+      }
       Arcade.finish(ui, {
-        score,
+        score: AUTOPILOT ? 0 : score,
         title: won ? 'You win!' : draw ? "It's a draw" : 'You lost',
         lines: [`${mine} – ${theirs} · ${L_.name} bots`],
         button: 'Menu',
@@ -744,11 +807,14 @@
   // ---------- Flow ----------
 
   function begin() {
+    if (!cupMatch) setRival(BLUE);
     newMatch();
     if (mode === 'guest') m.input[0] = blankInput();
     state = 'playing';
     ui.hide();
-    Arcade.tone({ freq: 880, to: 1320, dur: 0.3, type: 'triangle', vol: 0.05 });
+    fx.clear();
+    ballTrail = [];
+    Sports.startCrowd();
   }
 
   function startBot(lv) {
@@ -756,7 +822,23 @@
     Arcade.save('pitch:level', lv);
     mode = 'bot';
     me = 0;
+    cupMatch = false;
     begin();
+  }
+
+  function startCup() {
+    if (!cup) cup = { round: 0 };
+    Arcade.save('pitch:cup', cup);
+    const c = CUP[cup.round];
+    mode = 'bot';
+    me = 0;
+    level = c.level;
+    cupMatch = true;
+    setRival(c.team);
+    begin();
+    m.banner = { text: c.round, t: 1.6 };
+    m.pause = 1.6;
+    m.next = Math.random() < 0.5 ? 0 : 1;
   }
 
   function pause() {
@@ -779,6 +861,8 @@
     state = 'menu';
     mode = 'bot';
     me = 0;
+    cupMatch = false;
+    setRival(BLUE);
     newMatch();
     const online = Relay.enabled;
     ui.show({
@@ -786,6 +870,7 @@
       html: `<p>Four-a-side arcade football. Three minutes, walls all round, no offsides.</p>
         <div class="menu">
           <div class="row">${LEVELS.map((l, i) => `<button class="btn ${i === level ? '' : 'secondary'}" type="button" data-bot="${i}">${l.name}</button>`).join('')}</div>
+          <button class="btn secondary" type="button" data-cup>${cup ? `Continue Cup: ${CUP[cup.round].round} vs ${esc(CUP[cup.round].team.name)}` : 'Pixel Cup: three knockout rounds'}</button>
           ${online ? `<button class="btn secondary" type="button" data-net="quick">Quick match online</button>
           <button class="btn secondary" type="button" data-net="create">Create private room</button>
           <div class="row">
@@ -798,6 +883,7 @@
       button: null,
       onRender: panel => {
         panel.querySelectorAll('[data-bot]').forEach(b => b.addEventListener('click', () => startBot(+b.dataset.bot)));
+        panel.querySelector('[data-cup]').addEventListener('click', startCup);
         const code = panel.querySelector('#code');
         panel.querySelectorAll('[data-net]').forEach(b => b.addEventListener('click', () => goOnline(b.dataset.net, code.value)));
         code?.addEventListener('keydown', e => { if (e.key === 'Enter') goOnline('join', code.value); });
@@ -808,17 +894,29 @@
 
   // ---------- Sound ----------
 
+  // Sounds and effects for what just happened. The guest gets the same events from the host.
   function sounds(events) {
+    const S = Sports.sfx, b = m.ball;
     for (const e of events) {
-      if (e === 's') Arcade.tone({ freq: 160, to: 80, dur: 0.12, type: 'square', vol: 0.06 });
-      else if (e === 'p') Arcade.tone({ freq: 260, to: 200, dur: 0.06, type: 'square', vol: 0.04 });
-      else if (e === 'w' || e === 'post') Arcade.tone({ freq: e === 'post' ? 900 : 200, dur: 0.05, vol: 0.03 });
-      else if (e === 't' || e === 'slide') Arcade.tone({ freq: 120, to: 60, dur: 0.1, type: 'sawtooth', vol: 0.04 });
-      else if (e === 'save') Arcade.tone({ freq: 300, to: 500, dur: 0.1, type: 'triangle', vol: 0.04 });
+      if (e === 's') { S.kick(1.3); Sports.excite(0.3, 1); }
+      else if (e === 'p') S.kick(0.6);
+      else if (e === 'w') S.bounce();
+      else if (e === 'post') { S.clank(); fx.sparks(b.x, b.y, 8, '#ffffff', 100); S.groan(); }
+      else if (e === 't' || e === 'slide') { S.thud(0.8); fx.dust(b.x, b.y, 7, 'rgba(190,220,170,0.7)', 50); }
+      else if (e === 'save') { S.pop(); fx.text(b.x, b.y - 20, 'SAVE!', '#5ec8d8', 22); S.cheer(0.5); }
+      else if (e === 'k') S.whistle();
       else if (e[0] === 'g') {
-        const good = +e[1] === me;
-        Arcade.tone(good ? { freq: 523, to: 1046, dur: 0.5, type: 'triangle', vol: 0.07 } : { freq: 330, to: 160, dur: 0.5, type: 'sawtooth', vol: 0.05 });
-      } else if (e === 'end') Arcade.tone({ freq: 880, dur: 0.6, type: 'triangle', vol: 0.06 });
+        const t = +e[1], good = t === me || mode === 'bot' && AUTOPILOT;
+        S.cheer(1.6);
+        if (!good) S.groan();
+        S.horn();
+        excite = 1;
+        shake.kick(8);
+        bulge = [t === 0 ? R : L, b.y, 1];
+        const col = COLORS[t];
+        fx.confetti(W / 2, 90, 140, [col, '#ffffff', KITS[t], '#ff5d5d', '#3ddc84']);
+        for (let i = 0; i < 4; i++) setTimeout(() => fx.firework(Arcade.rand(120, W - 120), Arcade.rand(80, 200), Arcade.pick([col, '#ffffff', '#ffc53d'])), 200 + i * 240);
+      } else if (e === 'end') S.whistle(true);
     }
   }
 
@@ -826,59 +924,171 @@
 
   function renderPitch() {
     const c = pitch.ctx;
-    c.fillStyle = '#1d5c33';
+    // Stands behind the boards.
+    c.fillStyle = '#141826';
     c.fillRect(0, 0, W, H);
-    for (let i = 0; i < 11; i++) {
-      c.fillStyle = i % 2 ? '#22693a' : '#1f6236';
-      c.fillRect(L + i * (R - L) / 11, T, (R - L) / 11 + 1, B - T);
+    // Grass runs a little past the lines.
+    c.fillStyle = '#1b5a31';
+    c.fillRect(L - 30, T - 10, R - L + 60, B - T + 20);
+    for (let i = 0; i < 12; i++) {
+      c.fillStyle = i % 2 ? '#23703d' : '#1f6738';
+      c.fillRect(L + i * (R - L) / 12, T, (R - L) / 12 + 1, B - T);
     }
-    c.strokeStyle = 'rgba(255,255,255,0.75)';
+    // Checkerboard mowing and speckle.
+    for (let y = T; y < B; y += (B - T) / 8) {
+      c.fillStyle = 'rgba(255,255,255,0.025)';
+      if (Math.round((y - T) / ((B - T) / 8)) % 2) c.fillRect(L, y, R - L, (B - T) / 8);
+    }
+    const rnd = Sports.seeded(12);
+    for (let i = 0; i < 1800; i++) {
+      c.fillStyle = rnd() < 0.5 ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.06)';
+      c.fillRect(L + rnd() * (R - L), T + rnd() * (B - T), 1, 2);
+    }
+    // Ad boards along both touchlines.
+    const ads = [['PIXEL PIONEERS', '#ffc53d', '#1c1500'], ['PIXEL CUP', '#3ddc84', '#0d2a1a'], ['HOOP DUEL', '#ff7a5a', '#2a0d05'], ['ICE CLASH', '#5ec8d8', '#05222a'], ['APEX GP', '#1b1e24', '#ffc53d'], ['GRAND SLAM', '#c77dff', '#1f0a33']];
+    c.font = '900 10px system-ui, sans-serif';
+    c.textAlign = 'center';
+    for (const y of [T - 16, B + 4]) {
+      for (let i = 0; i < 6; i++) {
+        const [t, bg, fg] = ads[(i + (y > H / 2 ? 3 : 0)) % ads.length];
+        const x0 = L + i * (R - L) / 6;
+        c.fillStyle = bg;
+        c.fillRect(x0 + 2, y, (R - L) / 6 - 4, 12);
+        c.fillStyle = fg;
+        c.fillText(t, x0 + (R - L) / 12, y + 9.5);
+      }
+    }
+    c.strokeStyle = 'rgba(255,255,255,0.8)';
     c.lineWidth = 3;
     c.strokeRect(L, T, R - L, B - T);
     c.beginPath(); c.moveTo(W / 2, T); c.lineTo(W / 2, B); c.stroke();
     c.beginPath(); c.arc(W / 2, H / 2, 70, 0, Math.PI * 2); c.stroke();
-    c.fillStyle = 'rgba(255,255,255,0.75)';
+    c.fillStyle = 'rgba(255,255,255,0.8)';
     c.beginPath(); c.arc(W / 2, H / 2, 4, 0, Math.PI * 2); c.fill();
-    for (const [x, s] of [[L, 1], [R, -1]]) {
-      c.strokeRect(Math.min(x, x + s * 130), H / 2 - 130, 130, 260);
-      c.strokeRect(Math.min(x, x + s * 50), H / 2 - 75, 50, 150);
-      c.beginPath(); c.arc(x + s * 95, H / 2, 3, 0, Math.PI * 2); c.fill();
-      // Goal and net.
-      const gx = s > 0 ? x - 26 : x;
-      c.fillStyle = 'rgba(255,255,255,0.12)';
-      c.fillRect(gx, MOUTH[0], 26, MOUTH[1] - MOUTH[0]);
-      c.strokeStyle = 'rgba(255,255,255,0.25)';
-      c.lineWidth = 1;
-      for (let yy = MOUTH[0]; yy <= MOUTH[1]; yy += 10) { c.beginPath(); c.moveTo(gx, yy); c.lineTo(gx + 26, yy); c.stroke(); }
-      for (let xx = gx; xx <= gx + 26; xx += 9) { c.beginPath(); c.moveTo(xx, MOUTH[0]); c.lineTo(xx, MOUTH[1]); c.stroke(); }
-      c.strokeStyle = '#fff';
-      c.lineWidth = 4;
-      c.beginPath(); c.moveTo(x, MOUTH[0]); c.lineTo(gx + (s > 0 ? 0 : 26), MOUTH[0]); c.lineTo(gx + (s > 0 ? 0 : 26), MOUTH[1]); c.lineTo(x, MOUTH[1]); c.stroke();
-      c.strokeStyle = 'rgba(255,255,255,0.75)';
+    for (const [x, s2] of [[L, 1], [R, -1]]) {
+      c.strokeRect(Math.min(x, x + s2 * 130), H / 2 - 130, 130, 260);
+      c.strokeRect(Math.min(x, x + s2 * 50), H / 2 - 75, 50, 150);
+      c.beginPath(); c.arc(x + s2 * 95, H / 2, 3, 0, Math.PI * 2); c.fill();
+      // The D on the edge of the box.
+      c.beginPath(); c.arc(x + s2 * 95, H / 2, 70, s2 > 0 ? -0.93 : Math.PI - 0.93, s2 > 0 ? 0.93 : Math.PI + 0.93); c.stroke();
+    }
+    // Corner arcs and flags.
+    for (const [x, y, a] of [[L, T, 0], [R, T, Math.PI / 2], [R, B, Math.PI], [L, B, -Math.PI / 2]]) {
+      c.beginPath(); c.arc(x, y, 12, a, a + Math.PI / 2); c.stroke();
+      c.strokeStyle = '#e6e9ef';
+      c.lineWidth = 2;
+      c.beginPath(); c.moveTo(x, y); c.lineTo(x, y - 14); c.stroke();
+      c.fillStyle = '#ff5d5d';
+      c.beginPath(); c.moveTo(x, y - 14); c.lineTo(x + 9, y - 11); c.lineTo(x, y - 8); c.fill();
+      c.strokeStyle = 'rgba(255,255,255,0.8)';
       c.lineWidth = 3;
     }
   }
 
+  // Goal at x (L or R): net drawn live so it bulges where a goal goes in.
+  function drawGoal(x, s2) {
+    const gx = s2 > 0 ? x - 26 : x, back = s2 > 0 ? gx : gx + 26;
+    const [bx, by, k] = bulge;
+    const hit = k > 0 && Math.abs(bx - x) < 2;
+    const push = (yy, xx) => {
+      if (!hit) return xx;
+      const d = Math.abs(yy - by);
+      return xx - s2 * k * 14 * Math.max(0, 1 - d / 60) * (Math.abs(xx - x) / 26);
+    };
+    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+    ctx.fillRect(gx, MOUTH[0], 26, MOUTH[1] - MOUTH[0]);
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = 1;
+    for (let yy = MOUTH[0]; yy <= MOUTH[1]; yy += 9) {
+      ctx.beginPath(); ctx.moveTo(x, yy);
+      for (let xx = x; s2 > 0 ? xx >= gx : xx <= gx + 26; xx -= s2 * 6.5) ctx.lineTo(push(yy, xx), yy);
+      ctx.stroke();
+    }
+    for (let j = 0; j <= 4; j++) {
+      const xx = x - s2 * j * 6.5;
+      ctx.beginPath();
+      for (let yy = MOUTH[0]; yy <= MOUTH[1]; yy += 6) ctx.lineTo(push(yy, xx), yy);
+      ctx.stroke();
+    }
+    // Posts and bar, with a shadow on the grass.
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(x + 4, MOUTH[0] + 5); ctx.lineTo(back + 4, MOUTH[0] + 5); ctx.lineTo(back + 4, MOUTH[1] + 5); ctx.lineTo(x + 4, MOUTH[1] + 5); ctx.stroke();
+    ctx.strokeStyle = '#ffffff';
+    ctx.beginPath(); ctx.moveTo(x, MOUTH[0]); ctx.lineTo(back, MOUTH[0]); ctx.lineTo(back, MOUTH[1]); ctx.lineTo(x, MOUTH[1]); ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    for (const py of MOUTH) { ctx.beginPath(); ctx.arc(x, py, 3.5, 0, Math.PI * 2); ctx.fill(); }
+  }
+
+  const shadeHex = (hex, k) => {
+    const n = parseInt(hex.slice(1), 16), f = c => Math.round(clamp(k < 0 ? c * (1 + k) : c + (255 - c) * k, 0, 255));
+    return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`;
+  };
+
+  // Top-down footballer: running legs, shirt with sleeves, head and hair, facing p.dir.
   function drawPlayer(p) {
     const human = humanTeams().includes(p.team) && m.ctrl[p.team] === p.i && (mode !== 'bot' || p.team === 0);
+    // Stride from how far they moved since the last frame (works for the guest too).
+    const moved = p.lx === undefined ? 0 : len(p.x - p.lx, p.y - p.ly);
+    p.lx = p.x; p.ly = p.y;
+    p.step = (p.step || 0) + moved;
+    p.spd = (p.spd || 0) * 0.8 + moved * 0.2;
+    // After a goal the scoring side jumps about.
+    const party = m.pause > 0 && m.banner?.team === p.team && m.banner.text.includes('GOAL');
+    const hop = party ? Math.abs(Math.sin(performance.now() / 110 + p.i * 1.3)) * 6 : 0;
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
-    ctx.beginPath(); ctx.ellipse(p.x + 2, p.y + 4, PR, PR * 0.7, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(p.x + 3, p.y + 5, PR * 0.95, PR * 0.6, 0, 0, Math.PI * 2); ctx.fill();
     if (human) {
       ctx.strokeStyle = p.team === me ? '#fff' : 'rgba(255,255,255,0.5)';
       ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(p.x, p.y, PR + 6, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.ellipse(p.x, p.y + 2, PR + 7, PR + 4, 0, 0, Math.PI * 2); ctx.stroke();
     }
-    ctx.fillStyle = p.role === 'gk' ? (p.team === 0 ? '#ff8f3d' : '#3dd6c4') : COLORS[p.team];
-    ctx.beginPath(); ctx.arc(p.x, p.y, PR, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = KITS[p.team];
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    // Facing marker.
-    ctx.fillStyle = KITS[p.team];
-    ctx.beginPath(); ctx.arc(p.x + Math.cos(p.dir) * 6, p.y + Math.sin(p.dir) * 6, 3, 0, Math.PI * 2); ctx.fill();
+    const shirt = p.role === 'gk' ? KEEPERS[p.team] : COLORS[p.team];
+    const dark = KITS[p.team];
+    ctx.save();
+    ctx.translate(p.x, p.y - hop);
+    ctx.rotate(p.dir);
+    ctx.scale(1.3, 1.3);
     if (p.slide > 0) {
-      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - Math.cos(p.dir) * 22, p.y - Math.sin(p.dir) * 22); ctx.stroke();
+      // Sliding: stretched out with one leg forward.
+      ctx.fillStyle = '#e8e8e8';
+      ctx.beginPath(); ctx.ellipse(10, 3, 7, 2.4, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = shirt;
+      ctx.beginPath(); ctx.ellipse(-2, 0, 8, 6, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#5a3a2a';
+      ctx.beginPath(); ctx.arc(-8, 0, 4.6, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      return;
+    }
+    const sw = Math.sin(p.step * 0.32) * Math.min(1, p.spd / 1.5) * 6;
+    // Legs and boots.
+    for (const [sd, off] of [[-1, sw], [1, -sw]]) {
+      ctx.fillStyle = '#f0f0f0';
+      ctx.beginPath(); ctx.ellipse(off * 0.8, sd * 3.6, 3.6, 2.2, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#1b1e24';
+      ctx.beginPath(); ctx.ellipse(off * 0.8 + 3, sd * 3.6, 1.8, 1.8, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    // Arms swing opposite the legs.
+    ctx.fillStyle = p.role === 'gk' ? dark : '#c98e5a';
+    ctx.beginPath(); ctx.arc(-sw * 0.6, -8.5, 2.6, 0, Math.PI * 2); ctx.arc(sw * 0.6, 8.5, 2.6, 0, Math.PI * 2); ctx.fill();
+    // Shirt: shoulders across the body, sleeves in the team colour, a darker trim.
+    ctx.fillStyle = shirt;
+    ctx.strokeStyle = dark;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.ellipse(0, 0, 5.4, 8.6, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    ctx.beginPath(); ctx.ellipse(1, -2.5, 2.4, 4, 0, 0, Math.PI * 2); ctx.fill();
+    // Head with hair.
+    ctx.fillStyle = '#c98e5a';
+    ctx.beginPath(); ctx.arc(0.6, 0, 4.4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = ['#2a1a10', '#5a3a1a', '#1a1a1a', '#8a5a2a'][(p.id * 3) % 4];
+    ctx.beginPath(); ctx.arc(-0.4, 0, 4.2, Math.PI * 0.55, Math.PI * 1.45); ctx.fill();
+    ctx.restore();
+    if (p.stun > 0) {
+      ctx.fillStyle = '#fff';
+      ctx.font = '700 10px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('✶', p.x, p.y - 14);
     }
     if (human && p.team === me) {
       // Stamina and shot power under your player.
@@ -898,30 +1108,86 @@
 
   function drawBall() {
     const b = m.ball;
+    const sp = len(b.vx, b.vy);
+    ballSpin += sp * 0.0008;
+    if (sp > 380 && !b.owner) { ballTrail.push({ x: b.x, y: b.y - b.z * 0.5 }); if (ballTrail.length > 10) ballTrail.shift(); }
+    else if (ballTrail.length) ballTrail.shift();
+    ballTrail.forEach((q, i) => {
+      ctx.fillStyle = `rgba(255,255,255,${(i / ballTrail.length) * 0.35})`;
+      ctx.beginPath(); ctx.arc(q.x, q.y, BR * (0.3 + 0.6 * i / ballTrail.length), 0, Math.PI * 2); ctx.fill();
+    });
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.beginPath(); ctx.ellipse(b.x + 2 + b.z * 0.25, b.y + 3 + b.z * 0.15, BR, BR * 0.6, 0, 0, Math.PI * 2); ctx.fill();
     const y = b.y - b.z * 0.5;
     const r = BR + b.z * 0.04;
-    ctx.fillStyle = '#fff';
+    const g = ctx.createRadialGradient(b.x - r * 0.4, y - r * 0.4, 1, b.x, y, r);
+    g.addColorStop(0, '#ffffff');
+    g.addColorStop(1, '#c9ced8');
+    ctx.fillStyle = g;
     ctx.beginPath(); ctx.arc(b.x, y, r, 0, Math.PI * 2); ctx.fill();
+    // Patches roll across the ball in the direction it travels.
+    ctx.save();
+    ctx.beginPath(); ctx.arc(b.x, y, r, 0, Math.PI * 2); ctx.clip();
     ctx.fillStyle = '#1b1e24';
-    ctx.beginPath(); ctx.arc(b.x - 1.5, y - 1, r * 0.35, 0, Math.PI * 2); ctx.fill();
+    const a = Math.atan2(b.vy, b.vx), off = ((ballSpin % 1) * 2 - 1) * r * 1.4;
+    for (const [dx, dy] of [[0, 0], [-1.4, 0.9], [-1.4, -0.9], [1.4, 0.9], [1.4, -0.9]]) {
+      const px = dx * r * 0.7 + off, py = dy * r * 0.7;
+      ctx.beginPath(); ctx.arc(b.x + Math.cos(a) * px - Math.sin(a) * py, y + Math.sin(a) * px + Math.cos(a) * py, r * 0.32, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
   }
 
-  function draw() {
+  function draw(dt = 0) {
+    excite = Math.max(0, excite - dt * 0.3);
+    bulge[2] = Math.max(0, bulge[2] - dt * 1.2);
+    shake.apply(ctx, dt);
     ctx.drawImage(pitch.canvas, 0, 0, W, H);
+    const t = performance.now() / 1000, ex = state === 'playing' ? excite : 0;
+    crowdTop.draw(ctx, 0, 0, ex, t);
+    crowdBot.draw(ctx, 0, H - 26, ex, t);
+    drawGoal(L, 1);
+    drawGoal(R, -1);
     const order = [...m.players].sort((a, c) => a.y - c.y);
     for (const p of order) drawPlayer(p);
     drawBall();
+    fx.update(dt);
+    fx.draw(ctx);
+    ctx.restore();
+    Sports.lighting(ctx, W, H, 0.2);
 
     if (m.banner) {
-      ctx.fillStyle = 'rgba(10,12,16,0.6)';
+      const goal = m.banner.text.includes('GOAL');
+      const age = (goal ? 2.6 : 1.5) - (m.banner.t ?? 0);
+      const sc = goal ? (age < 0.3 ? 0.3 + age * 2.6 : 1 + Math.sin(age * 7) * 0.03) : 1;
+      ctx.fillStyle = 'rgba(10,12,16,0.65)';
       ctx.fillRect(0, H / 2 - 50, W, 100);
-      ctx.font = '800 64px system-ui, sans-serif';
+      if (goal) {
+        ctx.fillStyle = COLORS[m.banner.team];
+        ctx.fillRect(0, H / 2 - 50, W, 4);
+        ctx.fillRect(0, H / 2 + 46, W, 4);
+      }
+      ctx.save();
+      ctx.translate(W / 2, H / 2 + 22);
+      ctx.scale(sc, sc);
+      ctx.font = goal ? '900 italic 72px system-ui, sans-serif' : '800 56px system-ui, sans-serif';
       ctx.textAlign = 'center';
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = 'rgba(0,0,0,0.5)';
       ctx.fillStyle = m.banner.team !== undefined ? COLORS[m.banner.team] : '#fff';
-      ctx.fillText(m.banner.text, W / 2, H / 2 + 22);
-    } else if (state === 'playing' && m.time > MATCH - 3) {
+      ctx.strokeText(m.banner.text, 0, 0);
+      ctx.fillText(m.banner.text, 0, 0);
+      ctx.restore();
+    } else if (m.golden && state === 'playing') {
+      ctx.font = '800 16px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffc53d';
+      ctx.fillText('GOLDEN GOAL · next goal wins', W / 2, 62);
+    } else if (cupMatch && state === 'playing' && m.time > m.len - 3) {
+      ctx.font = '700 20px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.fillText(`${CUP[cup.round].round} vs ${CUP[cup.round].team.name}`, W / 2, 100);
+    } else if (!cupMatch && state === 'playing' && m.time > MATCH - 3) {
       ctx.font = '700 22px system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillStyle = 'rgba(255,255,255,0.85)';
@@ -939,7 +1205,7 @@
     $('you').textContent = m.score[me];
     $('them').textContent = m.score[1 - me];
     const t = Math.max(0, Math.ceil(m.time));
-    $('time').textContent = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+    $('time').textContent = m.golden ? 'GG' : `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
   }
 
   // ---------- Loop ----------
@@ -954,7 +1220,7 @@
         guestPositions();
       } else {
         pushLocalInput();
-        acc += dt;
+        acc += AUTOPILOT ? dt * 2.5 : dt;
         while (acc >= STEP) {
           step(STEP);
           acc -= STEP;
@@ -973,7 +1239,7 @@
         }
       }
     }
-    draw();
+    draw(state === 'paused' ? 0 : dt);
     if (m) updateHud();
     requestAnimationFrame(frame);
   }
