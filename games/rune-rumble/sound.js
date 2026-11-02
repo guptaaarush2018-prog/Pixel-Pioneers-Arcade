@@ -1,4 +1,4 @@
-/* Rune Rumble sound: battle effects, chest openings and a little menu tune, all synthesized
+/* Rune Rumble sound: battle effects, cache openings and a little menu tune, all synthesized
    with the Web Audio API. Follows the arcade's mute button. */
 const RuneSound = (() => {
   let ac = null, master = null, musicBus = null, noiseBuf = null, music = null, wantMusic = false;
@@ -87,13 +87,13 @@ const RuneSound = (() => {
     rage: () => { tone(110, { to: 220, dur: 0.4, type: 'sawtooth', vol: 0.07 }); },
     death: limited('death', 80, () => tone(300, { to: 120, dur: 0.12, type: 'triangle', vol: 0.05 })),
     towerFall: () => { noise(1.0, { vol: 0.25, from: 900, to: 40 }); tone(120, { to: 35, dur: 0.8, type: 'sine', vol: 0.18 }); notes([523, 659, 784], 0.1, { delay: 0.3 }); },
-    crownLost: () => notes([392, 311, 262], 0.14, { type: 'sawtooth', vol: 0.05 }),
+    towerLost: () => notes([392, 311, 262], 0.14, { type: 'sawtooth', vol: 0.05 }),
     start: () => notes([392, 523, 659, 784], 0.1, { type: 'square', vol: 0.06 }),
     tick: () => tone(1000, { dur: 0.05, vol: 0.05, type: 'square' }),
     win: () => notes([523, 659, 784, 1046, 0, 784, 1046], 0.13, { vol: 0.12 }),
     lose: () => notes([392, 330, 294, 262], 0.18, { type: 'sawtooth', vol: 0.06 }),
-    chestShake: () => noise(0.12, { vol: 0.08, from: 400, to: 150 }),
-    chestOpen: () => { noise(0.4, { vol: 0.12, from: 3000, to: 300 }); notes([523, 784, 1046], 0.07, { type: 'square', vol: 0.06 }); },
+    cacheShake: () => noise(0.12, { vol: 0.08, from: 400, to: 150 }),
+    cacheOpen: () => { noise(0.4, { vol: 0.12, from: 3000, to: 300 }); notes([523, 784, 1046], 0.07, { type: 'square', vol: 0.06 }); },
     card: rarity => {
       const base = { common: 660, rare: 784, epic: 988, legendary: 1175 }[rarity] || 660;
       tone(base, { to: base * 1.5, dur: 0.12, type: 'triangle', vol: 0.08 });
@@ -101,7 +101,7 @@ const RuneSound = (() => {
     },
     gold: () => { tone(988, { dur: 0.07, vol: 0.06 }); tone(1318, { dur: 0.2, vol: 0.06, delay: 0.07 }); },
     upgrade: () => notes([523, 659, 784, 1046, 1318], 0.07, { type: 'square', vol: 0.06 }),
-    trophy: () => notes([784, 988, 1175], 0.08, { type: 'triangle', vol: 0.08 }),
+    glory: () => notes([784, 988, 1175], 0.08, { type: 'triangle', vol: 0.08 }),
   };
 
   // Menu tune: a lute-ish arpeggio over a drone, four bars, in D dorian.

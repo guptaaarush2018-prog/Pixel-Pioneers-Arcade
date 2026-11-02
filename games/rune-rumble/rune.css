@@ -51,9 +51,9 @@
 .arena-banner .label { position: absolute; left: 0; right: 0; bottom: 0; padding: 30px 12px 12px; background: linear-gradient(transparent, rgba(16, 12, 30, .92)); }
 .arena-banner .label small { display: block; color: var(--muted); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; }
 .arena-banner .label b { font: 900 24px var(--font); color: #f4e7c4; }
-.trophy-bar { margin: 10px 16px 0; height: 10px; border-radius: 99px; background: rgba(0, 0, 0, .35); overflow: hidden; }
-.trophy-bar i { display: block; height: 100%; background: linear-gradient(90deg, #ffb100, #ffd86b); border-radius: inherit; }
-.trophy-line { display: flex; justify-content: space-between; margin: 4px 16px 0; font-size: 12px; color: var(--muted); }
+.glory-bar { margin: 10px 16px 0; height: 10px; border-radius: 99px; background: rgba(0, 0, 0, .35); overflow: hidden; }
+.glory-bar i { display: block; height: 100%; background: linear-gradient(90deg, #ffb100, #ffd86b); border-radius: inherit; }
+.glory-line { display: flex; justify-content: space-between; margin: 4px 16px 0; font-size: 12px; color: var(--muted); }
 
 .battle-btn {
   display: block;
@@ -75,8 +75,8 @@
 .mode-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
 .mode-row .btn { justify-content: center; }
 
-.chests { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.chest-slot {
+.caches { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.cache-slot {
   position: relative;
   min-height: 112px;
   padding: 8px 6px;
@@ -88,16 +88,16 @@
   text-align: center;
   cursor: pointer;
 }
-.chest-slot.full { border-style: solid; border-color: var(--rline); background: var(--rcard); }
-.chest-slot.ready { border-color: var(--gold); box-shadow: 0 0 16px rgba(255, 197, 61, .35); animation: rglow 1.4s infinite; }
+.cache-slot.full { border-style: solid; border-color: var(--rline); background: var(--rcard); }
+.cache-slot.ready { border-color: var(--gold); box-shadow: 0 0 16px rgba(255, 197, 61, .35); animation: rglow 1.4s infinite; }
 @keyframes rglow { 50% { box-shadow: 0 0 26px rgba(255, 197, 61, .6); } }
-.chest-slot canvas { display: block; width: 64px; height: 56px; margin: 0 auto 4px; }
-.chest-slot small { display: block; color: var(--muted); font-weight: 500; }
-.chest-slot .when { color: var(--gold); font-weight: 800; }
-.free-chest { display: flex; align-items: center; gap: 12px; margin-top: 10px; padding: 10px 14px; }
-.free-chest canvas { width: 54px; height: 46px; }
-.free-chest div { flex: 1; font-size: 14px; }
-.free-chest small { display: block; color: var(--muted); }
+.cache-slot canvas { display: block; width: 64px; height: 56px; margin: 0 auto 4px; }
+.cache-slot small { display: block; color: var(--muted); font-weight: 500; }
+.cache-slot .when { color: var(--gold); font-weight: 800; }
+.free-cache { display: flex; align-items: center; gap: 12px; margin-top: 10px; padding: 10px 14px; }
+.free-cache canvas { width: 54px; height: 46px; }
+.free-cache div { flex: 1; font-size: 14px; }
+.free-cache small { display: block; color: var(--muted); }
 
 /* ---------- Cards / deck ---------- */
 
@@ -148,7 +148,7 @@
 .stats b { display: block; color: var(--text); font-size: 15px; }
 .stats .up { color: #3ddc84; font-size: 11px; margin-left: 4px; }
 
-/* ---------- Trophy road ---------- */
+/* ---------- Glory path ---------- */
 
 .road { position: relative; padding-left: 26px; }
 .road::before { content: ''; position: absolute; left: 10px; top: 0; bottom: 0; width: 4px; border-radius: 4px; background: rgba(255, 255, 255, .1); }
@@ -172,9 +172,10 @@
 .bhud-side.them { border-bottom: 3px solid var(--red); }
 .bhud-side.me { border-bottom: 3px solid var(--blue); }
 .bname { max-width: 120px; font-size: 11px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.crowns { font-size: 18px; letter-spacing: 1px; color: rgba(255, 255, 255, .18); line-height: 1.1; }
-.crowns .on { color: var(--gold); text-shadow: 0 0 10px rgba(255, 197, 61, .7); display: inline-block; animation: rcrown .6s; }
-@keyframes rcrown { 0% { transform: scale(3) rotate(-30deg); } 60% { transform: scale(.8); } }
+.felled { font-size: 18px; letter-spacing: 1px; color: rgba(255, 255, 255, .18); line-height: 1.1; }
+.felled .on { color: var(--gold); text-shadow: 0 0 10px rgba(255, 197, 61, .7); display: inline-block; animation: rfelled .6s; }
+@keyframes rfelled { 0% { transform: scale(3) rotate(-30deg); } 60% { transform: scale(.8); } }
+.bdmg { font-size: 11px; font-weight: 800; color: #f4e7c4; font-variant-numeric: tabular-nums; }
 .clock { padding: 4px 14px; border-radius: 12px; background: rgba(12, 10, 24, .82); text-align: center; line-height: 1.05; }
 .clock b { font: 900 22px var(--font); font-variant-numeric: tabular-nums; }
 .clock.ot b { color: #ff7a7a; }
@@ -202,6 +203,7 @@
 .mana-bar { position: relative; flex: 1; height: 18px; border-radius: 99px; background: rgba(0, 0, 0, .45); overflow: hidden; border: 1px solid rgba(208, 107, 255, .35); }
 .mana-bar i { position: absolute; inset: 0 auto 0 0; background: linear-gradient(#e7a3ff, var(--mana) 55%, #9a3ad6); border-radius: inherit; }
 .mana-bar span { position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 calc(10% - 2px), rgba(0, 0, 0, .35) calc(10% - 2px) 10%); }
+.mana small { min-width: 34px; font-size: 12px; font-weight: 800; color: var(--mana); text-align: right; }
 .mana b { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #f0b6ff, var(--mana) 60%, #7a2aa8); font-size: 16px; font-weight: 900; }
 
 /* ---------- Bottom tabs (menus) ---------- */
@@ -213,11 +215,11 @@
 .tabs button[aria-current="page"] { background: rgba(255, 255, 255, .08); color: var(--text); }
 .tabs button[aria-current="page"] span { transform: scale(1.15) translateY(-2px); }
 
-/* ---------- Chest opening ---------- */
+/* ---------- Cache opening ---------- */
 
-.open-chest { text-align: center; }
-.open-chest canvas.big { width: 160px; height: 140px; cursor: pointer; }
-.open-chest canvas.big.shake { animation: rshake .35s; }
+.open-cache { text-align: center; }
+.open-cache canvas.big { width: 160px; height: 140px; cursor: pointer; }
+.open-cache canvas.big.shake { animation: rshake .35s; }
 @keyframes rshake { 20% { transform: rotate(-8deg) scale(1.05); } 40% { transform: rotate(8deg); } 60% { transform: rotate(-5deg); } 80% { transform: rotate(4deg); } }
 .reveal { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .reveal .ccard { width: 120px; animation: rflip .5s ease-out; cursor: default; }
@@ -230,10 +232,10 @@
 .loot-summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; margin: 10px 0; }
 .loot-summary .ccard { cursor: default; }
 
-.result-crowns { font-size: 44px; letter-spacing: 6px; color: rgba(255, 255, 255, .15); }
-.result-crowns .on { color: var(--gold); display: inline-block; animation: rcrown .6s backwards; text-shadow: 0 0 18px rgba(255, 197, 61, .6); }
-.result-crowns .on:nth-child(2) { animation-delay: .25s; }
-.result-crowns .on:nth-child(3) { animation-delay: .5s; }
+.result-felled { font-size: 44px; letter-spacing: 6px; color: rgba(255, 255, 255, .15); }
+.result-felled .on { color: var(--gold); display: inline-block; animation: rfelled .6s backwards; text-shadow: 0 0 18px rgba(255, 197, 61, .6); }
+.result-felled .on:nth-child(2) { animation-delay: .25s; }
+.result-felled .on:nth-child(3) { animation-delay: .5s; }
 .rewards { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
 .rewards span { padding: 6px 12px; border-radius: 999px; background: rgba(255, 255, 255, .07); font-weight: 800; }
 
@@ -248,8 +250,8 @@
   .rune .purse { grid-area: purse; padding: 4px 8px; font-size: 12px; }
   .rlogo { font-size: 15px; }
   .screens { padding: 14px 12px 24px; }
-  .chest-slot { min-height: 100px; }
-  .chest-slot canvas { width: 52px; height: 46px; }
+  .cache-slot { min-height: 100px; }
+  .cache-slot canvas { width: 52px; height: 46px; }
   .bhud-side { min-width: 70px; padding: 4px 6px; }
   .bname { max-width: 80px; }
   .bpause { top: 52px; }
@@ -273,3 +275,4 @@
   .rune .panel h2 { margin-bottom: 6px; }
   .card-info .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+.rule-note { margin: 10px 16px 0; font-size: 12px; line-height: 1.4; color: var(--muted); text-align: center; }

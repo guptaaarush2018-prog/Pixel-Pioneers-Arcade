@@ -171,7 +171,7 @@
     hardFlag: 'light-trail-hard',
     onlineWinFlag: 'light-trail-online-win',
     rules: `<ul>
-      <li>Your bike leaves a solid wall behind it. Anything you hit, a wall or a trail, ends the round.</li>
+      <li>Your racer leaves a solid trail behind it. Anything you hit, a wall or a trail, ends the round.</li>
       <li><span class="kbd-only">Press <b>Space</b></span><span class="touch-only">Tap</span> to <b>boost</b>: double speed for a moment, then it recharges.</li>
       <li>After ${SHRINK_AFTER} seconds the arena starts to shrink. First to ${WIN_ROUNDS} rounds wins.</li>
       <li>Two on one device: Player 1 uses <b>WASD</b> + <b>Shift</b>, Player 2 uses the <b>arrows</b> + <b>/</b>. On a touch screen, each player swipes on their own half.</li>
@@ -181,7 +181,7 @@
     onStop: () => { phase = 'over'; },
   });
 
-  // Online: the host runs the bikes and sends the squares filled each tick; the guest sends its turns.
+  // Online: the host runs the racers and sends the squares filled each tick; the guest sends its turns.
   function onNet(d) {
     if (me === 0) {
       if (d.k === 'in' && players && D[d.d | 0]) {

@@ -1,9 +1,9 @@
 (() => {
   const W = 500, H = 720;
-  const ROWS = 6, LEN = 5, TILE = 58, GAP = 8;
+  const ROWS = 5, LEN = 5, TILE = 66, GAP = 8;
   const GX = (W - (LEN * TILE + (LEN - 1) * GAP)) / 2, GY = 54;
   const START_TIME = 150, FAIL_PENALTY = 20, KEY_EVERY = 3;
-  const COLORS = { 2: '#3ddc84', 1: '#ffc53d', 0: '#3a404c' };
+  const COLORS = { 2: '#b388ff', 1: '#ff9f5a', 0: '#3a404c' };
   const KEY_ROWS = ['QWERTYUIOP', 'ASDFGHJKL', '>ZXCVBNM<'];
 
   // Answers: common, school-friendly words. Each answer's last letter becomes the next answer's
@@ -138,8 +138,8 @@
     if (chain % KEY_EVERY === 0) keys++;
     if (n <= 2) Arcade.flag('letter-lock-ace');
     if (chain >= 10) Arcade.flag('letter-lock-chain');
-    popups.push({ text: `+${points}  ·  +${bonus}s`, y: GY + n * (TILE + GAP) - 20, life: 1.4, color: '#3ddc84' });
-    say(chain > 1 ? `Chain ×${chain}!` : 'Solved!', '#3ddc84');
+    popups.push({ text: `+${points}  ·  +${bonus}s`, y: GY + n * (TILE + GAP) - 20, life: 1.4, color: COLORS[2] });
+    say(chain > 1 ? `Chain ×${chain}!` : 'Solved!', COLORS[2]);
     [523, 659, 784].forEach((f, i) => Arcade.tone({ freq: f, dur: 0.12, type: 'triangle', vol: 0.05, delay: 0.5 + i * 0.08 }));
     next = { at: clock + 1.3, first: answer[LEN - 1] };
     updateHud();
@@ -344,9 +344,9 @@
           else tile(x, y, row.word[i], COLORS[row.res[i]], Math.min(1, (t - 0.5) * 2));
         } else if (r === rows?.length && state !== 'ready' && !next) {
           const isLocked = i in locked;
-          tile(x + shakeX, y, cur[i], null, 1, isLocked ? '#3ddc84' : cur[i] ? '#6b7280' : '#2a2f39');
+          tile(x + shakeX, y, cur[i], null, 1, isLocked ? COLORS[2] : cur[i] ? '#6b7280' : '#2a2f39');
           if (isLocked) {
-            ctx.fillStyle = 'rgba(61,220,132,0.12)';
+            ctx.fillStyle = 'rgba(179,136,255,0.14)';
             ctx.beginPath(); ctx.roundRect(x + shakeX, y, TILE, TILE, 8); ctx.fill();
           }
         } else {
@@ -369,7 +369,7 @@
     } else if (state === 'playing' && !next) {
       ctx.fillStyle = '#8d94a1';
       ctx.font = '600 14px system-ui, sans-serif';
-      ctx.fillText(chain ? `Chain ×${chain} · solve it to keep going` : 'The green tile is locked in for you', W / 2, 476);
+      ctx.fillText(chain ? `Chain ×${chain} · solve it to keep going` : 'The violet tile is locked in for you', W / 2, 476);
     }
     for (const p of popups) {
       p.life -= dt;
@@ -413,7 +413,7 @@
     intro: {
       title: 'Letter Lock',
       html: `<ul>
-        <li>Guess the five-letter word in six tries. <b style="color:#3ddc84">Green</b> is the right spot, <b style="color:#ffc53d">gold</b> is in the word somewhere else.</li>
+        <li>Guess the five-letter word in five tries. <b style="color:#b388ff">Violet</b> is the right spot, <b style="color:#ff9f5a">orange</b> is in the word somewhere else.</li>
         <li>The <b>last letter</b> of each answer is locked in as the <b>first letter</b> of the next one.</li>
         <li>Fewer guesses score more and add time to the clock. Missing a word costs ${FAIL_PENALTY} seconds and breaks your chain.</li>
         <li>Every third word in a chain earns a <b>key</b>. <span class="kbd-only">Press <kbd>?</kbd></span><span class="touch-only">Tap the key button</span> to spend it on a free letter.</li>

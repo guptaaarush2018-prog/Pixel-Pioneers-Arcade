@@ -13,7 +13,7 @@
   <header class="topbar">
     <a class="back" href="../../index.html">← All games</a>
     <h1><span class="rlogo">RUNE<b>RUMBLE</b></span></h1>
-    <span class="purse" title="Gold and trophies"><span class="gold-ico">◆</span><b id="gold">0</b><span class="trophy-ico">🏆</span><b id="trophies">0</b></span>
+    <span class="purse" title="Gold and glory"><span class="gold-ico">◆</span><b id="gold">0</b><span class="glory-ico">⚜</span><b id="glory">0</b></span>
     <button class="icon-btn" id="mute" type="button">Sound on</button>
   </header>
 
@@ -21,9 +21,9 @@
     <canvas id="game"></canvas>
 
     <div class="bhud" id="bhud" hidden>
-      <div class="bhud-side them"><span class="bname" id="them-name">Opponent</span><span class="crowns" id="them-crowns"></span></div>
+      <div class="bhud-side me"><span class="bname" id="me-name">You</span><span class="felled" id="me-felled"></span><span class="bdmg" id="me-dmg"></span></div>
       <div class="clock" id="clock"><b id="time">3:00</b><small id="clock-note"></small></div>
-      <div class="bhud-side me"><span class="bname" id="me-name">You</span><span class="crowns" id="me-crowns"></span></div>
+      <div class="bhud-side them"><span class="bname" id="them-name">Opponent</span><span class="felled" id="them-felled"></span><span class="bdmg" id="them-dmg"></span></div>
       <button class="bpause" id="pause" type="button" aria-label="Pause">❚❚</button>
     </div>
     <div class="bbanner" id="bbanner"></div>
@@ -35,13 +35,13 @@
   <div class="hand-bar" id="hand" hidden>
     <div class="next"><small>Next</small><canvas id="next-card" width="80" height="96"></canvas></div>
     <div class="cards" id="cards"></div>
-    <div class="mana"><div class="mana-bar"><i id="mana-fill"></i><span id="mana-ticks"></span></div><b id="mana-num">5</b></div>
+    <div class="mana"><div class="mana-bar"><i id="mana-fill"></i><span id="mana-ticks"></span></div><small id="mana-rate"></small><b id="mana-num">5</b></div>
   </div>
 
   <nav class="tabs" id="tabs" aria-label="Rune Rumble">
     <button type="button" data-tab="cards"><span>🃏</span>Cards</button>
     <button type="button" data-tab="battle"><span>⚔️</span>Battle</button>
-    <button type="button" data-tab="road"><span>🏆</span>Road</button>
+    <button type="button" data-tab="road"><span>⚜</span>Path</button>
   </nav>
 
   <script src="../../assets/js/config.js"></script>

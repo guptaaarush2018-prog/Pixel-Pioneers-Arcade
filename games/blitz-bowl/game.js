@@ -963,7 +963,7 @@
     start: () => { ui.hide(); newGame(); },
     score: () => us * 100 + (us > them && state === 'over' ? 1500 : 0),
     intro: {
-      title: 'Blitz Bowl',
+      title: 'Pixel Gridiron',
       html: `<ul>
           <li>Call a play<span class="kbd-only">, then drop back with <kbd>←</kbd><kbd>↑</kbd><kbd>→</kbd><kbd>↓</kbd></span>.</li>
           <li>Click or tap a spot to throw there, or press <kbd>1</kbd>–<kbd>4</kbd> to hit a receiver in stride.</li>

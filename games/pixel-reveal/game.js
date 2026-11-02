@@ -18,7 +18,7 @@
     { id: 'trophy', name: 'Champion', pal: { y: '#ffc53d', o: '#c9952a' }, art: ['yyyyyyyyyy', 'y.yyyyyy.y', 'y.yyyyyy.y', '.yyyyyyyy.', '..yyyyyy..', '...yyyy...', '....yy....', '....yy....', '..oooooo..', '..oooooo..'] },
     { id: 'comet', name: 'Comet Pinball', pal: { y: '#ffc53d', o: '#ff9a3d', w: '#e6fbff' }, art: ['.......ww.', '......wwww', '.....owwww', '....yowww.', '...yyoo...', '..yyo.....', '.yyo......', 'yy........', 'y.........', '..........'] },
     { id: 'lantern', name: 'Lantern', pal: { o: '#c9952a', y: '#ffe08a', w: '#ffffff' }, art: ['....oo....', '...o..o...', '..oooooo..', '..oyyyyo..', '..oywyyo..', '..oyyyyo..', '..oyyyyo..', '..oooooo..', '...oooo...', '..........'] },
-    { id: 'football', name: 'Blitz Bowl', pal: { b: '#9a5a32', w: '#ffffff' }, art: ['..........', '...bbbb...', '.bbbbbbbb.', 'bbbwbwbwbb', 'bbwwwwwwbb', 'bbbwbwbwbb', '.bbbbbbbb.', '...bbbb...', '..........', '..........'] },
+    { id: 'football', name: 'Pixel Gridiron', pal: { b: '#9a5a32', w: '#ffffff' }, art: ['..........', '...bbbb...', '.bbbbbbbb.', 'bbbwbwbwbb', 'bbwwwwwwbb', 'bbbwbwbwbb', '.bbbbbbbb.', '...bbbb...', '..........', '..........'] },
     { id: 'ball', name: 'Hoop Duel', pal: { o: '#f28c28', k: '#7a3f0c' }, art: ['...okko...', '.oookkooo.', '.okookooko', 'ooookkoooo', 'kkkkkkkkkk', 'kkkkkkkkkk', 'ooookkoooo', '.okookooko', '.oookkooo.', '...okko...'] },
   ];
 

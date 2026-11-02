@@ -10,11 +10,11 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | Paintball Arena | Fighting (platform shooter) | Linked from the hub; hosted at [plzgimmeaname.github.io/paintball-web](https://plzgimmeaname.github.io/paintball-web/) |
 | Pixel Pitch | Sports (4-a-side football) | Live 1v1 |
 | Hoop Duel | Sports (1v1 basketball) | Live 1v1 |
-| Blitz Bowl | Sports (retro football, season mode) | Online duel |
-| Light Trail | Arcade (light-cycle duel, shrinking arena) | Live 1v1, two on one keyboard |
+| Pixel Gridiron | Sports (top-down football, season mode) | Online duel |
+| Light Trail | Arcade (trail duel, shrinking arena) | Live 1v1, two on one keyboard |
 | Quick Draw | Arcade (reaction standoff, outlaw ladder) | Live 1v1, two on one keyboard |
 | Pocket Racer | Racing | Its own mini-site: six-cup career with stars, 38 tracks, garage of 17 unlockable cars, time trials with per-track world leaderboards, track builder, synthesized engine sound and music, follow camera on phones, live 1v1 races, world-record ghost |
-| Rune Rumble | Strategy (lane battler: 30 cards, decks, chests, trophy road) | Live 1v1 |
+| Rune Rumble | Strategy (lane battler: 42 cards, rune wells, decks, caches, ladder) | Live 1v1 |
 | Realm Rivals | Strategy (kingdom builder) | Live 1v1 kingdom wars, plus the long-term Kingdom mode |
 | Box Battle | Strategy | Live 1v1 |
 | Gravity Four | Strategy (four in a row with a board tilt) | Live 1v1 |

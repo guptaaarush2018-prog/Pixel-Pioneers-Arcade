@@ -1,8 +1,9 @@
 (() => {
   const W = 900, H = 520, N = 10, CELL = 36;
   const GRIDS = [{ x: 50, y: 96 }, { x: 490, y: 96 }];  // your fleet, enemy waters
-  const SHIPS = [5, 4, 3, 3, 2];
-  const NAMES = ['Carrier', 'Battleship', 'Cruiser', 'Submarine', 'Destroyer'];
+  const SHIPS = [5, 4, 3, 2, 2];
+  const FLEET_SIZE = SHIPS.reduce((a, b) => a + b);
+  const NAMES = ['Flagship', 'Ironclad', 'Corvette', 'Cutter', 'Skiff'];
   const STRIKE_AT = 3;
   const LEVELS = ['Easy', 'Normal', 'Hard'];
   const BASE = [300, 600, 900];
@@ -259,12 +260,12 @@
     renderTools();
     const afloat = fleet.reduce((n, s) => n + s.len, 0) - incoming.filter(v => v === 2).length;
     const acc = shots ? hits / shots : 0;
-    if (winner === me && mode !== 'local' && afloat === 17) Arcade.flag('fleet-hunt-flawless');
+    if (winner === me && mode !== 'local' && afloat === FLEET_SIZE) Arcade.flag('fleet-hunt-flawless');
     const score = winner === 0 ? BASE[level] + afloat * 10 + Math.round(acc * 300) : hits * 10;
     setTimeout(() => Match.over({
       winner,
       score,
-      lines: [`Accuracy ${Math.round(acc * 100)}% · ${afloat} of 17 squares of your fleet still afloat`],
+      lines: [`Accuracy ${Math.round(acc * 100)}% · ${afloat} of ${FLEET_SIZE} squares of your fleet still afloat`],
     }), 1200);
   }
 

@@ -221,35 +221,43 @@ const RuneArt = (() => {
   const TROOPS = {
     squire: (c, r, team, a) => person(c, { r, team, walk: a.walk, swing: a.swing, outfit: shade(team, -0.15), head: helm('#9aa3b0'),
       gear: (g, r, s) => { weapon(g, 'sword', r * 1.3, s); rrect(g, -r * 1.1, -r * 0.2, r * 0.5, r * 0.75, r * 0.15, '#8a6a3a'); } }),
-    knight: (c, r, team, a) => person(c, { r, team, walk: a.walk, swing: a.swing, outfit: '#a9b2bf', legs: '#7d8794', cape: true,
+    bulwark: (c, r, team, a) => person(c, { r, team, walk: a.walk, swing: a.swing, outfit: '#a9b2bf', legs: '#7d8794', cape: true,
       head: (g, r) => { helm('#c3cad4')(g, r); g.fillStyle = team; g.fillRect(-r * 0.1, -r * 3.05, r * 0.22, r * 0.55); g.fillStyle = '#20242c'; g.fillRect(r * 0.15, -r * 2.3, r * 0.4, r * 0.1); },
       gear: (g, r, s) => weapon(g, 'sword', r * 1.6, s) }),
-    archers: (c, r, team, a) => person(c, { r, team, walk: a.walk, swing: 0, outfit: '#4f7a3a', head: hood('#3f6a2e'),
+    bowmen: (c, r, team, a) => person(c, { r, team, walk: a.walk, swing: 0, outfit: '#4f7a3a', head: hood('#3f6a2e'),
       gear: (g, r, s) => { g.translate(r * 0.3, 0); bow(g, r * 1.4, s); } }),
-    princess: (c, r, team, a) => person(c, { r, team, walk: a.walk, swing: 0, outfit: '#f2a6c8', skin: '#f6d2b0',
-      head: (g, r) => { g.fillStyle = '#f2d16b'; g.beginPath(); g.arc(0, -r * 2.3, r * 0.62, Math.PI * 0.9, Math.PI * 2.1); g.fill();
-        g.fillStyle = '#ffc53d'; g.beginPath(); g.moveTo(-r * 0.4, -r * 2.75); g.lineTo(-r * 0.3, -r * 3.15); g.lineTo(-r * 0.05, -r * 2.9); g.lineTo(r * 0.15, -r * 3.2); g.lineTo(r * 0.3, -r * 2.9); g.lineTo(r * 0.5, -r * 3.15); g.lineTo(r * 0.5, -r * 2.75); g.fill(); },
+    flamebow: (c, r, team, a) => person(c, { r, team, walk: a.walk, swing: 0, outfit: '#8c3b2a', head: hood('#6a2a1c'),
       gear: (g, r, s) => { g.translate(r * 0.3, 0); bow(g, r * 1.5, s); } }),
-    musketeer: (c, r, team, a) => person(c, { r, team, walk: a.walk, swing: a.swing, outfit: '#5a4a7a',
+    longshot: (c, r, team, a) => person(c, { r, team, walk: a.walk, swing: a.swing, outfit: '#5a4a7a',
       head: (g, r) => { g.fillStyle = '#2b2533'; g.beginPath(); g.ellipse(0, -r * 2.6, r * 0.9, r * 0.25, 0, 0, TAU); g.fill(); g.fillRect(-r * 0.45, -r * 3.05, r * 0.9, r * 0.5); g.fillStyle = team; g.beginPath(); g.ellipse(-r * 0.5, -r * 3.0, r * 0.5, r * 0.15, -0.6, 0, TAU); g.fill(); },
       gear: (g, r, s) => weapon(g, 'musket', r * 1.6, s) }),
-    wizard: (c, r, team, a) => person(c, { r, team, walk: a.walk, swing: a.swing, outfit: '#3a5ac8', head: (g, r) => { pointy('#2f4ab0')(g, r); g.fillStyle = '#eee'; g.beginPath(); g.moveTo(-r * 0.1, -r * 2); g.lineTo(r * 0.5, -r * 2); g.lineTo(r * 0.2, -r * 1.3); g.fill(); },
+    adept: (c, r, team, a) => person(c, { r, team, walk: a.walk, swing: a.swing, outfit: '#3a5ac8', head: (g, r) => { pointy('#2f4ab0')(g, r); g.fillStyle = '#eee'; g.beginPath(); g.moveTo(-r * 0.1, -r * 2); g.lineTo(r * 0.5, -r * 2); g.lineTo(r * 0.2, -r * 1.3); g.fill(); },
       gear: (g, r, s) => weapon(g, 'staff', r * 1.5, s * 0.4, '#ff9a3d') }),
-    necro: (c, r, team, a) => person(c, { r, team, walk: a.walk, swing: a.swing, outfit: '#2e2638', skin: '#c9d1c0', head: hood('#1f1828'),
+    gravecaller: (c, r, team, a) => person(c, { r, team, walk: a.walk, swing: a.swing, outfit: '#2e2638', skin: '#c9d1c0', head: hood('#1f1828'),
       gear: (g, r, s) => weapon(g, 'staff', r * 1.5, s * 0.4, '#a46bff') }),
-    electro: (c, r, team, a) => person(c, { r, team, walk: a.walk, swing: a.swing, outfit: '#2b6fd6', head: (g, r) => { g.strokeStyle = '#bfe8ff'; g.lineWidth = r * 0.18; g.beginPath(); for (let i = -2; i <= 2; i++) { g.moveTo(i * r * 0.22, -r * 2.7); g.lineTo(i * r * 0.32, -r * 3.25); } g.stroke(); },
+    stormmage: (c, r, team, a) => person(c, { r, team, walk: a.walk, swing: a.swing, outfit: '#2b6fd6', head: (g, r) => { g.strokeStyle = '#bfe8ff'; g.lineWidth = r * 0.18; g.beginPath(); for (let i = -2; i <= 2; i++) { g.moveTo(i * r * 0.22, -r * 2.7); g.lineTo(i * r * 0.32, -r * 3.25); } g.stroke(); },
       gear: (g, r, s) => { circle(g, r * 0.2, -r * 0.2, r * (0.3 + s * 0.25), 'rgba(140,220,255,0.85)'); circle(g, r * 0.2, -r * 0.2, r * 0.15, '#fff'); } }),
-    healer: (c, r, team, a) => person(c, { r, team, walk: a.walk, swing: a.swing, outfit: '#f2efe6', head: hood('#e6e1d3'),
+    mender: (c, r, team, a) => person(c, { r, team, walk: a.walk, swing: a.swing, outfit: '#f2efe6', head: hood('#e6e1d3'),
       gear: (g, r, s) => weapon(g, 'staff', r * 1.5, s * 0.3, '#5dff9a') }),
-    valkyrie: (c, r, team, a) => person(c, { r, team, walk: a.walk, swing: a.swing, outfit: shade(team, -0.1), skin: '#f2c9a0',
-      head: (g, r) => { g.fillStyle = '#ff8a2b'; g.beginPath(); g.arc(0, -r * 2.35, r * 0.62, Math.PI * 0.8, Math.PI * 2.2); g.fill(); g.fillRect(-r * 0.7, -r * 2.35, r * 0.3, r * 0.9); },
+    whirlblade: (c, r, team, a) => person(c, { r, team, walk: a.walk, swing: a.swing, outfit: shade(team, -0.1), head: helm('#7a828f'),
       gear: (g, r, s) => { g.rotate(s * TAU); weapon(g, 'axe', r * 1.4, 0); } }),
-    bomber: (c, r, team, a) => person(c, { r, team, walk: a.walk, swing: a.swing, outfit: '#5c5f66', skin: '#e8ebe4', head: (g, r) => { g.fillStyle = '#20242c'; g.fillRect(-r * 0.6, -r * 2.5, r * 1.2, r * 0.2); },
+    sapper: (c, r, team, a) => person(c, { r, team, walk: a.walk, swing: a.swing, outfit: '#5c5f66', skin: '#e8ebe4', head: (g, r) => { g.fillStyle = '#20242c'; g.fillRect(-r * 0.6, -r * 2.5, r * 1.2, r * 0.2); },
       gear: (g, r, s) => { circle(g, r * 0.1, -r * 0.3 - s * r, r * 0.45, '#22252b'); circle(g, r * 0.25, -r * 0.8 - s * r, r * 0.12, '#ffb347'); } }),
-    goblin: (c, r, team, a) => person(c, { r, team, walk: a.walk, swing: a.swing, outfit: '#7a5a3a', skin: '#7fc95a',
-      head: (g, r) => { g.fillStyle = '#7fc95a'; g.beginPath(); g.moveTo(-r * 0.4, -r * 2.4); g.lineTo(-r * 1.1, -r * 2.7); g.lineTo(-r * 0.4, -r * 2.15); g.fill(); g.beginPath(); g.moveTo(r * 0.4, -r * 2.4); g.lineTo(r * 1.1, -r * 2.7); g.lineTo(r * 0.4, -r * 2.15); g.fill(); },
+    pikes: (c, r, team, a) => person(c, { r, team, walk: a.walk, swing: a.swing, outfit: shade(team, -0.05), head: helm('#8d96a3'),
+      gear: (g, r, s) => weapon(g, 'lance', r * 2, s * 0.5) }),
+    thornback: (c, r, team, a) => {
+      person(c, { r, team, walk: a.walk, swing: a.swing, outfit: '#4d5a3c', legs: '#39432c', head: helm('#6f7d58'), gear: (g, r, s) => weapon(g, 'sword', r * 1.4, s) });
+      c.fillStyle = '#c9d6a0';
+      for (const [x, y] of [[-0.75, 1.75], [-0.85, 1.25], [-0.72, 0.75], [0.1, 2.75], [-0.35, 2.65], [0.55, 2.6]]) {
+        c.beginPath(); c.moveTo((x - 0.14) * r, -y * r); c.lineTo((x * 1.45) * r, -(y + 0.32) * r); c.lineTo((x + 0.14) * r, -y * r); c.fill();
+      }
+    },
+    hexblade: (c, r, team, a) => person(c, { r, team, walk: a.walk, swing: a.swing, outfit: '#3a1f4d', skin: '#d8c4e0', head: hood('#2a1538'),
+      gear: (g, r, s) => { weapon(g, 'sword', r * 1.5, s); circle(g, r * 0.1, -r * 1.1, r * 0.2, 'rgba(216,90,255,0.75)'); } }),
+    burrower: (c, r, team, a) => person(c, { r, team, walk: a.walk, swing: a.swing, outfit: '#7a5a3a', skin: '#b08a5a',
+      head: (g, r) => { g.fillStyle = '#b08a5a'; g.beginPath(); g.moveTo(-r * 0.4, -r * 2.4); g.lineTo(-r * 1.1, -r * 2.7); g.lineTo(-r * 0.4, -r * 2.15); g.fill(); g.beginPath(); g.moveTo(r * 0.4, -r * 2.4); g.lineTo(r * 1.1, -r * 2.7); g.lineTo(r * 0.4, -r * 2.15); g.fill(); },
       gear: (g, r, s) => weapon(g, 'dagger', r * 1.2, s) }),
-    skeletons: (c, r, team, a) => person(c, { r, team, walk: a.walk, swing: a.swing, outfit: '#e9e6dc', legs: '#d9d5c8', boots: '#bdb8aa', skin: '#efece2', undead: true,
+    sprites: (c, r, team, a) => person(c, { r, team, walk: a.walk, swing: a.swing, outfit: '#6f5438', legs: '#5c452d', boots: '#4a3722', skin: '#7d6042', undead: true,
       head: (g, r) => { g.fillStyle = '#1b1b22'; g.fillRect(r * 0.05, -r * 2.4, r * 0.18, r * 0.18); g.fillRect(-r * 0.25, -r * 2.4, r * 0.18, r * 0.18); g.fillStyle = 'rgba(0,0,0,0.35)'; for (let i = 0; i < 3; i++) g.fillRect(-r * 0.45, -r * 1.65 + i * r * 0.28, r * 0.9, r * 0.08); },
       gear: (g, r, s) => weapon(g, 'sword', r * 1.1, s) }),
     brute: (c, r, team, a) => person(c, { r, team, walk: a.walk, swing: a.swing, outfit: '#7a5a3a', skin: '#8fb36a', legs: '#5a4a32',
@@ -271,10 +279,55 @@ const RuneArt = (() => {
       circle(c, r * 1.33, -r * 1.12 + b, r * 0.04, '#fff');
       c.fillStyle = team; c.fillRect(r * 0.5, -r * 1.25 + b, r * 0.22, r * 0.85);
     },
-    bats: (c, r, team, a) => {
+    scout: (c, r, team, a) => {
+      const b = Math.sin(a.walk * 2) * r * 0.12;
+      for (let i = 0; i < 4; i++) { const ph = Math.sin(a.walk * 2 + i * 1.7) * r * 0.28; c.fillStyle = '#3a2418'; c.fillRect(-r * 0.75 + i * r * 0.46 + ph, -r * 0.7, r * 0.2, r * 0.7); }
+      c.fillStyle = '#d9692b';
+      c.beginPath(); c.moveTo(-r * 0.8, -r * 1.05 + b); c.quadraticCurveTo(-r * 1.9, -r * 1.7 + b, -r * 2.1, -r * 0.8 + b); c.quadraticCurveTo(-r * 1.5, -r * 0.55 + b, -r * 0.8, -r * 0.7 + b); c.fill();
+      circle(c, -r * 2, -r * 0.92 + b, r * 0.24, '#fff3e6');
+      ellipse(c, 0, -r * 0.95 + b, r * 1.1, r * 0.55, ball(c, 0, -r * 0.95 + b, r * 1.1, '#d9692b'));
+      circle(c, r * 1, -r * 1.3 + b, r * 0.52, '#d9692b');
+      for (const x of [0.72, 1.18]) { c.beginPath(); c.moveTo(r * (x - 0.17), -r * 1.65 + b); c.lineTo(r * x, -r * 2.2 + b); c.lineTo(r * (x + 0.17), -r * 1.65 + b); c.fill(); }
+      c.fillStyle = '#fff3e6'; c.beginPath(); c.moveTo(r * 1, -r * 1.25 + b); c.lineTo(r * 1.85, -r * 1.12 + b); c.lineTo(r * 1, -r * 0.95 + b); c.fill();
+      circle(c, r * 1.82, -r * 1.14 + b, r * 0.1, '#111');
+      circle(c, r * 1.15, -r * 1.4 + b, r * 0.1, '#111');
+      c.fillStyle = team; c.fillRect(r * 0.3, -r * 1.2 + b, r * 0.24, r * 0.65);
+    },
+    beetle: (c, r, team, a) => {
+      c.strokeStyle = '#231a14'; c.lineWidth = r * 0.14; c.lineCap = 'round';
+      for (let i = 0; i < 3; i++) { const ph = Math.sin(a.walk * 2 + i * 2) * r * 0.25; c.beginPath(); c.moveTo((i - 1) * r * 0.65, -r * 0.5); c.lineTo((i - 1) * r * 0.85 + ph, 0); c.stroke(); }
+      ellipse(c, 0, -r * 0.82, r * 1.2, r * 0.76, ball(c, 0, -r * 0.82, r * 1.2, '#3b3f49'));
+      c.strokeStyle = team; c.lineWidth = r * 0.2; c.beginPath(); c.moveTo(-r * 1.05, -r * 0.85); c.lineTo(r * 0.95, -r * 0.85); c.stroke();
+      circle(c, r * 1.2, -r * 0.82, r * 0.42, '#2a2d35');
+      circle(c, r * 1.35, -r * 0.94, r * 0.09, '#ff5d3d');
+      c.strokeStyle = '#6b4a2a'; c.lineWidth = r * 0.12; c.beginPath(); c.moveTo(-r * 0.2, -r * 1.5); c.quadraticCurveTo(-r * 0.3, -r * 2, r * 0.1, -r * 2.2); c.stroke();
+      circle(c, r * 0.14, -r * 2.25, r * (0.14 + Math.abs(Math.sin(a.walk * 3)) * 0.1), '#ffb347');
+    },
+    hawk: (c, r, team, a) => {
+      const f = Math.sin(a.walk * 2.5) * 0.7;
+      c.fillStyle = '#6b4a30';
+      for (const s of [-1, 1]) { c.beginPath(); c.moveTo(s * r * 0.2, -r * 1.2); c.quadraticCurveTo(s * r * 1.5, -r * (2.1 + f), s * r * 2.5, -r * (1 + f)); c.quadraticCurveTo(s * r * 1.5, -r * (1 + f * 0.5), s * r * 0.3, -r * 0.8); c.fill(); }
+      c.fillStyle = '#54381f'; c.beginPath(); c.moveTo(-r * 0.3, -r * 0.8); c.lineTo(-r * 1.4, -r * 0.45); c.lineTo(-r * 0.3, -r * 0.5); c.fill();
+      ellipse(c, 0, -r, r * 0.8, r * 0.48, ball(c, 0, -r, r * 0.8, '#8a6440'));
+      circle(c, r * 0.78, -r * 1.2, r * 0.38, '#efe6d2');
+      c.fillStyle = '#e8b22f'; c.beginPath(); c.moveTo(r * 1.08, -r * 1.3); c.lineTo(r * 1.55, -r * 1.12); c.lineTo(r * 1.08, -r * 1.05); c.fill();
+      circle(c, r * 0.92, -r * 1.27, r * 0.08, '#111');
+      c.fillStyle = team; c.fillRect(-r * 0.2, -r * 1.14, r * 0.36, r * 0.34);
+    },
+    wisps: (c, r, team, a) => {
+      const b = Math.sin(a.walk * 2.5) * r * 0.2, y = -r * 1.1 + b;
+      c.fillStyle = 'rgba(150,235,255,0.5)';
+      c.beginPath(); c.moveTo(-r * 0.65, y); c.quadraticCurveTo(-r * 1.4, y + r * 0.45, -r * 1.65, y + Math.sin(a.walk * 3) * r * 0.25); c.quadraticCurveTo(-r * 1.1, y - r * 0.6, -r * 0.3, y - r * 0.65); c.fill();
+      circle(c, 0, y, r * 1.0, 'rgba(120,225,255,0.3)');
+      circle(c, 0, y, r * 0.68, ball(c, 0, y, r * 0.68, '#9ff0ff'));
+      circle(c, r * 0.2, y - r * 0.1, r * 0.1, '#17465a');
+      circle(c, -r * 0.2, y - r * 0.1, r * 0.1, '#17465a');
+      c.fillStyle = team; c.fillRect(-r * 0.32, y + r * 0.25, r * 0.64, r * 0.14);
+    },
+    moths: (c, r, team, a) => {
       const f = Math.sin(a.walk * 3) * 0.8;
       for (const s of [-1, 1]) {
-        c.fillStyle = s < 0 ? '#3a2c48' : '#4e3d60';
+        c.fillStyle = s < 0 ? '#9c8560' : '#b59c74';
         c.beginPath(); c.moveTo(0, -r); c.quadraticCurveTo(s * r * 1.6, -r * (1.9 + f), s * r * 2.2, -r * (0.8 + f));
         c.quadraticCurveTo(s * r * 1.7, -r * (0.75 + f * 0.6), s * r * 1.45, -r * (0.55 + f * 0.4));
         c.quadraticCurveTo(s * r * 1.1, -r * (0.7 + f * 0.3), s * r * 0.8, -r * 0.5);
@@ -300,7 +353,7 @@ const RuneArt = (() => {
       person(c, { r, team, walk: 0, swing: a.swing, head: helm('#9aa3b0'), gear: (g, r, s) => weapon(g, 'lance', r * 1.5, s * 0.4) });
       c.restore();
     },
-    ramrider: (c, r, team, a) => {
+    charger: (c, r, team, a) => {
       const b = Math.sin(a.walk * 1.5) * r * 0.1;
       c.fillStyle = '#4a4038';
       for (let i = 0; i < 4; i++) { const ph = Math.sin(a.walk * 1.5 + i * 1.6) * r * 0.2; c.fillRect(-r * 0.7 + i * r * 0.45 + ph, -r * 0.7, r * 0.18, r * 0.7); }
@@ -312,9 +365,9 @@ const RuneArt = (() => {
       person(c, { r, team, walk: 0, swing: a.swing, skin: '#7fc95a', head: helm('#8a6a3a'), gear: (g, r, s) => weapon(g, 'club', r * 1.2, s) });
       c.restore();
     },
-    golem: (c, r, team, a) => golemBody(c, r, team, a, '#8a8f99'),
-    golemite: (c, r, team, a) => golemBody(c, r, team, a, '#9aa0aa'),
-    dragon: (c, r, team, a) => {
+    colossus: (c, r, team, a) => colossusBody(c, r, team, a, '#8a8f99'),
+    shardling: (c, r, team, a) => colossusBody(c, r, team, a, '#9aa0aa'),
+    wyrmling: (c, r, team, a) => {
       const f = Math.sin(a.walk * 2.5) * 0.7;
       const green = '#5fbf4f';
       for (const s of [-1, 1]) {
@@ -344,7 +397,7 @@ const RuneArt = (() => {
         circle(c, r * 1.75, -r * 1.35, r * 0.25 * a.swing, 'rgba(255,230,120,0.9)');
       }
     },
-    phoenix: (c, r, team, a) => {
+    ashwing: (c, r, team, a) => {
       const f = Math.sin(a.walk * 2.5) * 0.8;
       for (const s of [-1, 1]) {
         const g = c.createLinearGradient(0, -r, -r * 1.2, -r * (2.4 + f));
@@ -370,7 +423,7 @@ const RuneArt = (() => {
     },
   };
 
-  function golemBody(c, r, team, a, stone) {
+  function colossusBody(c, r, team, a, stone) {
     const step = Math.sin(a.walk) * r * 0.15;
     rrect(c, -r * 0.72 + step, -r * 0.75, r * 0.52, r * 0.75, r * 0.15, shade(stone, -0.35));
     rrect(c, r * 0.2 - step, -r * 0.75, r * 0.52, r * 0.75, r * 0.15, shade(stone, -0.2));
@@ -444,11 +497,12 @@ const RuneArt = (() => {
       crenels(c, -w * 0.42, -h, w * 0.84, 5, 7 * s, '#aaa294');
       c.fillStyle = team; c.fillRect(-w * 0.42, -h * 0.72, w * 0.84, 6 * s);
       rrect(c, -12 * s, -h * 0.5, 24 * s, h * 0.5, [12 * s, 12 * s, 0, 0], '#3a3028');
-      // The king, bobbing when he's annoyed.
-      const k = a.swing;
-      c.save(); c.translate(0, -h - 2 * s - k * 3 * s); c.scale(s, s);
-      person(c, { r: 9, team, walk: 0, swing: 0, outfit: shade(team, -0.1), head: (g, r) => { g.fillStyle = '#ffc53d'; g.beginPath(); g.moveTo(-r * 0.55, -r * 2.75); g.lineTo(-r * 0.45, -r * 3.35); g.lineTo(-r * 0.15, -r * 3.0); g.lineTo(r * 0.05, -r * 3.45); g.lineTo(r * 0.25, -r * 3.0); g.lineTo(r * 0.55, -r * 3.35); g.lineTo(r * 0.6, -r * 2.75); g.fill(); g.fillStyle = '#d8d8d8'; g.beginPath(); g.arc(r * 0.15, -r * 1.95, r * 0.45, 0, Math.PI); g.fill(); } });
-      c.restore();
+      // A rune stone floats over the keep, and jumps when the keep shoots.
+      const k = a.swing, ry = -h - 18 * s - k * 3 * s + Math.sin((a.t || 0) * 2) * 2 * s;
+      c.fillStyle = shade(team, 0.25);
+      c.beginPath(); c.moveTo(0, ry - 13 * s); c.lineTo(9 * s, ry); c.lineTo(0, ry + 13 * s); c.lineTo(-9 * s, ry); c.closePath(); c.fill();
+      c.strokeStyle = 'rgba(255,255,255,0.8)'; c.lineWidth = 1.5 * s;
+      c.beginPath(); c.moveTo(0, ry - 6 * s); c.lineTo(0, ry + 6 * s); c.moveTo(-3 * s, ry); c.lineTo(3 * s, ry); c.stroke();
     },
     turret: (c, s, team, a) => {
       ellipse(c, 0, 0, 16 * s, 6 * s, 'rgba(0,0,0,0.25)');
@@ -461,7 +515,7 @@ const RuneArt = (() => {
       c.fillStyle = '#d9dee6'; c.fillRect((14 - a.swing * 6) * s, -1 * s, 8 * s, 2 * s);
       c.restore();
     },
-    cannon: (c, s, team, a) => {
+    bombard: (c, s, team, a) => {
       ellipse(c, 0, 0, 16 * s, 6 * s, 'rgba(0,0,0,0.25)');
       c.save(); c.translate(-a.swing * 3 * s, -10 * s); c.rotate(-0.25);
       rrect(c, -6 * s, -5 * s, 24 * s, 10 * s, 4 * s, '#2b2f36');
@@ -471,7 +525,7 @@ const RuneArt = (() => {
       circle(c, -4 * s, -5 * s, 2.5 * s, team);
       circle(c, 6 * s, -5 * s, 6 * s, '#6b4a2a');
     },
-    goblinhut: (c, s, team, a) => {
+    burrow: (c, s, team, a) => {
       ellipse(c, 0, 0, 20 * s, 7 * s, 'rgba(0,0,0,0.25)');
       rrect(c, -15 * s, -16 * s, 30 * s, 16 * s, 2 * s, '#8a6a45');
       c.fillStyle = '#d9b25a';
@@ -481,7 +535,27 @@ const RuneArt = (() => {
       rrect(c, -5 * s, -11 * s, 10 * s, 11 * s, [5 * s, 5 * s, 0, 0], '#2a1f18');
       c.fillStyle = team; c.fillRect(-15 * s, -16 * s, 30 * s, 3 * s);
     },
-    inferno: (c, s, team, a) => {
+    thornwall: (c, s, team, a) => {
+      ellipse(c, 0, 0, 20 * s, 7 * s, 'rgba(0,0,0,0.25)');
+      rrect(c, -18 * s, -16 * s, 36 * s, 16 * s, 5 * s, '#4a3a22');
+      c.strokeStyle = '#6f7d3c'; c.lineWidth = 3.4 * s; c.lineCap = 'round';
+      for (const [x, h] of [[-13, 25], [-5, 31], [4, 28], [13, 24]]) { c.beginPath(); c.moveTo(x * s, 0); c.quadraticCurveTo((x - 6) * s, -h * 0.55 * s, (x + 2) * s, -h * s); c.stroke(); }
+      c.fillStyle = '#d6dca0';
+      for (const [x, y] of [[-12, -13], [-7, -24], [0, -14], [5, -24], [12, -13], [-15, -5], [8, -6]]) { c.beginPath(); c.moveTo((x - 2) * s, y * s); c.lineTo(x * s, (y - 6) * s); c.lineTo((x + 2) * s, y * s); c.fill(); }
+      c.fillStyle = team; c.fillRect(-16 * s, -3 * s, 32 * s, 3 * s);
+    },
+    font: (c, s, team, a) => {
+      ellipse(c, 0, 0, 17 * s, 6 * s, 'rgba(0,0,0,0.25)');
+      c.fillStyle = '#6d6f7f';
+      c.beginPath(); c.moveTo(-9 * s, 0); c.lineTo(-5 * s, -18 * s); c.lineTo(5 * s, -18 * s); c.lineTo(9 * s, 0); c.fill();
+      c.fillStyle = team; c.fillRect(-8 * s, -6 * s, 16 * s, 3 * s);
+      ellipse(c, 0, -20 * s, 15 * s, 6 * s, '#8b8d9e');
+      ellipse(c, 0, -21 * s, 11 * s, 3.8 * s, '#c45cff');
+      const glow = 0.75 + Math.sin(a.t * 4) * 0.25;
+      circle(c, 0, -31 * s, 8 * s * glow, 'rgba(196,92,255,0.3)');
+      circle(c, 0, -31 * s, 3.5 * s * glow, '#ecd0ff');
+    },
+    sunlance: (c, s, team, a) => {
       ellipse(c, 0, 0, 16 * s, 6 * s, 'rgba(0,0,0,0.25)');
       c.fillStyle = '#5a4f4a';
       c.beginPath(); c.moveTo(-12 * s, 0); c.lineTo(-6 * s, -30 * s); c.lineTo(6 * s, -30 * s); c.lineTo(12 * s, 0); c.fill();
@@ -578,7 +652,7 @@ const RuneArt = (() => {
     c.save();
     c.scale(s, s);
     switch (id) {
-      case 'fireball': {
+      case 'cinder': {
         const g = c.createRadialGradient(-4, -4, 2, 0, 0, 16);
         g.addColorStop(0, '#fff3b0'); g.addColorStop(0.4, '#ffb347'); g.addColorStop(1, '#ff4a1f');
         c.fillStyle = 'rgba(255,120,40,0.4)';
@@ -586,7 +660,7 @@ const RuneArt = (() => {
         circle(c, 2, 2, 15, g);
         break;
       }
-      case 'arrows':
+      case 'needles':
         for (let i = -1; i <= 1; i++) {
           c.save(); c.translate(i * 10, i * 4); c.rotate(0.6);
           c.strokeStyle = '#8a5a2b'; c.lineWidth = 2.5; c.beginPath(); c.moveTo(0, -18); c.lineTo(0, 14); c.stroke();
@@ -595,13 +669,13 @@ const RuneArt = (() => {
           c.restore();
         }
         break;
-      case 'zap':
-      case 'lightning':
-        c.fillStyle = id === 'zap' ? '#7fd4ff' : '#fff27a';
-        c.strokeStyle = id === 'zap' ? '#2b8fd6' : '#d6a92b'; c.lineWidth = 2;
+      case 'snap':
+      case 'stormcall':
+        c.fillStyle = id === 'snap' ? '#7fd4ff' : '#fff27a';
+        c.strokeStyle = id === 'snap' ? '#2b8fd6' : '#d6a92b'; c.lineWidth = 2;
         c.beginPath(); c.moveTo(4, -20); c.lineTo(-10, 2); c.lineTo(-1, 2); c.lineTo(-6, 20); c.lineTo(11, -4); c.lineTo(2, -4); c.closePath(); c.fill(); c.stroke();
         break;
-      case 'freeze':
+      case 'frostbind':
         c.strokeStyle = '#bfe8ff'; c.lineWidth = 3.5; c.lineCap = 'round';
         for (let i = 0; i < 6; i++) {
           c.save(); c.rotate(i * Math.PI / 3);
@@ -609,7 +683,22 @@ const RuneArt = (() => {
           c.restore();
         }
         break;
-      case 'rage':
+      case 'flick':
+        c.fillStyle = '#ff7a2f';
+        c.beginPath(); c.moveTo(0, -18); c.quadraticCurveTo(12, -6, 8, 6); c.quadraticCurveTo(5, 14, 0, 14); c.quadraticCurveTo(-8, 14, -9, 5); c.quadraticCurveTo(-10, -4, 0, -18); c.fill();
+        c.fillStyle = '#ffd86b';
+        c.beginPath(); c.moveTo(0, -5); c.quadraticCurveTo(6, 2, 4, 7); c.quadraticCurveTo(2, 11, 0, 11); c.quadraticCurveTo(-5, 10, -4, 5); c.quadraticCurveTo(-4, 1, 0, -5); c.fill();
+        break;
+      case 'spore':
+        for (const [x, y, r] of [[-9, 2, 10], [8, 4, 11], [0, -7, 12]]) circle(c, x, y, r, 'rgba(166,214,90,0.75)');
+        for (const [x, y] of [[-12, -10], [13, -11], [-4, 14], [7, 16], [-17, 10], [18, 11]]) circle(c, x, y, 2.2, '#dff0a8');
+        break;
+      case 'mendrain':
+        c.fillStyle = '#7dff9a'; c.fillRect(-4, -18, 8, 22); c.fillRect(-11, -11, 22, 8);
+        c.fillStyle = '#9fe3ff';
+        for (const [x, y] of [[-12, 7], [0, 10], [12, 7]]) { c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + 4.5, y + 7, x, y + 9); c.quadraticCurveTo(x - 4.5, y + 7, x, y); c.fill(); }
+        break;
+      case 'hymn':
         circle(c, 0, 0, 16, 'rgba(196,92,255,0.35)');
         c.fillStyle = '#c45cff';
         c.beginPath(); c.moveTo(-10, 12); c.lineTo(-4, -4); c.lineTo(-8, -4); c.lineTo(0, -18); c.lineTo(8, -4); c.lineTo(4, -4); c.lineTo(10, 12); c.closePath(); c.fill();
@@ -636,7 +725,7 @@ const RuneArt = (() => {
     if (card.kind === 'spell') {
       c.save(); c.translate(w / 2, h / 2); spellIcon(c, card.id, Math.min(w, h) * 0.8); c.restore();
     } else if (card.kind === 'building') {
-      const s = Math.min(w, h) / (card.id === 'goblinhut' ? 46 : 52);
+      const s = Math.min(w, h) / (card.id === 'burrow' ? 46 : 52);
       drawUnit(c, card.id, w / 2, h * 0.86, s, { team, swing: 0, t: 0 });
     } else {
       const big = card.r >= 14 ? 0.9 : card.r >= 11 ? 1.05 : 1.25;

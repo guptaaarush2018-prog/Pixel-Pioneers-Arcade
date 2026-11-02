@@ -1,6 +1,6 @@
-/* Rune Rumble: real-time lane battles with a card collection. Menus (Battle, Cards, Road) sit
-   over the battlefield; matches are played against a bot (ranked for trophies, or practice) or
-   another player online. Content is in data.js, drawing in art.js, sound in sound.js. */
+/* Rune Rumble: real-time lane battles with a card collection. Menus (Battle, Cards, Path) sit
+   over the battlefield; matches are played against a bot (the ladder, or practice) or another
+   player online. Card levels only count on the ladder. Content is in data.js, drawing in art.js, sound in sound.js. */
 (() => {
   const W = 960, FIELD_H = 410;
   const LANES = [95, 205, 315];
@@ -9,8 +9,9 @@
   const TOWER_X = [150, W - 150];
   const DEPLOY = [[80, MID - 40], [MID + 40, W - 80]];   // where each side may place units
   const STEP = 1 / 20;
-  const MATCH_TIME = 180, OVERTIME = 60, DOUBLE_AT = 60;
+  const MATCH_TIME = 180, OVERTIME = 60, SURGE_AT = 60, SURGE_MULT = 1.5;
   const MANA_MAX = 10, MANA_EVERY = 2.8;
+  const WELL_REACH = 60, WELL_CLAIM = 4, WELL_BONUS = 0.15;   // a well sits on each bridge; seconds to claim; mana per well held
   const SEND_EVERY = 0.08;
   const FIELD = { W, FIELD_H, LANES, MID, KEEP_X };
   const D = RuneData, A = RuneArt, S = RuneSound;
@@ -20,12 +21,12 @@
     keep: { hp: 2400, dmg: 80, rate: 1.0, range: 150, r: 30 },
   };
   const PRACTICE = [
-    { name: 'Easy', think: 1.8, mana: 0.65, mult: 1 },
-    { name: 'Normal', think: 1.0, mana: 0.9, mult: 1.5 },
-    { name: 'Hard', think: 0.45, mana: 1.1, mult: 2 },
+    { name: 'Easy', think: 2.2, mana: 0.65, slip: 0.4, react: 1.6, save: 10, mult: 1 },
+    { name: 'Normal', think: 1.7, mana: 0.8, slip: 0.32, react: 1.2, save: 9, mult: 1.5 },
+    { name: 'Hard', think: 0.9, mana: 1, slip: 0.12, react: 0.7, save: 8, mult: 2 },
   ];
-  const SPELL_DELAY = { fireball: 0.45, arrows: 0.5, lightning: 0.2 };
-  const SHOT_STYLE = { archers: 'arrow', princess: 'fire-arrow', tower: 'arrow', keep: 'arrow', musketeer: 'musket', bomber: 'bomb', wizard: 'fire', dragon: 'fire', phoenix: 'fire', electro: 'bolt', necro: 'dark', turret: 'spear', cannon: 'ball', inferno: 'beam' };
+  const SPELL_DELAY = { cinder: 0.45, needles: 0.5, stormcall: 0.2 };
+  const SHOT_STYLE = { bowmen: 'arrow', flamebow: 'fire-arrow', tower: 'arrow', keep: 'arrow', longshot: 'musket', sapper: 'bomb', adept: 'fire', wyrmling: 'fire', ashwing: 'fire', stormmage: 'bolt', gravecaller: 'dark', turret: 'spear', bombard: 'ball', sunlance: 'beam' };
   const CI = Object.fromEntries(D.CARDS.map((c, i) => [c.id, i]));
   // Test hook: #autopilot plays your cards at random, runs bot matches fast and never posts scores.
   const AUTOPILOT = location.hash === '#autopilot';
@@ -45,9 +46,19 @@
     Arcade.save('rune:gold', Math.max(0, gold() + n));
     updatePurse(true);
   }
-  const trophies = () => Arcade.load('rune:trophies', 0);
-  const arenaIdx = () => D.arenaFor(trophies());
+  const glory = () => Arcade.load('rune:trophies', 0);
+  const arenaIdx = () => D.arenaFor(glory());
   const arena = () => D.ARENAS[arenaIdx()];
+
+  // Cards were renamed; saves made before that still use the old ids.
+  (function migrateCardIds() {
+    if (Arcade.load('rune:ids2', false)) return;
+    const OLD = { archers: 'bowmen', skeletons: 'sprites', knight: 'bulwark', bomber: 'sapper', arrows: 'needles', bats: 'moths', zap: 'snap', cannon: 'bombard', fireball: 'cinder', valkyrie: 'whirlblade', musketeer: 'longshot', healer: 'mender', goblinhut: 'burrow', ramrider: 'charger', wizard: 'adept', dragon: 'wyrmling', freeze: 'frostbind', golem: 'colossus', necro: 'gravecaller', lightning: 'stormcall', rage: 'hymn', princess: 'flamebow', electro: 'stormmage', inferno: 'sunlance', phoenix: 'ashwing' };
+    const cards = Arcade.load('rune:cards', null), ds = Arcade.load('rune:decks', null);
+    if (cards) Arcade.save('rune:cards', Object.fromEntries(Object.entries(cards).map(([id, c]) => [OLD[id] || id, c])));
+    if (Array.isArray(ds)) Arcade.save('rune:decks', ds.map(d => (Array.isArray(d) ? d.map(id => OLD[id] || id) : d)));
+    Arcade.save('rune:ids2', true);
+  })();
 
   // Your collection: { id: { lvl, count } }. Everyone starts with the eight starter cards.
   function collection() {
@@ -77,16 +88,18 @@
   const deckIdx = () => Arcade.load('rune:deck', 0);
   const myDeck = () => decks()[deckIdx()];
 
-  // Four chest slots. Each slot: null, or { type, unlockAt } (unlockAt null until you start it).
+  // Four cache slots. Each slot: null, or { type, charge }. Battles charge the oldest unfinished one.
   const slots = () => {
     const s = Arcade.load('rune:chests', null);
-    return Array.isArray(s) && s.length === 4 ? s : [{ type: 'silver', unlockAt: null }, null, null, null];
+    if (!Array.isArray(s) || s.length !== 4) return [{ type: 'silver', charge: 0 }, null, null, null];
+    // Saves from when caches ran on timers: one that had finished stays ready.
+    return s.map(x => (!x || x.charge !== undefined ? x : { type: x.type, charge: x.unlockAt && x.unlockAt <= Date.now() ? D.CACHES[x.type].battles : 0 }));
   };
   const saveSlots = s => Arcade.save('rune:chests', s);
 
   function updatePurse(bump = false) {
     $('gold').textContent = gold().toLocaleString();
-    $('trophies').textContent = trophies().toLocaleString();
+    $('glory').textContent = glory().toLocaleString();
     if (bump) {
       const p = document.querySelector('.purse');
       p.classList.remove('bump');
@@ -123,11 +136,11 @@
   // deck: 8 card ids · lv: { id: level } · towerLvl: level of this side's towers
   function newPlayer(deck, lv, towerLvl) {
     const order = shuffle(deck.map(id => CI[id]));
-    return { mana: 5, hand: order.slice(0, 4), queue: order.slice(4), crowns: 0, lv, towerLvl };
+    return { mana: 5, hand: order.slice(0, 4), queue: order.slice(4), felled: 0, dmg: 0, lv, towerLvl };
   }
 
   function newMatch(sides) {
-    g = { time: MATCH_TIME, clock: 0, overtime: false, ents: [], nextId: 1, players: sides.map(s => newPlayer(s.deck, s.lv, s.towerLvl)), fx: [], newFx: [], pending: [], over: null };
+    g = { time: MATCH_TIME, clock: 0, overtime: false, ents: [], nextId: 1, players: sides.map(s => newPlayer(s.deck, s.lv, s.towerLvl)), wells: LANES.map((_, lane) => ({ lane, v: 0, owner: -1 })), fx: [], newFx: [], pending: [], over: null };
     for (const side of [0, 1]) {
       const m = D.levelMult(g.players[side].towerLvl);
       const k = BUILDING_BASE.keep, t = BUILDING_BASE.tower;
@@ -139,7 +152,7 @@
   }
 
   function addEnt(e) {
-    const ent = { id: g.nextId++, cd: 0.4, maxHp: e.hp, yOff: 0, flash: 0, stun: 0, rage: 0, atk: 0, walk: Math.random() * 6, toLane: -1, ...e };
+    const ent = { id: g.nextId++, born: g.clock, cd: 0.4, maxHp: e.hp, yOff: 0, flash: 0, stun: 0, rage: 0, atk: 0, walk: Math.random() * 6, toLane: -1, ...e };
     g.ents.push(ent);
     return ent;
   }
@@ -155,6 +168,7 @@
       heal: c.heal ? { ...c.heal, amt: c.heal.amt * m } : null, healT: 1,
       spawn: c.spawn || null, spawnT: c.spawn ? c.spawn.every * 0.6 : 0,
       death: c.death || null, ramp: !!c.ramp, rampId: 0, rampMult: 1, revive: !!c.revive, stunHit: c.stunHit || 0,
+      blast: c.blast || null, thorns: c.thorns || 0, lifesteal: c.lifesteal || 0, manaEvery: c.manaEvery || 0, manaT: c.manaEvery || 0,
       ...extra,
     });
   }
@@ -210,18 +224,23 @@
     return true;
   }
 
-  function castSpell({ side, id, x, lane, lvl }) {
+  function castSpell({ side, id, x, lane, lvl, tick = 1 }) {
     const card = D.card(id), m = D.levelMult(lvl);
     const y = LANES[lane];
     const inside = g.ents.filter(e => e.hp > 0 && Math.hypot(e.x - x, entY(e) - y) <= card.radius + e.r);
     const foes = inside.filter(e => e.side !== side);
     const dmgTo = e => card.dmg * m * (e.building ? card.towerMult || 1 : 1);
-    if (id === 'rage') {
+    if (id === 'hymn') {
       for (const e of inside) if (e.side === side && !e.building) e.rage = card.rage;
-      fx({ k: 'rage', x, y, r: card.radius });
+      fx({ k: 'hymn', x, y, r: card.radius });
       return;
     }
-    if (id === 'lightning') {
+    if (card.mend) {
+      for (const e of inside) if (e.side === side && !e.building) e.hp = Math.min(e.maxHp, e.hp + card.mend * m);
+      fx({ k: 'heal', x, y, r: card.radius });
+      return;
+    }
+    if (id === 'stormcall') {
       const hits = foes.sort((a, b) => b.hp - a.hp).slice(0, card.bolts);
       fx({ k: 'bolts', pts: hits.map(e => [Math.round(e.x), Math.round(entY(e))]) });
       for (const e of hits) hurt(e, dmgTo(e), side);
@@ -232,6 +251,7 @@
       if (card.stun && e.type !== 'keep') e.stun = Math.max(e.stun, card.stun);
     }
     fx({ k: id, x, y, r: card.radius });
+    if (tick < (card.ticks || 1)) g.pending.push({ at: g.clock + card.every, side, id, x, lane, lvl, tick: tick + 1 });
   }
 
   // Sends a squad over to another lane. Picking its own lane again calls it back.
@@ -250,13 +270,15 @@
 
   function hurt(e, dmg, by) {
     if (e.hp <= 0 || dmg <= 0) return;
+    // Every point taken off a tower or keep counts towards the overtime tiebreak (overkill doesn't).
+    if (e.type === 'tower' || e.type === 'keep') g.players[by].dmg += Math.min(e.hp, dmg);
     e.hp -= dmg;
     e.flash = 0.12;
     damageNumber(e.x, entY(e), dmg, e.side);
     if (e.hp > 0) return;
     e.hp = 0;
     if (e.type === 'tower' || e.type === 'keep') {
-      g.players[by].crowns += e.type === 'keep' ? 3 - g.players[by].crowns : 1;
+      g.players[by].felled += e.type === 'keep' ? 3 - g.players[by].felled : 1;
       fx({ k: 'fall', x: e.x, y: entY(e), s: e.side, keep: e.type === 'keep' ? 1 : 0 });
       if (e.type === 'keep') endMatch(by);
       return;
@@ -272,6 +294,14 @@
       for (let i = 0; i < e.death.n; i++) {
         const sp = (i - (e.death.n - 1) / 2) * 14;
         spawnFrom(e.death.id, e.side, e.lane, e.x, e.lvl, { squad: e.squad, yOff: e.yOff + sp, spread: sp });
+      }
+    }
+    if (e.blast) {
+      const dmg = e.blast.dmg * D.levelMult(e.lvl);
+      fx({ k: 'boom', x: Math.round(e.x), y: Math.round(entY(e)), r: e.blast.radius, c: '#ffb347' });
+      for (const o of g.ents) {
+        if (o.side === e.side || o.hp <= 0 || o.fly || Math.abs(o.x - e.x) > e.blast.radius + o.r) continue;
+        if (o.lane === e.lane || (o.type === 'keep' && !towerAlive(o.side, e.lane))) hurt(o, dmg * (o.building ? 0.5 : 1), e.side);
       }
     }
   }
@@ -295,11 +325,27 @@
     return best ? { e: best, d: bd } : null;
   }
 
+  const wellsHeld = side => g.wells.filter(w => w.owner === side).length;
+
+  // Troops alone on a bridge pull its well towards their side. v runs from -1 (side 0) to 1 (side 1).
+  function updateWells(dt) {
+    for (const w of g.wells) {
+      const near = side => g.ents.some(e => e.side === side && e.hp > 0 && e.speed && e.lane === w.lane && Math.abs(e.x - MID) < WELL_REACH);
+      const a = near(0), b = near(1);
+      if (a === b) continue;
+      w.v = clamp(w.v + (a ? -dt : dt) / WELL_CLAIM, -1, 1);
+      const owner = w.v === -1 ? 0 : w.v === 1 ? 1 : (w.owner === 0 && w.v >= 0) || (w.owner === 1 && w.v <= 0) ? -1 : w.owner;
+      if (owner !== w.owner && owner >= 0) fx({ k: 'well', x: MID, y: LANES[w.lane], s: owner });
+      w.owner = owner;
+    }
+  }
+
   function step(dt) {
     g.clock += dt;
-    const mult = g.time <= DOUBLE_AT || g.overtime ? 2 : 1;
+    updateWells(dt);
+    const mult = g.time <= SURGE_AT || g.overtime ? SURGE_MULT : 1;
     for (const [side, p] of g.players.entries()) {
-      const boost = bot && side === 1 ? bot.mana : 1;
+      const boost = (bot && side === 1 ? bot.mana : 1) * (1 + wellsHeld(side) * WELL_BONUS);
       p.mana = Math.min(MANA_MAX, p.mana + dt / MANA_EVERY * mult * boost);
     }
     for (const sp of g.pending.filter(s => s.at <= g.clock)) castSpell(sp);
@@ -342,6 +388,15 @@
           if (any) fx({ k: 'heal', x: Math.round(u.x), y: Math.round(entY(u)), r: u.heal.radius });
         }
       }
+      if (u.manaEvery) {
+        u.manaT -= dt;
+        if (u.manaT <= 0) {
+          u.manaT = u.manaEvery;
+          const owner = g.players[u.side];
+          owner.mana = Math.min(MANA_MAX, owner.mana + 1);
+          fx({ k: 'heal', x: Math.round(u.x), y: Math.round(entY(u)), r: 26 });
+        }
+      }
       u.cd -= dt * haste;
       if (u.toLane >= 0) {
         crossLanes(u, dt * haste);
@@ -365,16 +420,21 @@
 
     if (g.over) return;
     g.time -= dt;
-    if (g.overtime && g.players[0].crowns !== g.players[1].crowns) {
-      endMatch(g.players[0].crowns > g.players[1].crowns ? 0 : 1);
+    // When time runs out, whoever felled more towers wins. Level on towers means overtime, where the
+    // next tower felled wins. Only when overtime ends level does total damage to towers and keeps
+    // decide it. Breaking a keep (in hurt) wins on the spot.
+    const [a, b] = g.players.map(p => p.felled);
+    if (a !== b && (g.overtime || g.time <= 0)) {
+      endMatch(a > b ? 0 : 1);
     } else if (g.time <= 0) {
-      const [a, b] = g.players.map(p => p.crowns);
-      if (a !== b) endMatch(a > b ? 0 : 1);
-      else if (!g.overtime) {
+      if (!g.overtime) {
         g.overtime = true;
         g.time = OVERTIME;
-        fx({ k: 'note', text: 'Overtime!' });
-      } else endMatch(-1);
+        fx({ k: 'note', text: 'Overtime! Next tower felled wins' });
+      } else {
+        const [da, db] = g.players.map(p => Math.round(p.dmg));
+        endMatch(da === db ? -1 : da > db ? 0 : 1, true);
+      }
     }
   }
 
@@ -411,14 +471,16 @@
         if (e.fly && !u.air) continue;
         if (Math.abs(e.x - target.x) <= u.splash + e.r) hurt(e, dmg, u.side);
       }
-      if (u.ranged) fx({ k: 'boom', x: Math.round(target.x), y: Math.round(y2), r: u.splash, c: u.type === 'bomber' ? '#ffb347' : '#ff7a2f' });
+      if (u.ranged) fx({ k: 'boom', x: Math.round(target.x), y: Math.round(y2), r: u.splash, c: u.type === 'sapper' ? '#ffb347' : '#ff7a2f' });
     } else {
       hurt(target, dmg, u.side);
+      if (target.thorns && !u.ranged) hurt(u, dmg * target.thorns, target.side);
     }
+    if (u.lifesteal) u.hp = Math.min(u.maxHp, u.hp + dmg * u.lifesteal);
   }
 
-  function endMatch(winner) {
-    g.over = { winner, crowns: g.players.map(p => p.crowns) };
+  function endMatch(winner, onDamage = false) {
+    g.over = { winner, onDamage, felled: g.players.map(p => p.felled), dmg: g.players.map(p => Math.round(p.dmg)) };
   }
 
   // ---------- Bot ----------
@@ -435,21 +497,29 @@
 
   function botThink() {
     const side = 1, p = g.players[side];
-    const enemies = g.ents.filter(e => e.side === 0 && e.hp > 0 && !e.building);
+    if (bot.slip && Math.random() < bot.slip) return;
+    // Like a person, a bot takes a moment to notice what you just played.
+    const enemies = g.ents.filter(e => e.side === 0 && e.hp > 0 && !e.building && g.clock - e.born >= (bot.react || 0));
     if (bot.shift) botShift(enemies);
     const hand = p.hand.map((c, slot) => ({ slot, card: D.CARDS[c] })).filter(h => h.card.cost <= p.mana);
     if (!hand.length) return;
+    if (bot.novice) return noviceThink(hand, enemies);
 
     // Spells first, when they'll be worth it.
     for (const { slot, card } of hand.filter(h => h.card.kind === 'spell')) {
-      if (card.id === 'rage') {
+      if (card.id === 'hymn') {
         const mine = g.ents.filter(e => e.side === 1 && e.hp > 0 && !e.building && e.x < MID + 60);
         for (const e of mine) if (mine.filter(o => o.lane === e.lane && Math.abs(o.x - e.x) < 70).length >= 3) return playCard(side, slot, e.lane, e.x);
         continue;
       }
+      if (card.mend) {
+        const mine = g.ents.filter(e => e.side === 1 && e.hp > 0 && !e.building);
+        for (const e of mine) if (mine.filter(o => o.lane === e.lane && Math.abs(o.x - e.x) < card.radius).reduce((s, o) => s + o.maxHp - o.hp, 0) > 500) return playCard(side, slot, e.lane, e.x);
+        continue;
+      }
       for (const e of enemies) {
         const near = enemies.filter(o => o.lane === e.lane && Math.abs(o.x - e.x) < card.radius);
-        const worth = card.id === 'lightning' ? e.hp > 900 : card.id === 'freeze' ? near.reduce((s, o) => s + o.hp, 0) > 1400 && e.x > W - 300 : near.length >= 3 || (card.dmg >= 250 && near.reduce((s, o) => s + Math.min(o.hp, card.dmg), 0) > 500);
+        const worth = card.id === 'stormcall' ? e.hp > 900 : card.id === 'frostbind' ? near.reduce((s, o) => s + o.hp, 0) > 1400 && e.x > W - 300 : near.length >= 3 || (card.dmg >= 250 && near.reduce((s, o) => s + Math.min(o.hp, card.dmg), 0) > 500);
         if (worth && e.x > MID - 140) return playCard(side, slot, e.lane, e.x);
       }
     }
@@ -463,14 +533,15 @@
       const big = foes.some(e => e.maxHp >= 1000);
       const swarm = foes.length >= 3;
       const score = c => {
-        if (c.kind === 'spell' || c.siege) return -9;
+        if (c.kind === 'spell' || c.siege || c.manaEvery) return -9;
         let s = 1 - c.cost * 0.15;
-        const air = (c.ranged && !c.ground) || c.kind === 'building' && !c.ground;
+        const air = (c.ranged && !c.ground) || c.kind === 'building' && c.dmg && !c.ground;
         if (fliers && air) s += 3;
         if (fliers && !ground && !air) s -= 6;
         if (big && ((c.count || 1) >= 3 || c.ramp || c.dmg >= 100)) s += 2;
         if (swarm && c.splash) s += 3;
         if (c.kind === 'building' && !c.dmg) s -= 2;
+        if (big && c.decoy) s += 2.5;
         return s;
       };
       const best = hand.map(h => ({ ...h, s: score(h.card) })).sort((a, b) => b.s - a.s)[0];
@@ -480,6 +551,10 @@
         return playCard(side, best.slot, lane, x);
       }
     }
+
+    // With nothing to answer, a mana building is worth putting down.
+    const font = hand.find(h => h.card.manaEvery);
+    if (font && !threat[lane]) return playCard(side, font.slot, Arcade.randInt(0, 2), DEPLOY[1][1] - 30);
 
     // Back up a push already on its way.
     const pushers = g.ents.filter(e => e.side === 1 && e.hp > 0 && e.speed && e.x < MID + 80);
@@ -497,15 +572,29 @@
     if (units[0]) playCard(side, units[0].slot, push, units[0].card.siege || units[0].card.speed < 40 ? DEPLOY[1][1] - 10 : DEPLOY[1][0] + 60);
   }
 
+  // First-frontier bots act like someone learning the game: they often hesitate, sometimes answer
+  // in the wrong lane, pick cards at random and never save up for a big push.
+  function noviceThink(hand, enemies) {
+    if (Math.random() < 0.3) return;
+    const units = hand.filter(h => h.card.kind !== 'spell');
+    if (!units.length) return;
+    const pick = Arcade.pick(units);
+    const threats = enemies.filter(e => e.x > MID);
+    const lane = threats.length && Math.random() < 0.5 ? Arcade.pick(threats).lane : Arcade.randInt(0, 2);
+    playCard(1, pick.slot, lane, Arcade.rand(DEPLOY[1][0] + 40, DEPLOY[1][1] - 20));
+  }
+
   // The bot's deck: eight cards from what your arena has unlocked, with a spell and some air defence.
+  // Epics and legendaries are rationed so the bot isn't holding a hand you can't have yet.
   function botDeck(maxArena) {
     const pool = D.COLLECTIBLE.filter(c => c.arena <= maxArena);
     for (let tries = 0; tries < 50; tries++) {
       const d = shuffle([...pool]).slice(0, 8);
       const spells = d.filter(c => c.kind === 'spell').length;
       const air = d.filter(c => (c.ranged && !c.ground) || c.fly).length;
-      const tank = d.some(c => c.hp >= 800);
-      if (spells >= 1 && spells <= 2 && air >= 2 && tank) return d.map(c => c.id);
+      const tank = d.some(c => c.kind === 'unit' && c.hp >= 800);
+      const legendaries = d.filter(c => c.rarity === 'legendary').length, epics = d.filter(c => c.rarity === 'epic').length;
+      if (spells >= 1 && spells <= 2 && air >= 2 && tank && legendaries <= 1 && epics + legendaries <= Math.floor(maxArena / 2) + 1) return d.map(c => c.id);
     }
     return [...D.STARTER];
   }
@@ -518,7 +607,8 @@
       t: Math.round(g.time * 10) / 10, o: g.overtime ? 1 : 0,
       e: g.ents.map(e => [e.id, CI[e.type] ?? (e.type === 'tower' ? 90 : 91), e.side, Math.round(e.x), e.lane, Math.round(e.hp), Math.round(e.maxHp), Math.round(e.yOff),
         (e.flash > 0 ? 1 : 0) | (e.stun > 0 ? 2 : 0) | (e.rage > 0 ? 4 : 0) | (e.atk > 0.5 ? 8 : 0), e.squad || 0, e.toLane]),
-      p: g.players.map(p => [Math.round(p.mana * 100) / 100, p.crowns]),
+      p: g.players.map(p => [Math.round(p.mana * 100) / 100, p.felled, Math.round(p.dmg)]),
+      w: g.wells.map(w => [Math.round(w.v * 100) / 100, w.owner]),
       h: g.players[1].hand, n: g.players[1].queue[0],
       f: g.newFx.splice(0),
       over: g.over,
@@ -538,7 +628,8 @@
     snaps = [snaps[1] || entry, entry];
     g.time = s.t;
     g.overtime = !!s.o;
-    s.p.forEach(([mana, crowns], i) => Object.assign(g.players[i], { mana, crowns }));
+    s.p.forEach(([mana, felled, dmg], i) => Object.assign(g.players[i], { mana, felled, dmg }));
+    s.w.forEach(([v, owner], i) => Object.assign(g.wells[i], { v, owner }));
     g.players[1].hand = s.h;
     g.players[1].queue = [s.n];
     for (const f of s.f) { g.fx.push({ ...f, t: 0 }); onFx(f); }
@@ -583,7 +674,7 @@
       net.want.them = true;
       maybeRematch();
     } else if (name === 'start' && mode === 'guest') {
-      newMatch(onlineSides([...D.STARTER], [...D.STARTER]));
+      newMatch(levelFree([...D.STARTER], [...D.STARTER]));
       snaps = [];
       beginPlaying();
     } else if (name === 'quit') {
@@ -591,16 +682,13 @@
     }
   }
 
-  // Online, both sides fight at the same level so nobody can buy an edge.
-  function onlineSides(deck0, deck1) {
-    const lv = Object.fromEntries(D.CARDS.map(c => [c.id, D.ONLINE_LEVEL]));
-    return [{ deck: deck0, lv, towerLvl: D.ONLINE_LEVEL }, { deck: deck1, lv, towerLvl: D.ONLINE_LEVEL }];
-  }
+  // Levels only count on the ladder. Everywhere else every card and tower fights at its base stats.
+  const levelFree = (...decks) => decks.map(deck => ({ deck, lv: {}, towerLvl: 1 }));
   const validDeck = d => Array.isArray(d) && d.length === 8 && new Set(d).size === 8 && d.every(id => D.card(id) && !D.card(id).token);
 
   function hostStart() {
     net.want = { me: false, them: false };
-    newMatch(onlineSides(myDeck(), validDeck(net.theirDeck) ? net.theirDeck : [...D.STARTER]));
+    newMatch(levelFree(myDeck(), validDeck(net.theirDeck) ? net.theirDeck : [...D.STARTER]));
     net.conn.send('start');
     beginPlaying();
   }
@@ -696,7 +784,7 @@
     handSig = '';
     $('them-name').textContent = mode === 'host' || mode === 'guest' ? net.names[1] : bot.name;
     $('me-name').textContent = Arcade.profile().name;
-    banner('Battle!', mode === 'ranked' ? arena().name : mode === 'practice' ? `Practice · ${PRACTICE[practice].name}` : 'Online · everyone at level ' + D.ONLINE_LEVEL);
+    banner('Battle!', mode === 'ranked' ? arena().name : mode === 'practice' ? `Practice · ${PRACTICE[practice].name}` : 'Online · no card levels');
     S.stopMusic();
     S.sfx.start();
   }
@@ -709,44 +797,44 @@
 
   function startRanked() {
     const ar = arena(), ai = arenaIdx();
-    const lvl = ar.bot.level;
+    const lvl = Math.min(ar.bot.level, avgDeckLevel());
     mode = 'ranked';
     me = 0;
-    bot = { think: ar.bot.think, mana: ar.bot.mana, save: ai >= 3 ? 7 : 8, shift: ai >= 1, name: Arcade.pick(D.BOT_NAMES), level: lvl };
+    bot = { think: ar.bot.think, mana: ar.bot.mana, slip: ar.bot.slip, react: ar.bot.react, save: ar.bot.save, shift: ai >= 2, novice: !!ar.bot.novice, name: Arcade.pick(D.BOT_NAMES), level: lvl };
     const botLv = Object.fromEntries(D.CARDS.map(c => [c.id, lvl]));
-    newMatch([{ deck: myDeck(), lv: myLevels(), towerLvl: avgDeckLevel() }, { deck: botDeck(ai), lv: botLv, towerLvl: lvl }]);
+    newMatch([{ deck: myDeck(), lv: myLevels(), towerLvl: avgDeckLevel() }, { deck: ar.bot.novice ? [...D.NOVICE_DECK] : botDeck(ai), lv: botLv, towerLvl: lvl }]);
     beginPlaying();
   }
 
-  // Practice: pick the bot's difficulty. It plays at your level, and no trophies change hands.
+  // Practice: pick the bot's difficulty. No levels, no glory, and this is the mode with a leaderboard.
   function startPractice(lv) {
     practice = lv;
-    const P = PRACTICE[lv], my = avgDeckLevel();
+    const P = PRACTICE[lv];
     mode = 'practice';
     me = 0;
-    bot = { think: P.think, mana: P.mana, save: lv === 2 ? 7 : 8, shift: lv > 0, name: `${P.name} bot`, level: my };
-    const botLv = Object.fromEntries(D.CARDS.map(c => [c.id, my]));
-    newMatch([{ deck: myDeck(), lv: myLevels(), towerLvl: my }, { deck: botDeck(Math.max(arenaIdx(), lv * 2)), lv: botLv, towerLvl: my }]);
+    bot = { think: P.think, mana: P.mana, slip: P.slip, react: P.react, save: P.save, shift: lv > 0, name: `${P.name} bot` };
+    newMatch(levelFree(myDeck(), botDeck(Math.max(arenaIdx(), lv * 2))));
     beginPlaying();
   }
 
   function showResult() {
     state = 'over';
-    const { winner, crowns } = g.over;
-    const mine = crowns[me], theirs = crowns[1 - me];
+    const { winner, felled, dmg, onDamage } = g.over;
+    const mine = felled[me], theirs = felled[1 - me];
+    const damageLine = `Tower damage ${dmg[me].toLocaleString()} – ${dmg[1 - me].toLocaleString()}${onDamage && winner !== -1 ? ' decided it after overtime' : ''}`;
     const won = winner === me, draw = winner === -1;
     const title = draw ? "It's a draw" : won ? 'Victory!' : 'Defeat';
     (won ? S.sfx.win : S.sfx.lose)();
-    const crownHtml = `<div class="result-crowns">${[0, 1, 2].map(i => `<span class="${i < mine ? 'on' : ''}">♛</span>`).join('')}</div>`;
+    const felledHtml = `<div class="result-felled">${[0, 1, 2].map(i => `<span class="${i < mine ? 'on' : ''}">⚑</span>`).join('')}</div>`;
 
     if (mode === 'ranked' || mode === 'practice') {
       const rewards = [];
       let extra = '';
       if (mode === 'ranked') {
-        const before = trophies(), arBefore = arenaIdx();
+        const before = glory(), arBefore = arenaIdx();
         const delta = draw ? 0 : won ? Arcade.randInt(28, 32) + mine : -Arcade.randInt(18, 22);
         // You never drop out of an arena you've reached.
-        const after = Math.max(D.ARENAS[arBefore].trophies, before + delta);
+        const after = Math.max(D.ARENAS[arBefore].glory, before + delta);
         Arcade.save('rune:trophies', after);
         if (after > Arcade.load('rune:best', 0)) {
           Arcade.save('rune:best', after);
@@ -755,15 +843,16 @@
             Online.put(`scores/rune-rumble-trophies/${p.id}`, { name: p.name, score: after, t: Online.TIMESTAMP }).catch(() => {});
           }
         }
-        rewards.push(`🏆 ${after - before >= 0 ? '+' : ''}${after - before}`);
+        rewards.push(`⚜ ${after - before >= 0 ? '+' : ''}${after - before}`);
+        chargeCaches();
         if (won) {
           const coins = 20 + arBefore * 12 + mine * 5;
           addGold(coins);
           rewards.push(`◆ +${coins}`);
-          const chest = earnChest();
-          rewards.push(chest ? `${D.CHESTS[chest].name}!` : 'Chest slots full');
+          const cache = earnCache();
+          rewards.push(cache ? `${D.CACHES[cache].name}!` : 'Cache slots full');
         }
-        if (arenaIdx() > arBefore) extra = `<p class="unlock-note" style="color:var(--gold)!important;background:rgba(255,197,61,.12);padding:8px;border-radius:10px;font-weight:800">New arena: ${esc(arena().name)}! New cards can now drop from chests.</p>`;
+        if (arenaIdx() > arBefore) extra = `<p class="unlock-note" style="color:var(--gold)!important;background:rgba(255,197,61,.12);padding:8px;border-radius:10px;font-weight:800">New frontier: ${esc(arena().name)}! New cards can now drop from caches.</p>`;
         if (won) Arcade.flag('rune-rumble-win');
         if (won && arBefore >= 3) Arcade.flag('rune-rumble-hard');
       } else if (won) {
@@ -772,27 +861,28 @@
         addGold(5);
         rewards.push('◆ +5');
       }
-      const mult = mode === 'ranked' ? 1 + arenaIdx() * 0.25 : PRACTICE[practice].mult;
-      const score = Math.round(((won ? 300 : 0) + mine * 150 + Math.max(0, Math.round(g.time))) * mult);
-      Arcade.finish(ui, {
-        score, title,
-        lines: [`Crowns ${mine} – ${theirs} · vs ${esc(bot.name)}`],
-        html: `${crownHtml}<div class="rewards">${rewards.map(r => `<span>${r}</span>`).join('')}</div>${extra}`,
-        button: 'Continue',
-        onAction: () => toMenu('battle'),
-      });
+      const summary = `${felledHtml}<p>${damageLine} · vs ${esc(bot.name)}</p><div class="rewards">${rewards.map(r => `<span>${r}</span>`).join('')}</div>${extra}`;
+      // The ladder is ranked by glory, so only practice games post a score to the leaderboard.
+      if (mode === 'ranked') {
+        Arcade.countPlay();
+        ui.show({ title, html: summary, button: 'Continue', onAction: () => toMenu('battle') });
+        return;
+      }
+      const score = Math.round(((won ? 300 : 0) + mine * 150 + Math.max(0, Math.round(g.time))) * PRACTICE[practice].mult);
+      Arcade.finish(ui, { score, title, html: summary, button: 'Continue', onAction: () => toMenu('battle') });
       return;
     }
 
     Arcade.countPlay();
     Arcade.flag('online-match');
+    chargeCaches();
     if (won) {
       Arcade.flag('rune-rumble-online-win');
       addGold(25);
     } else addGold(5);
     ui.show({
       title,
-      html: `${crownHtml}<p class="big">${mine} – ${theirs}</p><p>${esc(net.names[0])} vs ${esc(net.names[1])}</p>
+      html: `${felledHtml}<p>${damageLine}</p><p>${esc(net.names[0])} vs ${esc(net.names[1])}</p>
         <div class="rewards"><span>◆ +${won ? 25 : 5}</span></div>
         <div class="menu"><button class="btn secondary" type="button" data-leave>Leave</button></div>
         <p class="muted-note" data-wait>A rematch starts when you both press it.</p>`,
@@ -810,15 +900,24 @@
     });
   }
 
-  // A win drops the next chest in the cycle into the first empty slot.
-  function earnChest() {
+  // Every ladder or online battle you finish charges the oldest cache that isn't ready yet.
+  function chargeCaches() {
+    const s = slots();
+    const next = s.find(x => x && x.charge < D.CACHES[x.type].battles);
+    if (!next) return;
+    next.charge++;
+    saveSlots(s);
+  }
+
+  // A win drops the next cache in the cycle into the first empty slot.
+  function earnCache() {
     const s = slots();
     const free = s.findIndex(x => !x);
     if (free < 0) return null;
     const n = Arcade.load('rune:cycle', 0);
-    const type = D.CHEST_CYCLE[n % D.CHEST_CYCLE.length];
+    const type = D.CACHE_CYCLE[n % D.CACHE_CYCLE.length];
     Arcade.save('rune:cycle', n + 1);
-    s[free] = { type, unlockAt: null };
+    s[free] = { type, charge: 0 };
     saveSlots(s);
     return type;
   }
@@ -852,7 +951,7 @@
       onRender: panel => panel.querySelector('[data-quit]').addEventListener('click', () => {
         state = 'playing';
         ui.hide();
-        g.players[1].crowns = 3;
+        g.players[1].felled = 3;
         endMatch(1);
       }),
     });
@@ -919,13 +1018,15 @@
       case 'hit': case 'swipe': S.sfx.sword(); burst(f.x, f.y, 4, '#ffffff', 50, 0.25, 2); break;
       case 'boom': S.sfx.boom(false); burst(f.x, f.y, 10, f.c, 90, 0.45, 3); break;
       case 'ring': S.sfx.deploy(); burst(f.x, f.y, 10, '#d9c9a0', 70, 0.4, 3); break;
-      case 'cast': if (f.id === 'arrows') S.sfx.arrow(); break;
-      case 'fireball': S.sfx.boom(true); burst(f.x, f.y, 26, '#ff7a2f', 140, 0.6, 4); burst(f.x, f.y, 12, '#ffd86b', 90, 0.5, 3); shake = Math.max(shake, 6); break;
-      case 'arrows': S.sfx.sword(); burst(f.x, f.y, 14, '#c9b98f', 80, 0.4, 2); break;
-      case 'zap': S.sfx.zap(); burst(f.x, f.y, 16, '#9fe3ff', 120, 0.3, 2); break;
-      case 'freeze': S.sfx.freeze(); burst(f.x, f.y, 24, '#e6f7ff', 90, 0.9, 3); break;
+      case 'cast': if (f.id === 'needles') S.sfx.arrow(); break;
+      case 'cinder': S.sfx.boom(true); burst(f.x, f.y, 26, '#ff7a2f', 140, 0.6, 4); burst(f.x, f.y, 12, '#ffd86b', 90, 0.5, 3); shake = Math.max(shake, 6); break;
+      case 'needles': S.sfx.sword(); burst(f.x, f.y, 14, '#c9b98f', 80, 0.4, 2); break;
+      case 'flick': S.sfx.boom(false); burst(f.x, f.y, 10, '#ffb347', 80, 0.35, 2); break;
+      case 'spore': S.sfx.freeze(); burst(f.x, f.y, 12, '#a6d65a', 45, 0.7, 3); break;
+      case 'snap': S.sfx.zap(); burst(f.x, f.y, 16, '#9fe3ff', 120, 0.3, 2); break;
+      case 'frostbind': S.sfx.freeze(); burst(f.x, f.y, 24, '#e6f7ff', 90, 0.9, 3); break;
       case 'bolts': S.sfx.zap(); S.sfx.boom(true); shake = Math.max(shake, 5); for (const [x, y] of f.pts) burst(x, y, 14, '#fff27a', 100, 0.4, 3); break;
-      case 'rage': S.sfx.rage(); burst(f.x, f.y, 20, '#c45cff', 100, 0.7, 3); break;
+      case 'hymn': S.sfx.rage(); burst(f.x, f.y, 20, '#c45cff', 100, 0.7, 3); break;
       case 'heal': S.sfx.heal(); burst(f.x, f.y, 6, '#7dff9a', 40, 0.6, 2.5); break;
       case 'rise': S.sfx.freeze(); burst(f.x, f.y, 24, '#ffb347', 100, 0.8, 4); break;
       case 'die': S.sfx.death(); burst(f.x, f.y, f.b ? 18 : 8, f.b ? '#8a7c6c' : '#e6e1d3', f.b ? 90 : 55, 0.5, f.b ? 4 : 3); break;
@@ -934,10 +1035,11 @@
         shake = Math.max(shake, f.keep ? 16 : 10);
         burst(f.x, f.y, 40, '#9a9284', 160, 0.9, 5);
         burst(f.x, f.y, 20, '#ffc53d', 120, 0.7, 3);
-        if (f.s === me) S.sfx.crownLost();
-        banner(f.s === me ? 'Tower lost!' : 'Tower down!', f.keep ? 'The keep has fallen' : '+1 crown');
+        if (f.s === me) S.sfx.towerLost();
+        banner(f.s === me ? 'Tower lost!' : 'Tower down!', f.keep ? 'The keep has fallen' : '');
         break;
       case 'note': banner(f.text); break;
+      case 'well': S.sfx.heal(); burst(f.x, f.y, 18, f.s === me ? COLORS.me : COLORS.them, 90, 0.7, 3); break;
     }
   }
 
@@ -964,6 +1066,7 @@
     ctx.setTransform(new DOMMatrix([dpr, 0, 0, dpr, 0, 0]).multiply(view.m));
     ctx.drawImage(fieldLayer, 0, 0, W, FIELD_H);
     A.drawRiver(ctx, ar, FIELD, t);
+    drawWells(t);
 
     if (state === 'playing') {
       // Where the picked troops would go.
@@ -987,6 +1090,27 @@
       }
     }
     ctx.restore();
+  }
+
+  // A rune stone on each bridge, with a ring showing how far it has been claimed. Drawn in world units.
+  function drawWells(t) {
+    const col = side => (side === me ? COLORS.me : COLORS.them);
+    for (const w of g.wells) {
+      const y = LANES[w.lane];
+      ctx.fillStyle = 'rgba(12,10,24,0.55)';
+      ctx.beginPath(); ctx.arc(MID, y, 19, 0, Math.PI * 2); ctx.fill();
+      if (w.v) {
+        ctx.strokeStyle = col(w.v < 0 ? 0 : 1);
+        ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.arc(MID, y, 17, -Math.PI / 2, -Math.PI / 2 + Math.abs(w.v) * Math.PI * 2); ctx.stroke();
+      }
+      const size = 9 + (w.owner >= 0 ? Math.sin(t * 3 + w.lane) * 1.2 : 0);
+      ctx.fillStyle = w.owner >= 0 ? col(w.owner) : '#d9d3ff';
+      ctx.beginPath(); ctx.moveTo(MID, y - size); ctx.lineTo(MID + size * 0.7, y); ctx.lineTo(MID, y + size); ctx.lineTo(MID - size * 0.7, y); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(MID, y - size * 0.45); ctx.lineTo(MID, y + size * 0.45); ctx.moveTo(MID - size * 0.25, y); ctx.lineTo(MID + size * 0.25, y); ctx.stroke();
+    }
   }
 
   function drawPreview() {
@@ -1122,37 +1246,37 @@
         ctx.setLineDash([4, 4]);
         ctx.beginPath(); ctx.arc(x, y, f.r * s, 0, Math.PI * 2); ctx.stroke();
         ctx.setLineDash([]);
-        if (f.id === 'fireball') {
+        if (f.id === 'cinder') {
           const mx = x - (1 - k) * 160 * s, my = y - (1 - k) * 220 * s;
           ctx.fillStyle = 'rgba(255,140,40,0.35)';
           ctx.beginPath(); ctx.arc(mx - 10 * s, my - 14 * s, 14 * s, 0, Math.PI * 2); ctx.fill();
           ctx.fillStyle = '#ff7a2f'; ctx.beginPath(); ctx.arc(mx, my, 10 * s, 0, Math.PI * 2); ctx.fill();
           ctx.fillStyle = '#ffd86b'; ctx.beginPath(); ctx.arc(mx, my, 5 * s, 0, Math.PI * 2); ctx.fill();
-        } else if (f.id === 'arrows') {
+        } else if (f.id === 'needles') {
           ctx.strokeStyle = '#e8dcc0'; ctx.lineWidth = 1.5;
           for (let i = 0; i < 14; i++) {
             const ax = x + Math.cos(i * 2.4) * f.r * s * 0.8 * ((i % 4) / 4 + 0.25), ay = y + Math.sin(i * 2.4) * f.r * s * 0.5 - (1 - k) * 160 * s;
             ctx.beginPath(); ctx.moveTo(ax - 4, ay - 10); ctx.lineTo(ax, ay); ctx.stroke();
           }
         }
-      } else if (f.k === 'boom' || f.k === 'fireball' || f.k === 'zap' || f.k === 'freeze' || f.k === 'rage' || f.k === 'arrows' || f.k === 'heal' || f.k === 'rise') {
-        const dur = f.k === 'freeze' ? 3 : f.k === 'rage' ? 0.9 : 0.5;
+      } else if (f.k === 'boom' || f.k === 'cinder' || f.k === 'snap' || f.k === 'frostbind' || f.k === 'hymn' || f.k === 'needles' || f.k === 'heal' || f.k === 'rise' || f.k === 'flick' || f.k === 'spore') {
+        const dur = f.k === 'frostbind' ? 3 : f.k === 'hymn' || f.k === 'spore' ? 0.9 : 0.5;
         if (f.t > dur) continue;
         const k = f.t / dur;
         const [x, y] = P(f.x, f.y);
         const r = (f.r || 30) * s;
         ctx.globalAlpha = 1 - k;
-        if (f.k === 'freeze') {
+        if (f.k === 'frostbind') {
           ctx.globalAlpha = Math.min(0.5, (1 - k) * 2);
           ctx.fillStyle = '#bfe8ff';
           ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-        } else if (f.k === 'rage') {
+        } else if (f.k === 'hymn') {
           ctx.strokeStyle = '#c45cff'; ctx.lineWidth = 4;
           ctx.beginPath(); ctx.arc(x, y, r * (0.3 + k * 0.8), 0, Math.PI * 2); ctx.stroke();
         } else if (f.k === 'heal') {
           ctx.strokeStyle = '#7dff9a'; ctx.lineWidth = 2;
           ctx.beginPath(); ctx.arc(x, y, r * k, 0, Math.PI * 2); ctx.stroke();
-        } else if (f.k === 'zap') {
+        } else if (f.k === 'snap') {
           ctx.strokeStyle = '#9fe3ff'; ctx.lineWidth = 2.5;
           for (let i = 0; i < 6; i++) {
             const a = i * 1.05 + f.t * 8;
@@ -1160,7 +1284,7 @@
           }
         } else {
           const g2 = ctx.createRadialGradient(x, y, 0, x, y, r * (0.6 + k * 0.6));
-          const col = f.k === 'arrows' ? '#c9b98f' : f.k === 'rise' ? '#ffb347' : f.c || '#ff7a2f';
+          const col = f.k === 'needles' ? '#c9b98f' : f.k === 'rise' || f.k === 'flick' ? '#ffb347' : f.k === 'spore' ? '#a6d65a' : f.c || '#ff7a2f';
           g2.addColorStop(0, '#fff3c0');
           g2.addColorStop(0.35, col);
           g2.addColorStop(1, 'rgba(0,0,0,0)');
@@ -1200,7 +1324,7 @@
         ctx.globalAlpha = 1;
       }
     }
-    g.fx = g.fx.filter(f => f.t < (f.k === 'freeze' ? 3 : 1.2));
+    g.fx = g.fx.filter(f => f.t < (f.k === 'frostbind' ? 3 : 1.2));
 
     // Particles.
     for (const p of particles) {
@@ -1260,13 +1384,13 @@
     });
   }
 
-  // One card tile. opts: { lvl, bar: [have, need], locked, upg, cls, tag }
+  // One card tile. opts: { lvl, note, bar: [have, need], locked, upg, cls, tag }
   function cardHTML(card, opts = {}) {
     const rc = D.RARITIES[card.rarity]?.color || '#9aa7b8';
     const bar = opts.bar ? `<span class="bar ${opts.bar[0] >= opts.bar[1] ? 'full' : ''}"><i style="width:${Math.min(100, (opts.bar[0] / opts.bar[1]) * 100)}%"></i></span>` : '';
     return `<button class="ccard ${opts.locked ? 'locked' : ''} ${opts.cls || ''}" type="button" ${opts.tag || ''} style="--rc:${rc}">
       <canvas data-art="${card.id}"></canvas><span class="cost">${card.cost}</span>${opts.upg ? '<span class="upg">▲</span>' : ''}
-      ${opts.name ? `<span class="name">${esc(card.name)}</span>` : ''}${opts.lvl ? `<span class="lvl">${opts.lvl === 'max' ? 'MAX' : 'Lvl ' + opts.lvl}</span>` : ''}${bar}
+      ${opts.name ? `<span class="name">${esc(card.name)}</span>` : ''}${opts.lvl ? `<span class="lvl">${opts.lvl === 'max' ? 'MAX' : 'Lvl ' + opts.lvl}</span>` : ''}${opts.note ? `<span class="lvl">${opts.note}</span>` : ''}${bar}
     </button>`;
   }
 
@@ -1310,17 +1434,21 @@
     const t = Math.max(0, Math.ceil(g.time));
     setHud('time', `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`);
     $('clock').classList.toggle('ot', g.overtime);
-    setHud('clock-note', g.overtime ? 'OVERTIME' : g.time <= DOUBLE_AT ? '2× MANA' : '');
-    const crowns = n => [0, 1, 2].map(i => `<span class="${i < n ? 'on' : ''}">♛</span>`).join('');
-    setHud('me-crowns', crowns(g.players[me].crowns));
-    setHud('them-crowns', crowns(g.players[1 - me].crowns));
+    setHud('clock-note', g.overtime ? 'OVERTIME' : g.time <= SURGE_AT ? 'RUNE SURGE' : '');
+    const felled = n => [0, 1, 2].map(i => `<span class="${i < n ? 'on' : ''}">⚑</span>`).join('');
+    setHud('me-felled', felled(g.players[me].felled));
+    setHud('them-felled', felled(g.players[1 - me].felled));
+    setHud('me-dmg', `${Math.round(g.players[me].dmg).toLocaleString()} dmg`);
+    setHud('them-dmg', `${Math.round(g.players[1 - me].dmg).toLocaleString()} dmg`);
+    const held = wellsHeld(me);
+    setHud('mana-rate', held ? `+${Math.round(held * WELL_BONUS * 100)}%` : '');
     if (state === 'playing' && t <= 10 && t !== lastTick && !g.over) {
       lastTick = t;
       S.sfx.tick();
     }
-    if (state === 'playing' && !g.overtime && Math.ceil(g.time) === DOUBLE_AT && !hudCache.double) {
-      hudCache.double = true;
-      banner('2× Mana!', 'One minute left');
+    if (state === 'playing' && !g.overtime && Math.ceil(g.time) === SURGE_AT && !hudCache.surge) {
+      hudCache.surge = true;
+      banner('Rune Surge!', 'Mana flows faster for the last minute');
     }
   }
 
@@ -1441,8 +1569,7 @@
     $('bhud').hidden = v !== 'battle';
     $('hand').hidden = v !== 'battle';
     if (v !== 'menu') screens.innerHTML = '';
-    hudCache.double = false;
-    for (const k of Object.keys(hudCache)) if (k !== 'double') delete hudCache[k];
+    for (const k of Object.keys(hudCache)) delete hudCache[k];
     requestAnimationFrame(resize);
   }
 
@@ -1468,14 +1595,14 @@
     go(b.dataset.tab);
   }));
 
-  function drawChest(cv, type, { open = false, glow = false } = {}) {
-    const chest = D.CHESTS[type];
+  function drawCache(cv, type, { open = false, glow = false } = {}) {
+    const cache = D.CACHES[type];
     const w = cv.width = 128, h = cv.height = 112;
     const c = cv.getContext('2d');
     c.clearRect(0, 0, w, h);
     if (glow) {
       const gl = c.createRadialGradient(w / 2, h / 2, 4, w / 2, h / 2, 60);
-      gl.addColorStop(0, chest.color + 'aa');
+      gl.addColorStop(0, cache.color + 'aa');
       gl.addColorStop(1, 'rgba(0,0,0,0)');
       c.fillStyle = gl;
       c.fillRect(0, 0, w, h);
@@ -1485,7 +1612,7 @@
     const wood = type === 'free' ? '#8a6a45' : '#6b4a2a';
     c.fillStyle = wood;
     c.beginPath(); c.roundRect(22, 52, 84, 46, 6); c.fill();
-    c.fillStyle = chest.color;
+    c.fillStyle = cache.color;
     c.fillRect(22, 60, 84, 6);
     c.fillRect(36, 52, 8, 46);
     c.fillRect(84, 52, 8, 46);
@@ -1497,7 +1624,7 @@
     } else {
       c.fillStyle = A.shade(wood, 0.08);
       c.beginPath(); c.roundRect(20, 28, 88, 28, [16, 16, 4, 4]); c.fill();
-      c.fillStyle = chest.color;
+      c.fillStyle = cache.color;
       c.fillRect(20, 46, 88, 5);
       c.fillRect(36, 28, 8, 28);
       c.fillRect(84, 28, 8, 28);
@@ -1514,45 +1641,46 @@
 
   function battleTab() {
     const ar = arena(), ai = arenaIdx(), next = D.ARENAS[ai + 1];
-    const t = trophies();
-    const pct = next ? ((t - ar.trophies) / (next.trophies - ar.trophies)) * 100 : 100;
+    const t = glory();
+    const pct = next ? ((t - ar.glory) / (next.glory - ar.glory)) * 100 : 100;
     const sl = slots();
     const now = Date.now();
     const freeAt = Arcade.load('rune:freeAt', 0);
     const deck = myDeck();
     return {
       html: `<div class="rcard arena-banner"><canvas id="arena-art"></canvas>
-          <div class="label"><small>Arena ${ai + 1}</small><b>${esc(ar.name)}</b></div></div>
-        <div class="trophy-bar"><i style="width:${clamp(pct, 0, 100)}%"></i></div>
-        <div class="trophy-line"><span>🏆 ${t}</span><span>${next ? `${esc(next.name)} at ${next.trophies}` : 'Top arena!'}</span></div>
-        <button class="battle-btn" type="button" data-ranked>BATTLE<small>vs a ${esc(ar.name)} bot · win trophies and chests</small></button>
+          <div class="label"><small>Frontier ${ai + 1}</small><b>${esc(ar.name)}</b></div></div>
+        <div class="glory-bar"><i style="width:${clamp(pct, 0, 100)}%"></i></div>
+        <div class="glory-line"><span>⚜ ${t}</span><span>${next ? `${esc(next.name)} at ${next.glory}` : 'Top frontier!'}</span></div>
+        <button class="battle-btn" type="button" data-ranked>LADDER<small>vs a ${esc(ar.name)} bot · win glory and caches</small></button>
         <div class="mode-row">
           <button class="btn secondary" type="button" data-practice>Practice</button>
           <button class="btn secondary" type="button" data-online ${Relay.enabled ? '' : 'disabled'}>Online 1v1</button>
         </div>
-        <p class="rsection"><span>Chests</span><span style="text-transform:none;letter-spacing:0">Win battles to earn chests</span></p>
-        <div class="chests">${sl.map((x, i) => {
-          if (!x) return `<div class="chest-slot"><small style="margin-top:36px">Empty slot</small></div>`;
-          const ready = x.unlockAt && x.unlockAt <= now;
-          const label = ready ? '<span class="when">OPEN!</span>' : x.unlockAt ? `<span class="when" data-left="${x.unlockAt}">${fmtLeft(x.unlockAt - now)}</span>` : `<small>${D.CHESTS[x.type].minutes ? D.CHESTS[x.type].minutes + 'm to unlock' : 'Tap to open'}</small>`;
-          return `<button class="chest-slot full ${ready ? 'ready' : ''}" type="button" data-chest="${i}"><canvas data-chest-art="${x.type}"></canvas>${esc(D.CHESTS[x.type].name)}${label}</button>`;
+        <p class="rule-note">Hold the rune wells on the bridges for faster mana. When time runs out, whoever felled more towers wins. Level on towers means overtime: the next tower felled wins, and if none falls, the most total tower damage takes it. Break the keep to win on the spot.</p>
+        <p class="rsection"><span>Caches</span><span style="text-transform:none;letter-spacing:0">Wins earn caches, battles charge them</span></p>
+        <div class="caches">${sl.map((x, i) => {
+          if (!x) return `<div class="cache-slot"><small style="margin-top:36px">Empty slot</small></div>`;
+          const need = D.CACHES[x.type].battles, ready = x.charge >= need;
+          const label = ready ? '<span class="when">OPEN!</span>' : `<small>${x.charge}/${need} battles</small>`;
+          return `<button class="cache-slot full ${ready ? 'ready' : ''}" type="button" data-cache="${i}"><canvas data-cache-art="${x.type}"></canvas>${esc(D.CACHES[x.type].name)}${label}</button>`;
         }).join('')}</div>
-        <div class="rcard free-chest"><canvas data-chest-art="free"></canvas><div><b>Free Chest</b><small data-free>${freeAt <= now ? 'Ready!' : 'Next in ' + fmtLeft(freeAt - now)}</small></div><button class="btn ${freeAt <= now ? '' : 'secondary'}" type="button" data-free-btn ${freeAt <= now ? '' : 'disabled'}>Open</button></div>
+        <div class="rcard free-cache"><canvas data-cache-art="free"></canvas><div><b>${esc(D.CACHES.free.name)}</b><small data-free>${freeAt <= now ? 'Ready!' : 'Next in ' + fmtLeft(freeAt - now)}</small></div><button class="btn ${freeAt <= now ? '' : 'secondary'}" type="button" data-free-btn ${freeAt <= now ? '' : 'disabled'}>Open</button></div>
         <p class="rsection"><span>Battle deck ${deckIdx() + 1}</span><span class="avg">Average <b>${(deck.reduce((s, id) => s + D.card(id).cost, 0) / 8).toFixed(1)}</b> mana</span></p>
         <div class="rcard deck">${deck.map(id => cardHTML(D.card(id), { lvl: levelOf(id) })).join('')}</div>
         <div class="settings" style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap"><button class="chip" type="button" data-music aria-pressed="${S.musicOn()}">Music: ${S.musicOn() ? 'On' : 'Off'}</button></div>
         <div data-waiting></div>`,
       wire: el => {
         drawArenaArt(el.querySelector('#arena-art'), ar);
-        el.querySelectorAll('canvas[data-chest-art]').forEach(cv => drawChest(cv, cv.dataset.chestArt));
+        el.querySelectorAll('canvas[data-cache-art]').forEach(cv => drawCache(cv, cv.dataset.cacheArt));
         el.querySelector('[data-ranked]').addEventListener('click', startRanked);
         el.querySelector('[data-practice]').addEventListener('click', practiceMenu);
         el.querySelector('[data-online]').addEventListener('click', onlineMenu);
-        el.querySelectorAll('[data-chest]').forEach(b => b.addEventListener('click', () => chestTap(+b.dataset.chest)));
+        el.querySelectorAll('[data-cache]').forEach(b => b.addEventListener('click', () => cacheTap(+b.dataset.cache)));
         el.querySelector('[data-free-btn]').addEventListener('click', () => {
           if (Arcade.load('rune:freeAt', 0) > Date.now()) return;
           Arcade.save('rune:freeAt', Date.now() + D.FREE_EVERY_H * 3600000);
-          openChest('free');
+          openCache('free');
         });
         el.querySelector('.deck').addEventListener('click', () => go('cards'));
         el.querySelector('[data-music]').addEventListener('click', e => {
@@ -1561,15 +1689,10 @@
           e.target.textContent = `Music: ${S.musicOn() ? 'On' : 'Off'}`;
         });
         Relay.showWaiting(el.querySelector('[data-waiting]'), room => goOnline('public', room));
-        // Count chest timers down live.
+        // Count the free cache's timer down live.
         timerHandle = setInterval(() => {
           if (!el.isConnected) return clearInterval(timerHandle);
           let redraw = false;
-          el.querySelectorAll('[data-left]').forEach(s => {
-            const left = +s.dataset.left - Date.now();
-            if (left <= 0) redraw = true;
-            else s.textContent = fmtLeft(left);
-          });
           const fa = Arcade.load('rune:freeAt', 0);
           const f = el.querySelector('[data-free]');
           if (f && fa > Date.now()) f.textContent = 'Next in ' + fmtLeft(fa - Date.now());
@@ -1597,7 +1720,7 @@
   function practiceMenu() {
     ui.show({
       title: 'Practice',
-      html: `<p>Play a bot at your own card level. No trophies or chests, just practice.</p>
+      html: `<p>Card levels don't count here, so it's just your deck and your skill. No glory or caches, but your score goes on the leaderboard.</p>
         <div class="menu"><div class="row">${PRACTICE.map((l, i) => `<button class="btn ${i === 1 ? '' : 'secondary'}" type="button" data-p="${i}">${l.name}</button>`).join('')}</div>
         <button class="btn secondary" type="button" data-back>Back</button></div>`,
       button: null,
@@ -1611,7 +1734,7 @@
   function onlineMenu() {
     ui.show({
       title: 'Online 1v1',
-      html: `<p>Bring your deck; every card fights at level ${D.ONLINE_LEVEL} so it's fair.</p>
+      html: `<p>Bring your deck. Card levels don't exist in online play, so it's fair.</p>
         <div class="menu">
           <button class="btn" type="button" data-net="quick">Quick match</button>
           <button class="btn secondary" type="button" data-net="create">Create private room</button>
@@ -1628,47 +1751,37 @@
     });
   }
 
-  // ---------- Chests ----------
+  // ---------- Caches ----------
 
-  function chestTap(i) {
+  function cacheTap(i) {
     const sl = slots(), x = sl[i];
     if (!x) return;
-    const now = Date.now();
-    const chest = D.CHESTS[x.type];
-    if (x.unlockAt && x.unlockAt <= now) {
+    const cache = D.CACHES[x.type];
+    const left = cache.battles - x.charge;
+    if (left <= 0) {
       sl[i] = null;
       saveSlots(sl);
-      return openChest(x.type);
+      return openCache(x.type);
     }
-    const busy = sl.some((o, j) => j !== i && o && o.unlockAt && o.unlockAt > now);
-    const left = x.unlockAt ? x.unlockAt - now : chest.minutes * 60000;
-    const cost = Math.max(10, Math.ceil(left / 60000) * 8);
+    const cost = Math.max(10, Math.ceil(cache.rush * left / cache.battles));
     ui.show({
-      title: chest.name,
+      title: cache.name,
       html: `<canvas class="big" data-c style="width:128px;height:112px"></canvas>
-        <p>${chestContents(x.type)}</p>
-        <p class="muted-note">${x.unlockAt ? `Unlocks in ${fmtLeft(left)}` : busy ? 'Another chest is unlocking. One at a time!' : `Takes ${chest.minutes} minutes to unlock.`}</p>
-        <div class="menu">${!x.unlockAt && !busy ? '<button class="btn" type="button" data-start>Start unlock</button>' : ''}
+        <p>${cacheContents(x.type)}</p>
+        <p class="muted-note">${left} more battle${left === 1 ? '' : 's'} to charge it. Battles charge your oldest cache first.</p>
+        <div class="menu">
           <button class="btn secondary" type="button" data-now ${gold() >= cost ? '' : 'disabled'}>Open now · ◆ ${cost}</button>
           <button class="btn secondary" type="button" data-back>Close</button></div>`,
       button: null,
       onRender: panel => {
-        drawChest(panel.querySelector('[data-c]'), x.type);
-        panel.querySelector('[data-start]')?.addEventListener('click', () => {
-          const s = slots();
-          s[i] = { ...s[i], unlockAt: Date.now() + chest.minutes * 60000 };
-          saveSlots(s);
-          S.sfx.select();
-          ui.hide();
-          go('battle');
-        });
+        drawCache(panel.querySelector('[data-c]'), x.type);
         panel.querySelector('[data-now]').addEventListener('click', () => {
           if (gold() < cost) return;
           addGold(-cost);
           const s = slots();
           s[i] = null;
           saveSlots(s);
-          openChest(x.type);
+          openCache(x.type);
         });
         panel.querySelector('[data-back]').addEventListener('click', () => ui.hide());
       },
@@ -1676,16 +1789,16 @@
   }
 
   const scale = () => 1 + arenaIdx() * 0.5;
-  function chestContents(type) {
-    const c = D.CHESTS[type];
+  function cacheContents(type) {
+    const c = D.CACHES[type];
     if (c.legendary) return 'One guaranteed Legendary card.';
     return `About ${Math.round(c.cards * scale())} cards and ◆ ${Math.round(c.gold * scale())} gold${c.epic ? `, with at least ${c.epic} Epic` : ''}.`;
   }
 
-  // Rolls a chest's loot from the cards your arena has unlocked, adds it to your collection,
+  // Rolls a cache's loot from the cards your arena has unlocked, adds it to your collection,
   // then reveals it one card at a time.
-  function rollChest(type) {
-    const chest = D.CHESTS[type], ai = arenaIdx();
+  function rollCache(type) {
+    const cache = D.CACHES[type], ai = arenaIdx();
     const pool = rar => D.COLLECTIBLE.filter(c => c.rarity === rar && c.arena <= ai);
     const pick = rar => {
       const order = ['legendary', 'epic', 'rare', 'common'];
@@ -1694,10 +1807,10 @@
     };
     const loot = new Map();
     const add = (card, n) => loot.set(card.id, (loot.get(card.id) || 0) + n);
-    if (chest.legendary) add(pick('legendary'), 1);
+    if (cache.legendary) add(pick('legendary'), 1);
     else {
-      let n = Math.round(chest.cards * scale());
-      for (let i = 0; i < (chest.epic || 0); i++, n--) add(pick('epic'), 1);
+      let n = Math.round(cache.cards * scale());
+      for (let i = 0; i < (cache.epic || 0); i++, n--) add(pick('epic'), 1);
       // A few stacks rather than a card of everything: commons in bulk, rarer ones in ones and twos.
       const stacks = type === 'free' ? 2 : type === 'silver' ? 3 : type === 'golden' ? 5 : 6;
       for (let s = 0; s < stacks && n > 0; s++) {
@@ -1710,7 +1823,7 @@
         n -= count;
       }
     }
-    const goldGot = Math.round(chest.gold * scale() * (0.85 + Math.random() * 0.3));
+    const goldGot = Math.round(cache.gold * scale() * (0.85 + Math.random() * 0.3));
     const col = collection();
     const items = [...loot.entries()].map(([id, count]) => {
       const card = D.card(id);
@@ -1724,29 +1837,29 @@
     return { items, gold: goldGot };
   }
 
-  function openChest(type) {
-    const loot = rollChest(type);
+  function openCache(type) {
+    const loot = rollCache(type);
     let taps = 0;
     const steps = loot.items.length;
     const show = () => {
       if (taps === 0) {
         ui.show({
-          title: D.CHESTS[type].name,
-          html: `<div class="open-chest"><canvas class="big" data-c></canvas><p class="muted-note">Tap the chest!</p></div>`,
+          title: D.CACHES[type].name,
+          html: `<div class="open-cache"><canvas class="big" data-c></canvas><p class="muted-note">Tap the cache!</p></div>`,
           button: null,
           onRender: panel => {
             const cv = panel.querySelector('[data-c]');
-            drawChest(cv, type, { glow: true });
+            drawCache(cv, type, { glow: true });
             let shakes = 0;
             cv.addEventListener('click', () => {
               shakes++;
               cv.classList.remove('shake');
               void cv.offsetWidth;
               cv.classList.add('shake');
-              S.sfx.chestShake();
+              S.sfx.cacheShake();
               if (shakes >= 2) {
-                S.sfx.chestOpen();
-                drawChest(cv, type, { open: true, glow: true });
+                S.sfx.cacheOpen();
+                drawCache(cv, type, { open: true, glow: true });
                 setTimeout(() => { taps = 1; show(); }, 350);
               }
             });
@@ -1774,7 +1887,7 @@
         return;
       }
       ui.show({
-        title: 'Chest opened!',
+        title: 'Cache opened!',
         html: `${loot.gold ? `<div class="rewards"><span>◆ +${loot.gold} gold</span></div>` : ''}
           <div class="loot-summary">${loot.items.map(it => cardHTML(it.card, { lvl: '×' + it.count })).join('')}</div>`,
         button: 'Collect',
@@ -1810,8 +1923,8 @@
         ${swapCard ? `<p class="swap-note">Tap a card in your deck to swap in ${esc(D.card(swapCard).name)} · <a href="#" data-cancel style="color:inherit">cancel</a></p>` : ''}
         <p class="rsection"><span>Collection</span><span>${found.length}/${D.COLLECTIBLE.length} found</span></p>
         <div class="collection">${found.filter(c => !deck.includes(c.id)).map(c => tile(c, { tag: `data-card="${c.id}"`, cls: swapCard === c.id ? 'selected' : '' })).join('')}</div>
-        ${locked.length ? `<p class="rsection"><span>Not found yet</span><span style="text-transform:none;letter-spacing:0">Drop from chests</span></p>
-          <div class="collection">${locked.map(c => cardHTML(c, { locked: true, name: true, tag: `data-info="${c.id}"`, lvl: D.ARENAS[c.arena].name.split(' ')[0] + (c.arena > arenaIdx() ? ' 🔒' : '') })).join('')}</div>` : ''}`,
+        ${locked.length ? `<p class="rsection"><span>Not found yet</span><span style="text-transform:none;letter-spacing:0">Drop from caches</span></p>
+          <div class="collection">${locked.map(c => cardHTML(c, { locked: true, name: true, tag: `data-info="${c.id}"`, note: D.ARENAS[c.arena].name.split(' ').pop() + (c.arena > arenaIdx() ? ' 🔒' : '') })).join('')}</div>` : ''}`,
       wire: el => {
         el.querySelectorAll('[data-deck]').forEach(b => b.addEventListener('click', () => { Arcade.save('rune:deck', +b.dataset.deck); S.sfx.tap(); go('cards'); }));
         el.querySelector('[data-cancel]')?.addEventListener('click', e => { e.preventDefault(); swapCard = null; go('cards'); });
@@ -1841,7 +1954,12 @@
     };
     const rows = [];
     if (card.hp) rows.push(row(card.kind === 'building' ? 'Hitpoints' : 'Hitpoints', card.hp));
-    if (card.dmg) rows.push(row(card.kind === 'spell' ? 'Damage' : 'Damage', card.dmg));
+    if (card.dmg) rows.push(row(card.ticks ? `Damage ×${card.ticks}` : 'Damage', card.dmg));
+    if (card.mend) rows.push(row('Heal', card.mend));
+    if (card.blast) rows.push(row('Death blast', card.blast.dmg));
+    if (card.manaEvery) rows.push(`<div>Mana<b>+1 / ${card.manaEvery}s</b></div>`);
+    if (card.thorns) rows.push(`<div>Thorns<b>${card.thorns * 100}%</b></div>`);
+    if (card.lifesteal) rows.push(`<div>Lifesteal<b>${card.lifesteal * 100}%</b></div>`);
     if (card.count) rows.push(`<div>Count<b>×${card.count}</b></div>`);
     if (card.rate && card.dmg && card.kind !== 'spell') rows.push(`<div>Hit speed<b>${card.rate}s</b></div>`);
     if (card.speed) rows.push(`<div>Speed<b>${card.speed >= 80 ? 'Very fast' : card.speed >= 60 ? 'Fast' : card.speed >= 40 ? 'Medium' : 'Slow'}</b></div>`);
@@ -1850,7 +1968,7 @@
     if (card.life) rows.push(`<div>Lifetime<b>${card.life}s</b></div>`);
     if (card.stun) rows.push(`<div>Stun<b>${card.stun}s</b></div>`);
     if (card.heal) rows.push(row('Heal / sec', card.heal.amt));
-    const targets = card.siege ? 'Buildings' : card.kind === 'spell' ? 'Area' : (card.ranged && !card.ground) || card.fly ? 'Air & ground' : card.dmg ? 'Ground' : '—';
+    const targets = card.siege ? 'Buildings' : card.mend ? 'Your troops' : card.kind === 'spell' ? 'Area' : (card.ranged && !card.ground) || card.fly ? 'Air & ground' : card.dmg ? 'Ground' : '—';
     rows.push(`<div>Targets<b>${targets}</b></div>`);
     return rows.join('');
   }
@@ -1867,7 +1985,7 @@
           <div class="top">${cardHTML(card, { lvl: k ? (lvl >= D.MAX_LEVEL ? 'max' : lvl) : null, bar: need ? [k.count, need] : null })}
             <div><span class="rar" style="color:${rar.color}">${rar.name} ${card.kind}</span><h3>${esc(card.name)}</h3><p class="muted-note" style="text-align:left">${esc(card.desc)}</p></div></div>
           <div class="stats">${statRows(card, lvl)}</div>
-          ${k ? (need ? `<p class="muted-note">${k.count}/${need} cards to level ${lvl + 1} · ◆ ${cost}</p>` : '<p class="muted-note">Max level!</p>') : `<p class="muted-note">Found in chests from ${esc(D.ARENAS[card.arena].name)} (${D.ARENAS[card.arena].trophies} trophies) onward.</p>`}
+          ${k ? (need ? `<p class="muted-note">${k.count}/${need} cards to level ${lvl + 1} · ◆ ${cost}</p>` : '<p class="muted-note">Max level!</p>') : `<p class="muted-note">Found in caches from ${esc(D.ARENAS[card.arena].name)} (${D.ARENAS[card.arena].glory} glory) onward.</p>`}
           <div class="menu">
             ${k && need ? `<button class="btn" type="button" data-up ${canUpgrade(id) ? '' : 'disabled'}>Upgrade · ◆ ${cost}</button>` : ''}
             ${k && !inDeck ? '<button class="btn secondary" type="button" data-use>Use in deck</button>' : ''}
@@ -1904,32 +2022,32 @@
     });
   }
 
-  // ---------- Trophy road ----------
+  // ---------- Glory path ----------
 
   function roadTab() {
-    const t = trophies(), best = Math.max(t, Arcade.load('rune:best', 0));
+    const t = glory(), best = Math.max(t, Arcade.load('rune:best', 0));
     const claimed = Arcade.load('rune:road', []);
     const items = [
-      ...D.ARENAS.map((a, i) => ({ t: a.trophies, arena: i })),
+      ...D.ARENAS.map((a, i) => ({ t: a.glory, arena: i })),
       ...D.ROAD.map(r => ({ ...r })),
     ].sort((a, b) => a.t - b.t || (a.arena !== undefined ? -1 : 1));
     return {
-      html: `<h2 class="rtitle">Trophy Road</h2><p class="rsub">You have 🏆 ${t} (best ${best}). Claim rewards as you climb.</p>
+      html: `<h2 class="rtitle">Glory Path</h2><p class="rsub">You have ⚜ ${t} (best ${best}). Claim rewards as you climb.</p>
         <div class="road" data-road>${items.map(it => {
           if (it.arena !== undefined) {
             const ar = D.ARENAS[it.arena], cards = D.COLLECTIBLE.filter(c => c.arena === it.arena);
-            return `<div class="rcard milestone arena ${best >= ar.trophies ? 'got' : 'locked'}"><span class="t">${ar.trophies}</span><span class="what"><b>Arena ${it.arena + 1}: ${esc(ar.name)}</b><small>Unlocks ${cards.map(c => esc(c.name)).join(', ')}</small></span></div>`;
+            return `<div class="rcard milestone arena ${best >= ar.glory ? 'got' : 'locked'}"><span class="t">${ar.glory}</span><span class="what"><b>Frontier ${it.arena + 1}: ${esc(ar.name)}</b><small>Unlocks ${cards.map(c => esc(c.name)).join(', ')}</small></span></div>`;
           }
           const got = best >= it.t, done = claimed.includes(it.t);
           return `<div class="rcard milestone ${got ? 'got' : 'locked'}"><span class="t">${it.t}</span>
-            ${it.chest ? `<canvas data-chest-art="${it.chest}"></canvas>` : '<span style="font-size:28px;width:46px;text-align:center">◆</span>'}
-            <span class="what">${it.chest ? esc(D.CHESTS[it.chest].name) : `${it.gold.toLocaleString()} gold`}<small>${done ? 'Claimed' : got ? 'Ready to claim' : `${it.t - best} trophies to go`}</small></span>
+            ${it.cache ? `<canvas data-cache-art="${it.cache}"></canvas>` : '<span style="font-size:28px;width:46px;text-align:center">◆</span>'}
+            <span class="what">${it.cache ? esc(D.CACHES[it.cache].name) : `${it.gold.toLocaleString()} gold`}<small>${done ? 'Claimed' : got ? 'Ready to claim' : `${it.t - best} glory to go`}</small></span>
             ${got && !done ? `<button class="btn" type="button" data-claim="${it.t}">Claim</button>` : done ? '<span style="color:#3ddc84">✓</span>' : ''}</div>`;
         }).join('')}</div>
-        <p class="rsection"><span>Top trophies worldwide</span></p>
+        <p class="rsection"><span>Most glory worldwide</span></p>
         <div class="rcard" style="padding:12px" data-board>${Online.enabled ? '<p class="board-note">Loading…</p>' : '<p class="board-note">Leaderboards aren\'t set up on this copy of the arcade.</p>'}</div>`,
       wire: el => {
-        el.querySelectorAll('canvas[data-chest-art]').forEach(cv => drawChest(cv, cv.dataset.chestArt));
+        el.querySelectorAll('canvas[data-cache-art]').forEach(cv => drawCache(cv, cv.dataset.cacheArt));
         // Start the road at your next reward rather than at the bottom rung.
         const next = el.querySelector('[data-claim]') || el.querySelector('.milestone.locked');
         if (next) screens.scrollTop += next.getBoundingClientRect().top - screens.getBoundingClientRect().top - screens.clientHeight / 2;
@@ -1942,14 +2060,14 @@
             addGold(item.gold);
             S.sfx.gold();
             go('road');
-          } else openChest(item.chest);
+          } else openCache(item.cache);
         }));
         if (Online.enabled) {
           Online.top('rune-rumble-trophies', 10).then(list => {
             const slot = el.querySelector('[data-board]');
             if (!slot?.isConnected) return;
             const meId = Arcade.profile().id;
-            slot.innerHTML = list.length ? `<ol class="board-list">${list.map((r, i) => `<li class="${r.id === meId ? 'me' : ''}"><span class="rank">${i + 1}</span><span class="name">${esc(r.name)}</span><b>🏆 ${r.score}</b></li>`).join('')}</ol>` : '<p class="board-note">No one yet. Be the first!</p>';
+            slot.innerHTML = list.length ? `<ol class="board-list">${list.map((r, i) => `<li class="${r.id === meId ? 'me' : ''}"><span class="rank">${i + 1}</span><span class="name">${esc(r.name)}</span><b>⚜ ${r.score}</b></li>`).join('')}</ol>` : '<p class="board-note">No one yet. Be the first!</p>';
           }).catch(() => { const slot = el.querySelector('[data-board]'); if (slot) slot.innerHTML = '<p class="board-note">Couldn\'t reach the leaderboard.</p>'; });
         }
       },
