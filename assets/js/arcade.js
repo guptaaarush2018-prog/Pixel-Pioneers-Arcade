@@ -209,7 +209,12 @@ const Arcade = (() => {
 
   // Marks a one-off accomplishment, e.g. Arcade.flag('box-battle-win'). Catalog games can
   // list these under `extras` to turn them into achievements.
+  // Games may call this every frame once a goal is met, so repeats within a day are skipped.
+  const flaggedToday = new Set();
   function flag(name) {
+    const key = today() + ':' + name;
+    if (flaggedToday.has(key)) return;
+    flaggedToday.add(key);
     updateStats(s => { s.flags[name] = true; });
     dailyEvent({ flag: name });
   }

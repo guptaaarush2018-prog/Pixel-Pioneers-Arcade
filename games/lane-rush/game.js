@@ -57,6 +57,8 @@
   function update(dt) {
     time += dt;
     speed = Math.min(950, 320 + time * 7);
+    if (speed >= 950) Arcade.flag('lane-rush-floored');
+    if (distance >= 20000) Arcade.flag('lane-rush-10k');
     const dy = speed * dt;
     distance += dy;
     scroll += dy;
@@ -83,6 +85,7 @@
         if (Math.abs(laneX(c.lane) - x) < LANE_W * 1.2) {
           combo = time < comboUntil ? combo + 1 : 1;
           comboUntil = time + 2;
+          if (combo >= 5) Arcade.flag('lane-rush-weaver');
           const pts = 25 * Math.min(combo, 8);
           bonus += pts;
           popups.push({ x: laneX(c.lane), y: PLAYER_Y, text: combo > 1 ? `Close call x${combo}` : 'Close call', life: 0.9 });

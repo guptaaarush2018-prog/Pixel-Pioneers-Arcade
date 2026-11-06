@@ -28,6 +28,7 @@
 
   let state = 'ready';
   let paddle, balls, bricks, drops, particles, score, lives, level, wideUntil, slowUntil, time, held, pointerX;
+  let lostLife = false;  // this level, for the flawless achievement
 
   function buildLevel() {
     const rows = Math.min(8, 4 + Math.floor(level / 2));
@@ -57,6 +58,7 @@
     score = 0;
     lives = 3;
     level = 1;
+    lostLife = false;
     time = 0;
     held = { left: false, right: false };
     pointerX = null;
@@ -106,6 +108,7 @@
     if (kind === 'slow') slowUntil = time + 8;
     if (kind === 'life') lives = Math.min(5, lives + 1);
     if (kind === 'multi') {
+      if (balls.length >= 3) Arcade.flag('brick-burst-swarm');
       const src = balls.find(b => !b.stuck) || balls[0];
       for (const s of [-0.4, 0.4]) {
         const a = Math.atan2(src.vx || 0.01, -(src.vy || -1)) + s;
@@ -193,6 +196,7 @@
 
     if (!balls.length) {
       lives--;
+      lostLife = true;
       updateHud();
       Arcade.tone({ freq: 300, to: 80, dur: 0.4, type: 'sawtooth', vol: 0.06 });
       if (lives <= 0) {
@@ -205,7 +209,10 @@
 
     if (!bricks.length) {
       score += 250 * level;
+      if (!lostLife) Arcade.flag('brick-burst-flawless');
+      lostLife = false;
       level++;
+      if (level >= 5) Arcade.flag('brick-burst-level5');
       Arcade.tone({ freq: 523, dur: 0.12, type: 'triangle', vol: 0.06 });
       Arcade.tone({ freq: 784, dur: 0.2, type: 'triangle', vol: 0.06, delay: 0.12 });
       buildLevel();

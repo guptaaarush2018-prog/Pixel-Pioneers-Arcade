@@ -14,18 +14,22 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | Ice Clash | Sports (3-on-3 hockey with goalies, slapshots, sudden-death overtime) | Online duel |
 | Apex GP | Racing (pseudo-3D Grand Prix: 8 circuits, slipstream, tyre wear, pit stops, championship) | Online duel |
 | Grand Slam | Sports (arcade baseball: pitch selection, timed swings, fielding plays) | Online duel |
+| Putt Planet | Sports (space mini golf, 12 holes) | Online duel |
 | Light Trail | Arcade (trail duel, shrinking arena) | Live 1v1, two on one keyboard |
 | Quick Draw | Arcade (reaction standoff, outlaw ladder) | Live 1v1, two on one keyboard |
+| Beat Lane | Rhythm (four lanes, four synthesized songs, three difficulties) | Online duel |
 | Pocket Racer | Racing | Its own mini-site: six-cup career with stars, 38 tracks, garage of 17 unlockable cars, time trials with per-track world leaderboards, track builder, synthesized engine sound and music, follow camera on phones, live 1v1 races, world-record ghost |
 | Rune Rumble | Strategy (lane battler: 42 cards, rune wells, decks, caches, ladder) | Live 1v1 |
 | Realm Rivals | Strategy (kingdom builder) | Live 1v1 kingdom wars, plus the long-term Kingdom mode |
+| Rampart | Strategy (tower defense where you build the maze) | Online duel |
+| Dice Delve | Strategy (dice roguelike, three acts, daily seeded run) | Online duel |
 | Box Battle | Strategy | Live 1v1 |
 | Gravity Four | Strategy (four in a row with a board tilt) | Live 1v1 |
 | Mega Tac-Toe | Strategy (nine-board tic-tac-toe) | Live 1v1 |
 | Fleet Hunt | Strategy (hidden fleets, sonar, airstrikes) | Live 1v1 |
 | Chess | Strategy (classic, or Crystal chess with level-ups) | Live 1v1 |
-| Taco Truck Tycoon | Tycoon | Online duel |
-| Gem Mine | Idle | Leaderboard |
+| Taco Truck Tycoon | Tycoon (five spots, weekday crowds, four-item menu, rivals and critics, endless mode) | Online duel |
+| Gem Mine | Idle (six layers to breach, ore refinery, Lab research, abilities, drill bits, expeditions, relics, Core tree, challenge dives) | Leaderboard |
 | Pocket Pet | Idle (virtual pet, earns treats from other games) | Leaderboard |
 | Crowd Rush | Arcade (gate runner) | Online duel |
 | Lane Rush | Racing | Online duel |
@@ -40,7 +44,7 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | Letter Lock | Word (chained five-letter guessing) | Online duel |
 | Cloud Climber | Platformer | Online duel |
 | Stack Up | Arcade (one button) | Online duel |
-| Polarity Run | Runner | Online duel |
+| Polarity Run | Runner (rule-changing zones: polarity gates, saws, low gravity, Overdrive; air flips, combos, power-ups, skins) | Online duel |
 | Blackjack | Cards | Leaderboard |
 | Video Poker | Cards | Leaderboard |
 | High-Low | Cards | Leaderboard |

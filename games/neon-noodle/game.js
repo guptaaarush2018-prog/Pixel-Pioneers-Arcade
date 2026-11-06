@@ -106,6 +106,8 @@
     grow += kind.grow;
     burst(p.x, p.y, kind.color, 14);
 
+    if (combo >= 5) Arcade.flag('neon-noodle-combo');
+    if (snake.length >= 40) Arcade.flag('neon-noodle-long');
     if (p.type === 'orb') {
       eaten++;
       spawn('orb');

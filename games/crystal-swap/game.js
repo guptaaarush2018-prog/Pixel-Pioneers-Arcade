@@ -108,9 +108,11 @@
     for (const len of runs) {
       gained += len * 20 * cascade;
       if (len >= 4) timeLeft += len - 2; // big matches buy time
+      if (len >= 5) Arcade.flag('crystal-swap-five');
     }
     score += gained;
     bestCombo = Math.max(bestCombo, cascade);
+    if (cascade >= 4) Arcade.flag('crystal-swap-cascade');
     const first = [...cells][0];
     popups.push({
       x: (first % N) * CELL + CELL / 2, y: Math.floor(first / N) * CELL + CELL / 2,

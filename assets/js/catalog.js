@@ -126,6 +126,20 @@ window.CATALOG = [
     ],
   },
   {
+    id: 'putt-planet',
+    title: 'Putt Planet',
+    genre: 'Sports',
+    desc: 'Space mini golf. Twelve holes of planets that bend your putts, black holes, wormholes, sliding walls, bumpers and boost pads. Beat par for points.',
+    goals: [600, 1000, 1300],
+    online: 'duel',
+    extras: [
+      { id: 'putt-planet-ace', title: 'Putt Planet: Hole in One', desc: 'Sink a hole in one.' },
+      { id: 'putt-planet-portal', title: 'Putt Planet: Wormhole Surfer', desc: 'Send your ball through a portal.' },
+      { id: 'putt-planet-round', title: 'Putt Planet: Full Round', desc: 'Finish all 12 holes.' },
+      { id: 'putt-planet-under', title: 'Putt Planet: Under Par', desc: 'Finish a round under par.' },
+    ],
+  },
+  {
     id: 'light-trail',
     title: 'Light Trail',
     genre: 'Arcade',
@@ -152,6 +166,20 @@ window.CATALOG = [
       { id: 'quick-draw-200', title: 'Quick Draw: Lightning Hands', desc: 'Win a round in under 200 ms.' },
       { id: 'quick-draw-ladder', title: 'Quick Draw: Fastest in the West', desc: 'Beat all eight outlaws.' },
       { id: 'quick-draw-online-win', title: 'Quick Draw: Sharpshooter', desc: 'Win an online match.' },
+    ],
+  },
+  {
+    id: 'beat-lane',
+    title: 'Beat Lane',
+    genre: 'Rhythm',
+    desc: 'Four-lane rhythm game with four original songs made right in your browser. Hit the notes on the beat, hold the long ones, and chase an S rank on Easy, Normal or Hard.',
+    goals: [40000, 120000, 220000],
+    online: 'duel',
+    extras: [
+      { id: 'beat-lane-clear', title: 'Beat Lane: Encore', desc: 'Clear a song.' },
+      { id: 'beat-lane-hard', title: 'Beat Lane: Hard Mode', desc: 'Clear a song on Hard.' },
+      { id: 'beat-lane-fc', title: 'Beat Lane: Full Combo', desc: 'Clear a song without a single miss.' },
+      { id: 'beat-lane-s', title: 'Beat Lane: S Rank', desc: 'Get an S rank.' },
     ],
   },
   {
@@ -184,27 +212,61 @@ window.CATALOG = [
     ],
   },
   {
+    id: 'rampart',
+    title: 'Rampart',
+    genre: 'Strategy',
+    desc: 'Tower defense where you build the maze. Wall off the field, place and upgrade four kinds of towers, save gold for interest, and hold back 7 enemy types and a boss every ten waves.',
+    goals: [2000, 6000, 14000],
+    online: 'duel',
+    extras: [
+      { id: 'rampart-wave10', title: 'Rampart: Holding the Line', desc: 'Clear wave 10.' },
+      { id: 'rampart-boss', title: 'Rampart: Warlord Down', desc: 'Defeat a Warlord.' },
+      { id: 'rampart-perfect', title: 'Rampart: Not One Step', desc: 'Clear wave 10 without losing a life.' },
+      { id: 'rampart-wave25', title: 'Rampart: Unbreakable', desc: 'Clear wave 25.' },
+    ],
+  },
+  {
+    id: 'dice-delve',
+    title: 'Dice Delve',
+    genre: 'Strategy',
+    desc: 'A dice roguelike. Roll and reroll your dice to fight through three acts of monsters, build a pool of custom dice, sharpen them, and collect charms. Same run for everyone in the Daily Delve.',
+    goals: [800, 2000, 3500],
+    online: 'duel',
+    extras: [
+      { id: 'dice-delve-boss', title: 'Dice Delve: Boss Breaker', desc: 'Defeat a boss.' },
+      { id: 'dice-delve-combo', title: 'Dice Delve: Four of a Kind', desc: 'Roll a ×2 combo.' },
+      { id: 'dice-delve-hoard', title: 'Dice Delve: Full Pouch', desc: 'Carry a full pool of 8 dice.' },
+      { id: 'dice-delve-abyss', title: 'Dice Delve: Abyss Conqueror', desc: 'Defeat the Abyss Wyrm on floor 12.' },
+    ],
+  },
+  {
     id: 'taco-tycoon',
     title: 'Taco Truck Tycoon',
     genre: 'Tycoon',
-    desc: 'Pick a spot, set your price, and stock up for the weather. Then work the lunch rush. Fourteen days to build a taco empire.',
+    desc: 'Pick one of five spots, plan for the weather and the weekend crowds, and price a menu of tacos, burritos, churros and horchata. Beat rival trucks, impress the critic, then keep going in endless mode.',
     goals: [1500, 3000, 5000],
     online: 'duel',
     extras: [
       { id: 'taco-tycoon-300', title: 'Taco Tycoon: Big Day', desc: 'Make $300 profit in one day.' },
       { id: 'taco-tycoon-mogul', title: 'Taco Tycoon: Taco Mogul', desc: 'Finish the season with $2,000.' },
+      { id: 'taco-tycoon-600', title: 'Taco Tycoon: Lunch Legend', desc: 'Make $600 profit in one day.' },
+      { id: 'taco-tycoon-stadium', title: 'Taco Tycoon: Game Day', desc: 'Make $400 at the stadium on a big game day.' },
+      { id: 'taco-tycoon-veteran', title: 'Taco Tycoon: Veteran', desc: 'Retire after 30 days or more.' },
     ],
   },
   {
     id: 'gem-mine',
     title: 'Gem Mine',
     genre: 'Idle',
-    desc: 'Click the rock, hire diggers, and watch the gems pile up, even while you\'re away. Dive deeper to dig even faster.',
+    desc: 'Hire diggers, refine ore, breach the bedrock into six deeper layers, and send crews on expeditions for relics. Dive deeper for core shards and build your Core tree.',
     goals: [500, 1000, 1500],
     extras: [
       { id: 'gem-mine-nugget', title: 'Gem Mine: Golden Touch', desc: 'Catch a golden nugget.' },
       { id: 'gem-mine-dive', title: 'Gem Mine: Into the Deep', desc: 'Dive deeper for the first time.' },
       { id: 'gem-mine-forge', title: 'Gem Mine: Star Forged', desc: 'Own a Star Forge.' },
+      { id: 'gem-mine-relic', title: 'Gem Mine: Treasure Hunter', desc: 'Find a relic.' },
+      { id: 'gem-mine-challenge', title: 'Gem Mine: Trial by Stone', desc: 'Win a challenge dive.' },
+      { id: 'gem-mine-starfall', title: 'Gem Mine: Rock Bottom', desc: 'Breach into Starfall Deep.' },
     ],
   },
   {
@@ -235,6 +297,11 @@ window.CATALOG = [
     desc: 'Weave through highway traffic at ever-higher speeds. Close calls earn bonus points.',
     goals: [1000, 3000, 6000],
     online: 'duel',
+    extras: [
+      { id: 'lane-rush-weaver', title: 'Lane Rush: Weaver', desc: 'Chain five close calls.' },
+      { id: 'lane-rush-floored', title: 'Lane Rush: Pedal Down', desc: 'Hit top speed.' },
+      { id: 'lane-rush-10k', title: 'Lane Rush: Long Haul', desc: 'Drive 10 km in one run.' },
+    ],
   },
   {
     id: 'box-battle',
@@ -317,6 +384,10 @@ window.CATALOG = [
     desc: 'Grow your noodle in a wrap-around arena. Chain bites for combos and grab prisms to slip through your own tail.',
     goals: [200, 600, 1500],
     online: 'duel',
+    extras: [
+      { id: 'neon-noodle-combo', title: 'Neon Noodle: Hungry', desc: 'Reach a x5 combo.' },
+      { id: 'neon-noodle-long', title: 'Neon Noodle: Long Noodle', desc: 'Grow to length 40.' },
+    ],
   },
   {
     id: 'crystal-swap',
@@ -325,6 +396,10 @@ window.CATALOG = [
     desc: 'Swap crystals to make rows of three or more. You have 60 seconds, and big matches buy you more time.',
     goals: [2000, 5000, 9000],
     online: 'duel',
+    extras: [
+      { id: 'crystal-swap-five', title: 'Crystal Swap: Five Alive', desc: 'Match five in a row.' },
+      { id: 'crystal-swap-cascade', title: 'Crystal Swap: Avalanche', desc: 'Set off a x4 cascade.' },
+    ],
   },
   {
     id: 'sudoku-siege',
@@ -360,6 +435,11 @@ window.CATALOG = [
     desc: 'Collect every spark in a dark maze while shadows close in. Your lantern is running low, so flash it wisely.',
     goals: [1000, 3000, 7000],
     online: 'duel',
+    extras: [
+      { id: 'lantern-maze-banish', title: 'Lantern Maze: Lights Out', desc: 'Catch a stunned shadow.' },
+      { id: 'lantern-maze-sweep', title: 'Lantern Maze: Clean Sweep', desc: 'Catch three shadows in one flash.' },
+      { id: 'lantern-maze-deep', title: 'Lantern Maze: Deep Delver', desc: 'Reach maze 5.' },
+    ],
   },
   {
     id: 'brick-burst',
@@ -368,6 +448,11 @@ window.CATALOG = [
     desc: 'Bounce the ball, break every brick, catch power-ups. Each level is short and a little harder.',
     goals: [1500, 5000, 12000],
     online: 'duel',
+    extras: [
+      { id: 'brick-burst-flawless', title: 'Brick Burst: Flawless', desc: 'Clear a level without losing a life.' },
+      { id: 'brick-burst-swarm', title: 'Brick Burst: Ball Swarm', desc: 'Split into five or more balls.' },
+      { id: 'brick-burst-level5', title: 'Brick Burst: Wall Breaker', desc: 'Reach level 5.' },
+    ],
   },
   {
     id: 'comet-pinball',
@@ -388,6 +473,10 @@ window.CATALOG = [
     desc: 'Words rain down from the sky. Type them before they land. Good practice that doesn\'t feel like it.',
     goals: [500, 1500, 3500],
     online: 'duel',
+    extras: [
+      { id: 'type-storm-streak', title: 'Type Storm: On Fire', desc: 'Type 25 words in a row without a miss.' },
+      { id: 'type-storm-wave10', title: 'Type Storm: Storm Chaser', desc: 'Reach wave 10.' },
+    ],
   },
   {
     id: 'letter-lock',
@@ -408,6 +497,11 @@ window.CATALOG = [
     desc: 'Bounce from platform to platform, all the way to space. Save your battery cells for rocket boosts.',
     goals: [500, 1500, 3000],
     online: 'duel',
+    extras: [
+      { id: 'cloud-climber-drone', title: 'Cloud Climber: Drone Down', desc: 'Smash a drone.' },
+      { id: 'cloud-climber-500', title: 'Cloud Climber: Skyward', desc: 'Climb 500 m.' },
+      { id: 'cloud-climber-1000', title: 'Cloud Climber: Stratosphere', desc: 'Climb 1,000 m.' },
+    ],
   },
   {
     id: 'stack-up',
@@ -416,14 +510,24 @@ window.CATALOG = [
     desc: 'One button. Drop each sliding block onto the tower; anything hanging over gets sliced off.',
     goals: [15, 30, 50],
     online: 'duel',
+    extras: [
+      { id: 'stack-up-perfect', title: 'Stack Up: Steady Hands', desc: 'Land five perfect drops in a row.' },
+      { id: 'stack-up-75', title: 'Stack Up: Skyscraper', desc: 'Stack 75 blocks.' },
+    ],
   },
   {
     id: 'polarity-run',
     title: 'Polarity Run',
     genre: 'Runner',
-    desc: 'Flip gravity between the floor and the ceiling to dodge spikes. The faster it gets, the harder it is.',
-    goals: [300, 800, 1500],
+    desc: 'Flip gravity between the floor and the ceiling. Race through zones of polarity gates, swinging saws and low gravity, chain combos, and bank shards for skins.',
+    goals: [400, 1200, 2500],
     online: 'duel',
+    extras: [
+      { id: 'polarity-run-saw', title: 'Polarity Run: Mill Worker', desc: 'Reach the Saw Mill.' },
+      { id: 'polarity-run-overdrive', title: 'Polarity Run: Overdrive', desc: 'Reach Overdrive.' },
+      { id: 'polarity-run-combo', title: 'Polarity Run: Full Charge', desc: 'Hit a ×5 combo.' },
+      { id: 'polarity-run-skin', title: 'Polarity Run: New Look', desc: 'Unlock a skin.' },
+    ],
   },
   {
     id: 'blackjack',

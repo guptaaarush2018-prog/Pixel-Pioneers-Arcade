@@ -225,6 +225,7 @@
   function nextLevel() {
     score += 500 * level + Math.floor(fuel) * 5;
     level++;
+    if (level >= 5) Arcade.flag('lantern-maze-deep');
     Arcade.tone({ freq: 523, dur: 0.12, type: 'triangle', vol: 0.07 });
     Arcade.tone({ freq: 659, dur: 0.12, type: 'triangle', vol: 0.07, delay: 0.12 });
     Arcade.tone({ freq: 784, dur: 0.2, type: 'triangle', vol: 0.07, delay: 0.24 });
@@ -315,6 +316,8 @@
         if (time < s.stunUntil) {
           score += 200 * chain;
           chain *= 2;
+          Arcade.flag('lantern-maze-banish');
+          if (chain >= 8) Arcade.flag('lantern-maze-sweep');
           s.gone = true;
           s.releaseAt = time + 4;
           burst(q.x, q.y, '#9fd8ff', 20);

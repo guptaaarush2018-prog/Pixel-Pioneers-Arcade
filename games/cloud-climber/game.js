@@ -146,6 +146,7 @@
       if (stomp || boostT > 0) {
         d.alive = false;
         bonus += 100;
+        Arcade.flag('cloud-climber-drone');
         if (stomp) bounce(JUMP);
         for (let i = 0; i < 14; i++) puff(d.x + d.w / 2, d.y + d.h / 2, '#ff4fd8');
         Arcade.tone({ freq: 800, to: 200, dur: 0.15, type: 'square', vol: 0.05 });
@@ -170,6 +171,8 @@
 
     camY = Math.min(camY, player.y - H * 0.42);
     climb = Math.max(climb, startY - player.y);
+    if (climb >= 5000) Arcade.flag('cloud-climber-500');
+    if (climb >= 10000) Arcade.flag('cloud-climber-1000');
     generate();
     updateHud();
 

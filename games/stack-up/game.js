@@ -40,6 +40,7 @@
       // Perfect drop: snap into place, and a run of them grows the block back.
       x = top.x;
       perfects++;
+      if (perfects >= 5) Arcade.flag('stack-up-perfect');
       if (perfects >= 3) w = Math.min(BASE_W, w + 12);
       popups.push({ y: blockY(i), text: perfects > 1 ? `Perfect x${perfects}` : 'Perfect', life: 0.9 });
       Arcade.tone({ freq: 523 * Math.pow(1.06, Math.min(perfects, 12)), dur: 0.12, type: 'triangle', vol: 0.06 });
@@ -59,6 +60,7 @@
       Arcade.tone({ freq: 300 + i * 6, dur: 0.06, vol: 0.04 });
     }
     stack.push({ x, w });
+    if (stack.length > 75) Arcade.flag('stack-up-75');
     newBlock();
     updateHud();
   }

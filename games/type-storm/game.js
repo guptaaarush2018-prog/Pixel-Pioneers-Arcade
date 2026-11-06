@@ -41,6 +41,7 @@
 
   function nextWave() {
     wave++;
+    if (wave >= 10) Arcade.flag('type-storm-wave10');
     toSpawn = 6 + wave * 2;
     spawnT = 1.2;
     banner = { text: `Wave ${wave}`, until: time + 1.6 };
@@ -92,6 +93,7 @@
     if (target.done === target.text.length) {
       streak++;
       cleared++;
+      if (streak >= 25) Arcade.flag('type-storm-streak');
       score += target.text.length * 10 * multiplier();
       for (let i = 0; i < 14; i++) {
         particles.push({ x: target.x + Math.random() * target.width, y: target.y, vx: Arcade.rand(-120, 120), vy: Arcade.rand(-160, 40), life: Arcade.rand(0.3, 0.6) });
