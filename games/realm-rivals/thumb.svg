@@ -1,13 +1,113 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
-  <rect width="320" height="200" fill="#25381f"/>
-  <rect x="190" width="130" height="200" fill="#1a2230"/>
-  <g fill="#7b8494"><rect x="50" y="50" width="90" height="56"/><rect x="40" y="34" width="14" height="72"/><rect x="136" y="34" width="14" height="72"/><rect x="83" y="22" width="24" height="30"/></g>
-  <rect x="88" y="80" width="14" height="26" fill="#4a5160"/>
-  <rect x="94" y="4" width="3" height="20" fill="#4f8cff"/><rect x="97" y="4" width="12" height="8" fill="#4f8cff"/>
-  <g fill="#3a2f22" stroke="#41553a"><rect x="18" y="124" width="46" height="46"/><rect x="72" y="124" width="46" height="46"/><rect x="126" y="124" width="46" height="46"/></g>
-  <rect x="30" y="140" width="22" height="16" fill="#8bc34a"/><rect x="84" y="140" width="22" height="16" fill="#b0a089"/><rect x="138" y="140" width="22" height="16" fill="#c0504d"/>
-  <g stroke="#2a3446" stroke-width="2" stroke-dasharray="4 5"><path d="M255 100 L215 40 M255 100 L300 40 M255 100 L300 160 M255 100 L215 160"/></g>
-  <rect x="247" y="92" width="16" height="16" fill="#4f8cff"/>
-  <g><path d="M206 50 v-12 l9 -8 9 8 v12z" fill="#e0a040"/><path d="M291 50 v-12 l9 -8 9 8 v12z" fill="#4f8cff"/><path d="M291 170 v-12 l9 -8 9 8 v12z" fill="#9b6bd6"/><path d="M206 170 v-12 l9 -8 9 8 v12z" fill="#ff5d5d"/></g>
-  <circle cx="232" cy="70" r="5" fill="#4f8cff"/><circle cx="278" cy="130" r="5" fill="#ff5d5d"/>
+  <defs>
+    <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2f4727"/><stop offset="1" stop-color="#21331b"/></linearGradient>
+    <linearGradient id="dirt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#46392a"/><stop offset="1" stop-color="#33291e"/></linearGradient>
+    <linearGradient id="stone" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#9aa3b2"/><stop offset=".55" stop-color="#7b8494"/><stop offset="1" stop-color="#5f6776"/></linearGradient>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1f2a3c"/><stop offset="1" stop-color="#151c28"/></linearGradient>
+    <filter id="ds" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="6" stdDeviation="6" flood-opacity=".45"/></filter>
+  </defs>
+  <!-- village, drawn at the game's own scale -->
+  <g transform="translate(0 6) scale(.33)" font-family="system-ui,sans-serif" font-weight="700" text-anchor="middle" fill="#eceef2">
+    <rect x="0" y="-20" width="600" height="600" fill="url(#grass)"/>
+    <g fill="#355130"><rect x="0" y="0" width="6" height="6" rx="2"/><rect x="137" y="89" width="6" height="6" rx="2"/><rect x="274" y="178" width="6" height="6" rx="2"/><rect x="411" y="267" width="6" height="6" rx="2"/><rect x="548" y="356" width="6" height="6" rx="2"/><rect x="85" y="445" width="6" height="6" rx="2"/><rect x="222" y="534" width="6" height="6" rx="2"/><rect x="359" y="83" width="6" height="6" rx="2"/><rect x="496" y="172" width="6" height="6" rx="2"/><rect x="33" y="261" width="6" height="6" rx="2"/><rect x="170" y="350" width="6" height="6" rx="2"/><rect x="307" y="439" width="6" height="6" rx="2"/><rect x="444" y="528" width="6" height="6" rx="2"/><rect x="581" y="77" width="6" height="6" rx="2"/><rect x="118" y="166" width="6" height="6" rx="2"/><rect x="255" y="255" width="6" height="6" rx="2"/><rect x="392" y="344" width="6" height="6" rx="2"/><rect x="529" y="433" width="6" height="6" rx="2"/><rect x="66" y="522" width="6" height="6" rx="2"/><rect x="203" y="71" width="6" height="6" rx="2"/><rect x="340" y="160" width="6" height="6" rx="2"/><rect x="477" y="249" width="6" height="6" rx="2"/><rect x="14" y="338" width="6" height="6" rx="2"/><rect x="151" y="427" width="6" height="6" rx="2"/><rect x="288" y="516" width="6" height="6" rx="2"/><rect x="425" y="65" width="6" height="6" rx="2"/><rect x="562" y="154" width="6" height="6" rx="2"/><rect x="99" y="243" width="6" height="6" rx="2"/><rect x="236" y="332" width="6" height="6" rx="2"/><rect x="373" y="421" width="6" height="6" rx="2"/><rect x="510" y="510" width="6" height="6" rx="2"/><rect x="47" y="59" width="6" height="6" rx="2"/><rect x="184" y="148" width="6" height="6" rx="2"/><rect x="321" y="237" width="6" height="6" rx="2"/><rect x="458" y="326" width="6" height="6" rx="2"/><rect x="595" y="415" width="6" height="6" rx="2"/><rect x="132" y="504" width="6" height="6" rx="2"/><rect x="269" y="53" width="6" height="6" rx="2"/><rect x="406" y="142" width="6" height="6" rx="2"/><rect x="543" y="231" width="6" height="6" rx="2"/></g>
+    <!-- castle -->
+    <g filter="url(#ds)">
+      <rect x="210" y="50" width="20" height="120" fill="url(#stone)"/><rect x="370" y="50" width="20" height="120" fill="url(#stone)"/>
+      <rect x="220" y="80" width="160" height="90" fill="url(#stone)"/>
+      <rect x="280" y="30" width="40" height="50" fill="url(#stone)"/>
+      <rect x="286" y="130" width="28" height="40" rx="12" fill="#3a404c"/>
+      <rect x="298" y="0" width="4" height="32" fill="#cfd4dc"/><path d="M302 0h22l-5 6 5 6h-22z" fill="#4f8cff"/>
+    </g>
+    <rect x="220" y="182" width="160" height="10" rx="5" fill="#000" opacity=".5"/><rect x="220" y="182" width="134" height="10" rx="5" fill="#9be37a"/>
+    <text x="300" y="212" font-size="18" fill="#cfd4dc">Castle 84/100</text>
+    <g><circle cx="40" cy="40" r="5.5" fill="#4f8cff"/><circle cx="54" cy="40" r="5.5" fill="#4f8cff"/><circle cx="68" cy="40" r="5.5" fill="#4f8cff"/><circle cx="82" cy="40" r="5.5" fill="#4f8cff"/><circle cx="96" cy="40" r="5.5" fill="#4f8cff"/><circle cx="110" cy="40" r="5.5" fill="#4f8cff"/><circle cx="124" cy="40" r="5.5" fill="#4f8cff"/><circle cx="138" cy="40" r="5.5" fill="#4f8cff"/><circle cx="152" cy="40" r="5.5" fill="#4f8cff"/><circle cx="166" cy="40" r="5.5" fill="#4f8cff"/><circle cx="40" cy="58" r="5.5" fill="#8bc34a"/><circle cx="54" cy="58" r="5.5" fill="#8bc34a"/><circle cx="68" cy="58" r="5.5" fill="#8bc34a"/><circle cx="82" cy="58" r="5.5" fill="#8bc34a"/><circle cx="96" cy="58" r="5.5" fill="#8bc34a"/><circle cx="110" cy="58" r="5.5" fill="#8bc34a"/><circle cx="124" cy="58" r="5.5" fill="#ffc53d"/><circle cx="138" cy="58" r="5.5" fill="#ffc53d"/><circle cx="152" cy="58" r="5.5" fill="#ffc53d"/></g>
+      <rect x="30" y="256" width="120" height="120" rx="10" fill="#000" opacity=".25"/>
+      <rect x="30" y="250" width="120" height="120" rx="10" fill="url(#dirt)" stroke="#41553a" stroke-width="2"/>
+      <ellipse cx="90" cy="328.8" rx="37.0" ry="7" fill="#000" opacity=".3"/>
+      <rect x="63.0" y="287.0" width="27.0" height="37.8" fill="#8bc34a"/><rect x="90" y="287.0" width="27.0" height="37.8" fill="#6c983a"/>
+      <rect x="85" y="308.8" width="10" height="16" rx="3" fill="#3f5821"/>
+      <path d="M57.0 287.0L90 269.0L123.0 287.0Z" fill="#53752c"/><path d="M57.0 287.0L90 269.0L90 287.0Z" fill="#689238"/>
+      <text x="90" y="362" font-size="17">Farm 3</text>
+      <rect x="170" y="256" width="120" height="120" rx="10" fill="#000" opacity=".25"/>
+      <rect x="170" y="250" width="120" height="120" rx="10" fill="url(#dirt)" stroke="#41553a" stroke-width="2"/>
+      <ellipse cx="230" cy="327.2" rx="33.0" ry="7" fill="#000" opacity=".3"/>
+      <rect x="207.0" y="291.0" width="23.0" height="32.199999999999996" fill="#b0a089"/><rect x="230" y="291.0" width="23.0" height="32.199999999999996" fill="#897d6b"/>
+      <rect x="225" y="307.2" width="10" height="16" rx="3" fill="#4f483e"/>
+      <path d="M201.0 291.0L230 273.0L259.0 291.0Z" fill="#6a6052"/><path d="M201.0 291.0L230 273.0L230 291.0Z" fill="#847867"/>
+      <text x="230" y="362" font-size="17">Mine 2</text>
+      <rect x="310" y="256" width="120" height="120" rx="10" fill="#000" opacity=".25"/>
+      <rect x="310" y="250" width="120" height="120" rx="10" fill="url(#dirt)" stroke="#41553a" stroke-width="2"/>
+      <ellipse cx="370" cy="327.2" rx="33.0" ry="7" fill="#000" opacity=".3"/>
+      <rect x="347.0" y="291.0" width="23.0" height="32.199999999999996" fill="#d7a86e"/><rect x="370" y="291.0" width="23.0" height="32.199999999999996" fill="#a88356"/>
+      <rect x="365" y="307.2" width="10" height="16" rx="3" fill="#614c31"/>
+      <path d="M341.0 291.0L370 273.0L399.0 291.0Z" fill="#816542"/><path d="M341.0 291.0L370 273.0L370 291.0Z" fill="#a17e52"/>
+      <text x="370" y="362" font-size="17">Houses 2</text>
+      <rect x="450" y="256" width="120" height="120" rx="10" fill="#000" opacity=".25"/>
+      <rect x="450" y="250" width="120" height="120" rx="10" fill="url(#dirt)" stroke="#41553a" stroke-width="2"/>
+      <ellipse cx="510" cy="327.2" rx="33.0" ry="7" fill="#000" opacity=".3"/>
+      <rect x="487.0" y="291.0" width="23.0" height="32.199999999999996" fill="#c0504d"/><rect x="510" y="291.0" width="23.0" height="32.199999999999996" fill="#963e3c"/>
+      <rect x="505" y="307.2" width="10" height="16" rx="3" fill="#562423"/>
+      <path d="M481.0 291.0L510 273.0L539.0 291.0Z" fill="#73302e"/><path d="M481.0 291.0L510 273.0L510 291.0Z" fill="#903c3a"/>
+      <text x="510" y="362" font-size="17">Barracks 2</text>
+      <rect x="30" y="396" width="120" height="120" rx="10" fill="#000" opacity=".25"/>
+      <rect x="30" y="390" width="120" height="120" rx="10" fill="url(#dirt)" stroke="#41553a" stroke-width="2"/>
+      <ellipse cx="90" cy="465.6" rx="29.0" ry="7" fill="#000" opacity=".3"/>
+      <rect x="71.0" y="435.0" width="19.0" height="26.599999999999998" fill="#8bc34a"/><rect x="90" y="435.0" width="19.0" height="26.599999999999998" fill="#6c983a"/>
+      <rect x="85" y="445.6" width="10" height="16" rx="3" fill="#3f5821"/>
+      <path d="M65.0 435.0L90 417.0L115.0 435.0Z" fill="#53752c"/><path d="M65.0 435.0L90 417.0L90 435.0Z" fill="#689238"/>
+      <text x="90" y="502" font-size="17">Farm 1</text>
+      <rect x="170" y="396" width="120" height="120" rx="10" fill="#000" opacity=".25"/>
+      <rect x="170" y="390" width="120" height="120" rx="10" fill="url(#dirt)" stroke="#41553a" stroke-width="2"/>
+      <ellipse cx="230" cy="465.6" rx="29.0" ry="7" fill="#000" opacity=".3"/>
+      <rect x="211.0" y="435.0" width="19.0" height="26.599999999999998" fill="#9aa3ad"/><rect x="230" y="435.0" width="19.0" height="26.599999999999998" fill="#787f87"/>
+      <rect x="225" y="445.6" width="10" height="16" rx="3" fill="#45494e"/>
+      <path d="M205.0 435.0L230 417.0L255.0 435.0Z" fill="#5c6268"/><path d="M205.0 435.0L230 417.0L230 435.0Z" fill="#747a82"/>
+      <text x="230" y="502" font-size="17">Walls 1</text>
+      <rect x="310" y="396" width="120" height="120" rx="10" fill="#000" opacity=".25"/>
+      <rect x="310" y="390" width="120" height="120" rx="10" fill="url(#dirt)" stroke="#ffc53d" stroke-width="6"/>
+      <ellipse cx="370" cy="465.6" rx="29.0" ry="7" fill="#000" opacity=".3"/>
+      <rect x="351.0" y="435.0" width="19.0" height="26.599999999999998" fill="#5b7fbf"/><rect x="370" y="435.0" width="19.0" height="26.599999999999998" fill="#476395"/>
+      <rect x="365" y="445.6" width="10" height="16" rx="3" fill="#293956"/>
+      <path d="M345.0 435.0L370 417.0L395.0 435.0Z" fill="#374c73"/><path d="M345.0 435.0L370 417.0L370 435.0Z" fill="#445f8f"/>
+      <text x="370" y="502" font-size="17">Watchtower 1</text>
+      <rect x="450" y="396" width="120" height="120" rx="10" fill="#000" opacity=".25"/>
+      <rect x="450" y="390" width="120" height="120" rx="10" fill="#2a3a24" stroke="#41553a" stroke-width="2"/>
+      <text x="510" y="462" font-size="44" fill="#5c7052">+</text>
+    <!-- incoming raid -->
+    <rect x="140" y="222" width="320" height="38" rx="8" fill="#ff5d5d" opacity=".92"/>
+    <text x="300" y="248" font-size="18" fill="#fff">Duskhold attacks in 6s!</text>
+  </g>
+  <!-- realm map -->
+  <rect x="198" y="0" width="122" height="106" fill="url(#sea)"/>
+  <g font-family="system-ui,sans-serif" font-weight="700" font-size="4.6" text-anchor="middle">
+    <g stroke="#34415a" stroke-width="1" stroke-dasharray="2 3"><path d="M257 55L227 24"/><path d="M257 55L291 20"/><path d="M257 55L305 62"/><path d="M257 55L275 86"/><path d="M257 55L220 78"/></g>
+    <path d="M222 28v-6.5l5-4 5 4v6.5z" fill="#e0a040" stroke="#ffc53d" stroke-width="1.2"/>
+    <path d="M227 28v-10.5l5 4v6.5z" fill="#000" opacity=".2"/>
+    <text x="227" y="34.5" fill="#cfd4dc">Ashford</text><text x="227" y="40" fill="#8d94a1">⚔ 60</text>
+    <path d="M286 24v-6.5l5-4 5 4v6.5z" fill="#4fb3a9"/>
+    <path d="M291 24v-10.5l5 4v6.5z" fill="#000" opacity=".2"/>
+    <text x="291" y="30.5" fill="#cfd4dc">Mirevale</text><text x="291" y="36" fill="#8d94a1">⚔ 110</text>
+    <path d="M300 66v-6.5l5-4 5 4v6.5z" fill="#4f8cff"/>
+    <path d="M305 66v-10.5l5 4v6.5z" fill="#000" opacity=".2"/>
+    <text x="305" y="72.5" fill="#cfd4dc">Stonecrest</text><text x="305" y="78" fill="#4f8cff">yours</text>
+    <path d="M270 90v-6.5l5-4 5 4v6.5z" fill="#9b6bd6"/>
+    <path d="M275 90v-10.5l5 4v6.5z" fill="#000" opacity=".2"/>
+    <text x="275" y="96.5" fill="#cfd4dc">Duskhold</text><text x="275" y="102" fill="#8d94a1">⚔ 300</text>
+    <path d="M215 82v-6.5l5-4 5 4v6.5z" fill="#ff5d5d"/>
+    <path d="M220 82v-10.5l5 4v6.5z" fill="#000" opacity=".2"/>
+    <text x="220" y="88.5" fill="#cfd4dc">Emberreach</text><text x="220" y="94" fill="#8d94a1">⚔ 460</text>
+    <rect x="253" y="51" width="8" height="8" rx="1.5" fill="#4f8cff"/><text x="257" y="65" fill="#cfd4dc">You</text>
+    <circle cx="266.9" cy="72.0" r="2.6" fill="#ff5d5d" stroke="#fff" stroke-width=".6"/>
+  </g>
+  <!-- side panel -->
+  <rect x="198" y="106" width="122" height="94" fill="#161920"/>
+  <rect x="198" y="106" width="122" height="1" fill="#2a2f39"/>
+  <g font-family="system-ui,sans-serif" font-weight="700">
+    <text x="206" y="120" font-size="9" fill="#e0a040">Ashford</text>
+    <text x="206" y="132" font-size="6" fill="#8d94a1">Defence ≈ 60 · walls 2/3 standing</text>
+    <text x="206" y="141" font-size="6" fill="#8d94a1">Your army at home: 95 power</text>
+    <rect x="206" y="148" width="106" height="20" rx="5" fill="#ffc53d"/>
+    <text x="259" y="161" font-size="8" fill="#1c1500" text-anchor="middle">Attack (good odds)</text>
+    <g font-size="7" fill="#cfd4dc"><text x="206" y="182">Gold 240</text><text x="244" y="182">Food 185</text><text x="283" y="182">Army 19</text></g>
+  </g>
 </svg>

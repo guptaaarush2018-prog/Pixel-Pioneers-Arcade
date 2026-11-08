@@ -37,6 +37,7 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | Crowd Rush | Arcade (gate runner) | Online duel |
 | Lane Rush | Racing | Online duel |
 | Neon Noodle | Arcade (snake) | Online duel |
+| Block Bloom | Puzzle (block placement: clear rows and columns, combos, gem blocks that earn shuffles) | Online duel |
 | Crystal Swap | Puzzle (match-3) | Online duel |
 | Sudoku Siege | Puzzle (sudoku, races with fog) | Live 1v1 race |
 | Pixel Reveal | Puzzle (picture logic, gallery) | Online duel |

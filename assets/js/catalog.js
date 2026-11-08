@@ -437,6 +437,20 @@ window.CATALOG = [
     ],
   },
   {
+    id: 'block-bloom',
+    title: 'Block Bloom',
+    genre: 'Puzzle',
+    desc: 'Drag pieces onto an 8×8 board and fill whole rows or columns to clear them. Chain clears for combos, pop gem blocks to earn shuffles, and keep going until nothing fits.',
+    goals: [800, 2500, 6000],
+    online: 'duel',
+    extras: [
+      { id: 'block-bloom-triple', title: 'Block Bloom: Triple Bloom', desc: 'Clear 3 lines with one piece.' },
+      { id: 'block-bloom-combo', title: 'Block Bloom: On a Roll', desc: 'Reach a x5 combo.' },
+      { id: 'block-bloom-sweep', title: 'Block Bloom: Clean Sweep', desc: 'Clear every block off the board.' },
+      { id: 'block-bloom-gems', title: 'Block Bloom: Gem Picker', desc: 'Collect 15 gems in one game.' },
+    ],
+  },
+  {
     id: 'crystal-swap',
     title: 'Crystal Swap',
     genre: 'Puzzle',
