@@ -17,6 +17,7 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | Putt Planet | Sports (space mini golf, 12 holes) | Online duel |
 | Light Trail | Arcade (trail duel, shrinking arena) | Live 1v1, two on one keyboard |
 | Quick Draw | Arcade (reaction standoff, outlaw ladder) | Live 1v1, two on one keyboard |
+| Buzz Bout | Trivia (700+ questions plus generated math, category draft, final wager, Streak and Daily 10; some questions from the [Open Trivia Database](https://opentdb.com), CC BY-SA 4.0) | Live 1v1, two on one device |
 | Beat Lane | Rhythm (four lanes, four synthesized songs, three difficulties) | Online duel |
 | Pocket Racer | Racing | Its own mini-site: six-cup career with stars, 38 tracks, garage of 17 unlockable cars, time trials with per-track world leaderboards, track builder, synthesized engine sound and music, follow camera on phones, live 1v1 races, world-record ghost |
 | Rune Rumble | Strategy (lane battler: 42 cards, rune wells, decks, caches, ladder) | Live 1v1 |
@@ -29,6 +30,8 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | Fleet Hunt | Strategy (hidden fleets, sonar, airstrikes) | Live 1v1 |
 | Chess | Strategy (classic, or Crystal chess with level-ups) | Live 1v1 |
 | Taco Truck Tycoon | Tycoon (five spots, weekday crowds, four-item menu, rivals and critics, endless mode) | Online duel |
+| Timber Haul | Tycoon (drive-and-saw logging truck, stacking loads, garage upgrades, crew trucks, five forests, lucky trees, mill orders) | Leaderboard |
+| Sweet Works | Idle (merge matching candy machines, conveyor shipping, 20 sweets to discover, upgrades, auto-merger, franchises) | Leaderboard |
 | Gem Mine | Idle (six layers to breach, ore refinery, Lab research, abilities, drill bits, expeditions, relics, Core tree, challenge dives) | Leaderboard |
 | Pocket Pet | Idle (virtual pet, earns treats from other games) | Leaderboard |
 | Crowd Rush | Arcade (gate runner) | Online duel |
@@ -44,6 +47,7 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | Letter Lock | Word (chained five-letter guessing) | Online duel |
 | Cloud Climber | Platformer | Online duel |
 | Stack Up | Arcade (one button) | Online duel |
+| Nova Barrage | Shooter (bullet hell: five sectors with bosses, grazing multiplier, upgrade picks, endless loops) | Online duel |
 | Polarity Run | Runner (rule-changing zones: polarity gates, saws, low gravity, Overdrive; air flips, combos, power-ups, skins) | Online duel |
 | Blackjack | Cards | Leaderboard |
 | Video Poker | Cards | Leaderboard |
@@ -51,6 +55,8 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | Peak Run | Cards (tri-peaks solitaire with combos) | Leaderboard |
 
 Every game also feeds the shared **profile**: playtime, games finished, days played, and achievements (arcade-wide, plus Bronze/Silver/Gold medals and specials for each game). All of that lives in the player's browser and works without any setup.
+
+Games that want more polish than flat shapes can load [`assets/js/gfx.js`](assets/js/gfx.js) after `arcade.js`: colour shading, soft shadows, fake-3D boxes and extruded vehicles, outlined text, HUD cards and bars, particles, floating "+$" popups, screen shake, easing and pre-rendered sprites. Timber Haul and Sweet Works are built on it, and Taco Truck Tycoon uses it for its scenery. Its effects never call `Math.random`, so they're safe in online duels.
 
 The four card tables share one wallet of pretend chips (`ppa:chips` in localStorage). Chips can't be bought; anyone who runs out is given a fresh stack. A table's score is the most chips held during a session.
 
@@ -79,9 +85,11 @@ GitHub Pages only serves static files, so online features talk directly from the
 2. **Build → Realtime Database → Create database**. Pick a location, start in **locked mode**.
 3. On the **Rules** tab, paste the contents of [`database.rules.json`](database.rules.json) and click **Publish**.
 4. Copy the database URL shown at the top of the **Data** tab (it looks like `https://your-project-default-rtdb.firebaseio.com`).
-5. Paste it into [`assets/js/config.js`](assets/js/config.js) as `firebaseUrl`, then commit and push.
+5. Paste it into [`assets/js/config.js`](assets/js/config.js) as `firebaseUrl`.
+6. **Build → Authentication → Get started**, then on **Sign-in method** turn on **Anonymous** and **Email/Password**.
+7. **Project settings → General → Your apps → Add app → Web**. From the config it shows, copy only `apiKey` into `config.js` as `firebaseApiKey` (the rest is for Firebase's SDK, which this site doesn't use). Commit and push.
 
-That turns on global leaderboards, the "playing now" counters (site-wide and per game), the **Lobby** page, chat, friend status and challenges, Pocket Racer ghosts, and real players in Realm Rivals' Kingdom mode. Leave `firebaseUrl` empty and everything else keeps working, including every live match and duel below.
+That turns on player accounts, global leaderboards, the "playing now" counters (site-wide and per game), the **Lobby** page, chat, friend status and challenges, Pocket Racer ghosts, and real players in Realm Rivals' Kingdom mode. Leave `firebaseUrl` empty and everything else keeps working, including every live match and duel below.
 
 ## Real-time matches and duels
 
@@ -110,12 +118,24 @@ With Firebase on, real players share the world, with no game server needed:
 
 Because there's no server of its own, each browser is trusted to report its own kingdom honestly, the same trade-off as the leaderboards. If cheating becomes a problem, the fix is a small server (or Firebase Cloud Functions) that owns kingdom state and resolves battles.
 
+### Accounts
+
+[`assets/js/online.js`](assets/js/online.js) talks to Firebase Authentication over its REST API (still no SDK).
+
+- **Guests.** Every visitor gets an anonymous account on their first visit, with nothing to fill in. Every database write is signed with that account's token.
+- **Saving an account.** On the Profile page a guest can add an email and password. The account and its id stay the same, and progress (everything the arcade keeps in `localStorage` except race ghosts) is backed up to `profiles/<id>`.
+- **Logging in** on another browser or device restores that backup. A saved account that played on another device picks up the newer backup on its next page load, keeping the higher of each best score. **Forgot password?** sends Firebase's reset email.
+- **Friend codes** are the short codes players share. `codes/<code>` points at the account. Players from before accounts existed keep their old id as their friend code. On their first visit after the update, their leaderboard entries and Kingdom under the old id move to the account, and friend lists swap old codes for accounts as players return.
+- **Names are unique.** `names/<name>` records who holds each name, and `profiles/<id>/name` is the player's current one.
+
 What the rules enforce:
+- Players can only write their own entries (`auth.uid` must match), and every name, chat id, invite sender and battle report sender must be the writer's own.
 - Leaderboard entries can only go up, and names must match the generated `AdjectiveNoun00` format, so nobody can post a custom (possibly rude) name.
 - Ghosts can only be replaced by a faster time.
-- Lobby entries must point at a public queue room; Kingdom snapshots and battle reports are shape-checked and losses are capped.
+- Another player can only touch your Kingdom's raid shield (capped at about 2 hours). Lobby entries must point at a public queue room. Kingdom snapshots and battle reports are shape-checked and losses are capped.
+- Backups in `profiles/<id>` are readable only by their owner.
 
-There's no login, so a determined student could still post a fake score through the API. If that becomes a problem, the next step is Firebase Anonymous Auth.
+Scores are still reported by each browser, so a determined player could post a fake score for their own account. For a casual arcade that's an accepted trade-off.
 
 ## Add a game
 

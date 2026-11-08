@@ -1,9 +1,77 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
-  <rect width="320" height="200" fill="#1d1a26"/>
-  <rect y="150" width="320" height="50" fill="#2b2233"/>
-  <path d="M60 110 L85 55 L140 35 L195 52 L225 105 L205 155 L140 175 L85 158Z" fill="#5d566b"/>
-  <path d="M85 55 L140 35 L195 52 L150 85Z" fill="#6d6680"/>
-  <g><path d="M120 80 l8 12 -8 12 -8 -12z" fill="#7fdbff"/><path d="M165 110 l8 12 -8 12 -8 -12z" fill="#b388ff"/><path d="M130 130 l7 10 -7 10 -7 -10z" fill="#9be37a"/><path d="M185 75 l7 10 -7 10 -7 -10z" fill="#ffd54f"/></g>
-  <circle cx="262" cy="60" r="14" fill="#ffd54f"/>
-  <g font-family="system-ui,sans-serif" font-weight="700" fill="#eceef2"><text x="240" y="125" font-size="18">+1.2M</text><text x="250" y="150" font-size="13" fill="#8d94a1">/s</text></g>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6fc3f0"/><stop offset="1" stop-color="#bfe8f7"/></linearGradient>
+    <radialGradient id="glowC"><stop offset="0" stop-color="#bff0ff" stop-opacity=".9"/><stop offset="1" stop-color="#7fdbff" stop-opacity="0"/></radialGradient>
+    <radialGradient id="glowM"><stop offset="0" stop-color="#ffd27a" stop-opacity=".9"/><stop offset="1" stop-color="#ff7043" stop-opacity="0"/></radialGradient>
+    <radialGradient id="glowS"><stop offset="0" stop-color="#ffd0e4" stop-opacity=".9"/><stop offset="1" stop-color="#f48fb1" stop-opacity="0"/></radialGradient>
+    <linearGradient id="shaft" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#15121c"/><stop offset=".5" stop-color="#2a2433"/><stop offset="1" stop-color="#15121c"/></linearGradient>
+    <g id="gem"><path d="M0-7 l6 4 -2 8 h-8 l-2-8z"/><path d="M0-7 l6 4 -6 2 -6-2z" fill="#fff" opacity=".45"/></g>
+  </defs>
+  <rect width="320" height="22" fill="url(#sky)"/>
+  <!-- strata: Topsoil, Granite, Crystal Caves, Magma Rivers, Outer Core, Starfall Deep -->
+  <path d="M0 20 Q80 16 160 20 T320 18 V50 H0Z" fill="#5d566b"/>
+  <path d="M0 18 Q80 14 160 18 T320 16 V22 Q240 26 160 22 T0 24Z" fill="#5aa84f"/>
+  <path d="M0 50 Q90 46 170 52 T320 48 V80 H0Z" fill="#62666e"/>
+  <path d="M0 80 Q70 84 160 78 T320 82 V112 H0Z" fill="#3f5a73"/>
+  <path d="M0 112 Q90 108 170 114 T320 110 V142 H0Z" fill="#6b3a2e"/>
+  <path d="M0 142 Q80 146 160 140 T320 144 V172 H0Z" fill="#7a5a1f"/>
+  <path d="M0 172 Q90 168 170 174 T320 170 V200 H0Z" fill="#2e2a5c"/>
+  <g fill="#000" opacity=".12"><rect y="47" width="320" height="3"/><rect y="78" width="320" height="3"/><rect y="110" width="320" height="3"/><rect y="140" width="320" height="3"/><rect y="170" width="320" height="3"/></g>
+
+  <!-- ore flecks -->
+  <g fill="#e0915a"><circle cx="30" cy="34" r="2.5"/><circle cx="96" cy="40" r="2"/><circle cx="240" cy="30" r="2.5"/><circle cx="292" cy="40" r="2"/></g>
+  <g fill="#b8c4cc"><rect x="22" y="62" width="5" height="3"/><rect x="230" y="66" width="5" height="3"/><rect x="286" y="58" width="5" height="3"/></g>
+  <g fill="#a58cff"><circle cx="40" cy="126" r="2.5"/><circle cx="250" cy="122" r="2.5"/></g>
+  <g fill="#ffd54f"><circle cx="26" cy="156" r="2.5"/><circle cx="214" cy="160" r="2"/><circle cx="300" cy="152" r="2.5"/></g>
+  <g fill="#fff"><circle cx="30" cy="186" r="1"/><circle cx="90" cy="192" r="1.2"/><circle cx="210" cy="182" r="1"/><circle cx="270" cy="190" r="1.2"/></g>
+
+  <!-- magma river -->
+  <path d="M190 128 Q230 120 270 128 T330 126" stroke="#ff7043" stroke-width="6" fill="none" stroke-linecap="round"/>
+  <path d="M190 128 Q230 120 270 128 T330 126" stroke="#ffd27a" stroke-width="2" fill="none" stroke-linecap="round"/>
+
+  <!-- shaft with ladder and elevator -->
+  <rect x="140" y="18" width="34" height="182" fill="url(#shaft)"/>
+  <g stroke="#8a6440" stroke-width="2"><path d="M146 18V200"/><path d="M168 18V200"/></g>
+  <g stroke="#a87346" stroke-width="2"><path d="M146 30h22"/><path d="M146 42h22"/><path d="M146 54h22"/><path d="M146 66h22"/><path d="M146 78h22"/><path d="M146 90h22"/><path d="M146 102h22"/><path d="M146 114h22"/><path d="M146 126h22"/><path d="M146 138h22"/><path d="M146 150h22"/><path d="M146 162h22"/><path d="M146 174h22"/><path d="M146 186h22"/></g>
+  <path d="M157 0V96" stroke="#c9d1d9" stroke-width="1.5"/>
+  <g transform="translate(144 96)">
+    <rect width="26" height="18" rx="2" fill="#ffb300"/><rect y="0" width="26" height="4" fill="#ffd54f"/>
+    <g transform="translate(13 0)" fill="#7fdbff"><use href="#gem" x="-6" y="-2"/><use href="#gem" x="6" y="-3" fill="#a58cff"/><use href="#gem" y="-6" fill="#ffd54f"/></g>
+  </g>
+  <!-- headframe -->
+  <g stroke="#6b4a2e" stroke-width="3" fill="none"><path d="M136 22 L157 -2 L178 22"/></g>
+
+  <!-- tunnels with diggers -->
+  <path d="M174 56 h62 a8 8 0 0 1 0 16 h-62z" fill="#1d1a24"/>
+  <g transform="translate(220 72)">
+    <ellipse cx="0" cy="0" rx="10" ry="2.5" fill="#000" opacity=".35"/>
+    <rect x="-10" y="-14" width="20" height="13" rx="3" fill="#90a4ae"/><rect x="-7" y="-11" width="8" height="5" rx="1" fill="#3ef0ff"/>
+    <path d="M10 -10 l10 3 -10 3z" fill="#c9d1d9"/>
+  </g>
+  <path d="M60 92 h80 v16 h-80 a8 8 0 0 1 0 -16z" fill="#1d1a24"/>
+  <g transform="translate(84 108)">
+    <ellipse cx="0" cy="0" rx="9" ry="2.5" fill="#000" opacity=".35"/>
+    <ellipse cx="0" cy="-7" rx="9" ry="7" fill="#8d6e63"/><circle cx="-6" cy="-10" r="4" fill="#a1887f"/><circle cx="-7" cy="-11" r="1.2" fill="#1b1e24"/>
+    <circle cx="-10" cy="-8" r="1.6" fill="#f48fb1"/>
+    <path d="M6 -14 l8 -6" stroke="#6b4a2e" stroke-width="2"/><path d="M11 -23 q6 2 6 7" stroke="#c9d1d9" stroke-width="2.5" fill="none"/>
+  </g>
+
+  <!-- crystal cluster -->
+  <circle cx="64" cy="70" r="22" fill="url(#glowC)"/>
+  <g transform="translate(64 80)">
+    <path d="M-12 0 l4 -22 6 22z" fill="#7fdbff"/><path d="M-12 0 l4 -22 2 22z" fill="#bff0ff"/>
+    <path d="M-3 0 l6 -30 7 30z" fill="#5cc8f5"/><path d="M-3 0 l6 -30 1 30z" fill="#bff0ff"/>
+    <path d="M8 0 l5 -16 5 16z" fill="#7fdbff"/>
+  </g>
+  <!-- golden nugget -->
+  <circle cx="250" cy="156" r="16" fill="url(#glowM)"/>
+  <path d="M240 160 q4 -12 12 -10 q10 -2 8 8 q-2 8 -12 6 q-8 2 -8 -4z" fill="#ffd54f"/><path d="M244 156 q4 -6 8 -4" stroke="#fff6c2" stroke-width="2" fill="none"/>
+  <!-- starstone -->
+  <circle cx="96" cy="186" r="16" fill="url(#glowS)"/>
+  <g transform="translate(96 190)" fill="#f48fb1"><use href="#gem" transform="scale(1.6)"/></g>
+
+  <g font-family="system-ui,-apple-system,sans-serif" font-weight="900" paint-order="stroke" stroke="rgba(0,0,0,.6)" stroke-width="4" stroke-linejoin="round">
+    <text x="240" y="100" font-size="20" fill="#7fdbff">+1.2M</text>
+    <text x="34" y="150" font-size="12" fill="#ffd54f" opacity=".95">BREACH!</text>
+  </g>
 </svg>

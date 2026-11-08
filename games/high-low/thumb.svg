@@ -1,11 +1,76 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
-  <defs><radialGradient id="f" cx="50%" cy="45%" r="70%"><stop offset="0" stop-color="#1f7a4a"/><stop offset="1" stop-color="#0f3f27"/></radialGradient></defs>
-  <rect width="320" height="200" fill="url(#f)"/>
-  <g font-family="system-ui,sans-serif" font-weight="700">
-    <rect x="40" y="62" width="58" height="82" rx="7" fill="#fbfbf8" opacity=".5"/><text x="48" y="86" font-size="18" fill="#1b1e24" opacity=".6">4</text>
-    <rect x="130" y="46" width="66" height="96" rx="8" fill="#fbfbf8" stroke="#ffc53d" stroke-width="3"/><text x="139" y="72" font-size="22" fill="#d43b3b">7</text><text x="150" y="118" font-size="34" fill="#d43b3b">♦</text>
-    <path d="M250 60 l22 26 h-44z" fill="#3ddc84"/><path d="M250 142 l22 -26 h-44z" fill="#ff7a7a"/>
-    <text x="250" y="104" text-anchor="middle" font-size="13" fill="#fff">or</text>
-    <rect x="110" y="156" width="106" height="28" rx="14" fill="rgba(10,12,16,.7)"/><text x="163" y="176" text-anchor="middle" font-size="15" fill="#ffc53d">×2.11</text>
+  <defs>
+    <radialGradient id="felt" cx=".45" cy=".42" r=".75"><stop offset="0" stop-color="#2a8f58"/><stop offset=".6" stop-color="#17643c"/><stop offset="1" stop-color="#0b3a22"/></radialGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#ece8dc"/></linearGradient>
+    <linearGradient id="back" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4b7bff"/><stop offset="1" stop-color="#2442b8"/></linearGradient>
+    <pattern id="chk" width="8" height="8" patternUnits="userSpaceOnUse"><rect width="8" height="8" fill="url(#back)"/><rect width="4" height="4" fill="#fff" opacity=".14"/><rect x="4" y="4" width="4" height="4" fill="#fff" opacity=".14"/></pattern>
+    <radialGradient id="glow"><stop offset="0" stop-color="#ffe066" stop-opacity=".55"/><stop offset="1" stop-color="#ffe066" stop-opacity="0"/></radialGradient>
+    <linearGradient id="up" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6cf0a2"/><stop offset="1" stop-color="#1fae5c"/></linearGradient>
+    <linearGradient id="dn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff8f8f"/><stop offset="1" stop-color="#d23c3c"/></linearGradient>
+    <filter id="ds" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="2" dy="4" stdDeviation="3" flood-opacity=".45"/></filter>
+  </defs>
+  <rect width="320" height="200" fill="url(#felt)"/>
+  <rect x="8" y="8" width="304" height="184" rx="18" fill="none" stroke="#fff" stroke-opacity=".1" stroke-width="2"/>
+
+  <!-- previous cards -->
+  <g opacity=".55" filter="url(#ds)">
+    <g transform="translate(22 30) rotate(-8)"><rect width="40" height="56" rx="5" fill="url(#card)"/><text x="5" y="15" font-family="system-ui,sans-serif" font-weight="800" font-size="12" fill="#1b1e24">4♣</text></g>
+    <g transform="translate(40 40) rotate(-3)"><rect width="40" height="56" rx="5" fill="url(#card)"/><text x="5" y="15" font-family="system-ui,sans-serif" font-weight="800" font-size="12" fill="#d23c3c">J♥</text></g>
+  </g>
+
+  <!-- current card -->
+  <ellipse cx="128" cy="96" rx="70" ry="66" fill="url(#glow)"/>
+  <g transform="translate(128 96) rotate(-6)" filter="url(#ds)">
+    <rect x="-36" y="-50" width="72" height="100" rx="8" fill="url(#card)" stroke="#ffd34d" stroke-width="3"/>
+    <text x="-28" y="-30" font-family="system-ui,sans-serif" font-weight="900" font-size="20" fill="#d23c3c">7</text>
+    <text x="-28" y="-14" font-family="system-ui,sans-serif" font-size="14" fill="#d23c3c">♦</text>
+    <text x="4" y="22" text-anchor="middle" font-family="system-ui,sans-serif" font-size="46" fill="#d23c3c">♦</text>
+  </g>
+
+  <!-- next card sliding in face down -->
+  <g stroke="#fff" stroke-opacity=".35" stroke-width="2" stroke-linecap="round"><path d="M290 44h22"/><path d="M296 58h18"/><path d="M288 72h26"/></g>
+  <g transform="translate(240 82) rotate(14)" filter="url(#ds)">
+    <rect x="-30" y="-42" width="60" height="84" rx="7" fill="#fff"/>
+    <rect x="-26" y="-38" width="52" height="76" rx="5" fill="url(#chk)"/>
+    <text x="0" y="8" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="900" font-size="30" fill="#fff" opacity=".9">?</text>
+  </g>
+
+  <!-- higher / lower -->
+  <g filter="url(#ds)">
+    <path d="M190 30 l14 -18 l14 18 h-8 v12 h-12 v-12z" fill="url(#up)" stroke="#0f6b37" stroke-width="1.5"/>
+    <path d="M190 148 l14 18 l14 -18 h-8 v-12 h-12 v12z" fill="url(#dn)" stroke="#8a1f1f" stroke-width="1.5"/>
+  </g>
+  <g font-family="system-ui,sans-serif" font-weight="900" paint-order="stroke" stroke="rgba(0,0,0,.5)" stroke-width="4" stroke-linejoin="round">
+    <text x="222" y="34" font-size="13" fill="#7dffb0">×2.11</text>
+    <text x="222" y="160" font-size="13" fill="#ff9b9b">×1.48</text>
+  </g>
+
+  <!-- pot and chips -->
+  <g filter="url(#ds)">
+    <g transform="translate(60 168)">
+      <ellipse cx="0" cy="8" rx="17" ry="6.5" fill="#5a2bbf"/><ellipse cx="0" cy="4" rx="17" ry="6.5" fill="#7a3cff" stroke="#fff" stroke-opacity=".8" stroke-dasharray="3 3" stroke-width="1.5"/>
+      <ellipse cx="0" cy="-1" rx="17" ry="6.5" fill="#16803f"/><ellipse cx="0" cy="-5" rx="17" ry="6.5" fill="#1f9d55" stroke="#fff" stroke-opacity=".8" stroke-dasharray="3 3" stroke-width="1.5"/>
+      <ellipse cx="0" cy="-10" rx="17" ry="6.5" fill="#a52b2b"/><ellipse cx="0" cy="-14" rx="17" ry="6.5" fill="#d43b3b" stroke="#fff" stroke-opacity=".8" stroke-dasharray="3 3" stroke-width="1.5"/>
+    </g>
+  </g>
+  <rect x="84" y="156" width="92" height="26" rx="13" fill="rgba(10,14,20,.72)"/>
+  <text x="130" y="174" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="900" font-size="15" fill="#ffe066">POT $480</text>
+
+  <!-- streak pips -->
+  <g>
+    <circle cx="228" cy="186" r="4" fill="#3ddc84"/><circle cx="240" cy="186" r="4" fill="#3ddc84"/><circle cx="252" cy="186" r="4" fill="#3ddc84"/>
+    <circle cx="264" cy="186" r="4" fill="#ffc53d"/><circle cx="276" cy="186" r="5" fill="#ffc53d"/>
+    <circle cx="288" cy="186" r="3.5" fill="#fff" opacity=".15"/><circle cx="300" cy="186" r="3.5" fill="#fff" opacity=".15"/>
+  </g>
+
+  <!-- confetti -->
+  <g>
+    <rect x="96" y="22" width="6" height="2.5" fill="#ffe066" transform="rotate(30 96 22)"/>
+    <rect x="160" y="16" width="6" height="2.5" fill="#3ddc84" transform="rotate(-40 160 16)"/>
+    <rect x="176" y="40" width="5" height="2.5" fill="#fff" transform="rotate(70 176 40)"/>
+    <rect x="84" y="56" width="5" height="2.5" fill="#3ddc84" transform="rotate(-20 84 56)"/>
+    <rect x="172" y="120" width="6" height="2.5" fill="#ffe066" transform="rotate(50 172 120)"/>
+    <rect x="80" y="128" width="5" height="2.5" fill="#fff" transform="rotate(-60 80 128)"/>
+    <rect x="140" y="8" width="5" height="2.5" fill="#7a3cff" transform="rotate(10 140 8)"/>
   </g>
 </svg>

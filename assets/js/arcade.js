@@ -11,8 +11,13 @@ const Arcade = (() => {
     }
   }
 
+  // online.js listens here to back up a signed-in player's progress to their account.
+  const saveHooks = [];
+  const onSave = fn => saveHooks.push(fn);
+
   function save(key, value) {
     try { localStorage.setItem(PREFIX + key, JSON.stringify(value)); } catch {}
+    for (const fn of saveHooks) fn(key);
   }
 
   const getBest = id => load('best:' + id, 0);
@@ -172,10 +177,16 @@ const Arcade = (() => {
   const randomName = () => pick(ADJECTIVES) + pick(NOUNS) + randInt(10, 99);
   const randomId = () => Array.from(crypto.getRandomValues(new Uint8Array(9)), b => (b % 36).toString(36)).join('');
 
+  // id: who you are online (your account id once signed in). code: the short friend code you share.
+  // seed: never changes, so anything generated from it (like your Kingdom's spot on the map) stays put.
   function profile() {
     let p = load('profile', null);
     if (!p || !p.id) {
-      p = { id: randomId(), name: randomName() };
+      const id = randomId();
+      p = { id, code: id, seed: id, name: randomName() };
+      save('profile', p);
+    } else if (!p.code || !p.seed) {
+      p = { code: p.id, seed: p.id, ...p };
       save('profile', p);
     }
     return p;
@@ -368,6 +379,12 @@ const Arcade = (() => {
       { id: 'ice', name: 'Ice', cost: 30, colors: ['#e1f5fe', '#81d4fa', '#4fc3f7', '#b3e5fc'] },
       { id: 'rainbow', name: 'Rainbow', cost: 60, colors: ['#ff5252', '#ffb300', '#ffee58', '#66bb6a', '#42a5f5', '#ab47bc'] },
     ] },
+    { slot: 'nova-ship', game: 'nova-barrage', title: 'Nova Barrage ship', items: [
+      { id: 'classic', name: 'Comet', cost: 0, colors: ['#3ef0ff', '#e8f6ff'] },
+      { id: 'ember', name: 'Ember', cost: 30, colors: ['#ff7a45', '#ffe0c4'] },
+      { id: 'jade', name: 'Jade', cost: 30, colors: ['#5cf2c0', '#e0fff4'] },
+      { id: 'royal', name: 'Royal', cost: 60, colors: ['#ffd23f', '#fff4c4'] },
+    ] },
   ];
 
   const tickets = () => load('tickets', 0);
@@ -515,7 +532,7 @@ const Arcade = (() => {
 
   return {
     load, save, getBest, submitScore, setupCanvas, makeLayer, DIRS, VEC, onSwipe, onBlur, overlay, tone, rand, randInt, pick,
-    gameId, profile, setName, randomName, stats, flag, achievementList, unlocked, finish, countPlay, toast,
+    gameId, profile, setName, randomName, randomId, onSave, stats, flag, achievementList, unlocked, finish, countPlay, toast,
     SHOP, tickets, addTickets, equipped, equip, owned, daily, DAILY_REWARD, DAILY_BONUS,
   };
 })();

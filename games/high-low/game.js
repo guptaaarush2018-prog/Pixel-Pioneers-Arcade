@@ -14,6 +14,18 @@
   let bet = Arcade.load('hilo:bet', 25);
   let pot = 0, streak = 0, skips = SKIPS, current = null, incoming = null, history = [], result = null, busy = false;
   const session = Cards.session();
+  const fx = Gfx.particles(400);
+  const pops = Gfx.floaters();
+  const shake = Gfx.shaker();
+  const CARD_CX = W / 2, CARD_CY = 220 + Cards.H / 2;
+
+  function confetti(n, cols, y = CARD_CY) {
+    fx.burst(n, () => ({
+      x: CARD_CX + Gfx.rand(-40, 40), y: y + Gfx.rand(-30, 30), vx: Gfx.rand(-260, 260), vy: Gfx.rand(-320, -60),
+      drag: 1.2, life: Gfx.rand(0.7, 1.2), size: Gfx.rand(2.5, 4.5), color: cols[Math.floor(Gfx.rand(0, cols.length))],
+      shape: 'chip', spin: Gfx.rand(-10, 10), g: 0,
+    }));
+  }
 
   // Aces are high. Every card comes from a freshly shuffled deck, so the odds shown are exact.
   const val = c => (c.r === 1 ? 14 : c.r);
@@ -53,13 +65,17 @@
         result = { text: 'Same rank: push', color: '#ffc53d' };
         Arcade.tone({ freq: 440, dur: 0.1, vol: 0.04 });
       } else if ((dir === 'higher') === (b > a)) {
+        const before = pot;
         pot = Math.floor(pot * mult(p));
         streak++;
+        pops.add(`+${money(pot - before)}`, CARD_CX, 205, { color: '#7dffb0', size: 24 });
+        confetti(10 + Math.min(streak, 10) * 2, ['#3ddc84', '#ffe066', '#ffffff']);
         if (streak >= 8) Arcade.flag('high-low-streak');
         result = { text: `Right! Pot ${money(pot)}`, color: '#3ddc84' };
         Arcade.tone({ freq: 523 + streak * 40, to: 784 + streak * 40, dur: 0.15, type: 'triangle', vol: 0.05 });
       } else {
         result = { text: `Wrong. You lose ${money(pot)}`, color: '#ff7a7a' };
+        shake.add(0.55);
         pot = 0;
         state = 'done';
         session.track();
@@ -86,6 +102,8 @@
     session.track();
     result = { text: `Banked ${money(pot)}`, color: '#3ddc84' };
     if (pot - bet >= 1000) Arcade.flag('high-low-big');
+    pops.add(`+${money(pot)}`, CARD_CX, 460, { color: '#ffe066', size: 28, life: 1.2 });
+    confetti(40 + Math.min(streak, 10) * 4, ['#7a3cff', '#1f9d55', '#2a5bd7', '#d43b3b', '#ffe066'], 480);
     pot = 0;
     state = 'done';
     Arcade.tone({ freq: 523, to: 1046, dur: 0.3, type: 'triangle', vol: 0.06 });
@@ -175,7 +193,16 @@
 
   // ---------- Drawing ----------
 
-  function frame() {
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    fx.update(dt);
+    pops.update(dt);
+    shake.update(dt);
+    const o = shake.offset(8);
+    ctx.save();
+    ctx.translate(o.x, o.y);
     Cards.felt(ctx, W, H);
     history.forEach(c => Cards.draw(ctx, c, { dim: true }));
     if (history.length) {
@@ -196,12 +223,26 @@
       ctx.font = '600 15px system-ui, sans-serif';
       ctx.fillText(streak ? `${streak} in a row · bank it or keep going` : 'Will the next card be higher or lower?', W / 2, 428);
       Cards.chipStack(ctx, W / 2, 490, pot);
+      // Streak pips: one per right guess, warming from green to gold to red-hot.
+      const n = Math.max(8, streak);
+      for (let i = 0; i < n; i++) {
+        const on = i < streak;
+        const col = i < 3 ? '#3ddc84' : i < 6 ? '#ffc53d' : '#ff6b3d';
+        ctx.fillStyle = on ? col : 'rgba(255,255,255,0.12)';
+        ctx.beginPath();
+        ctx.arc(W - 60 - (n - 1 - i) * 18, 470, on ? 6 + (i === streak - 1 ? Math.sin(now / 120) : 0) : 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      Gfx.text(ctx, 'STREAK', W - 60 - (n - 1) * 9, 448, { size: 11, color: 'rgba(255,255,255,0.55)', stroke: null, weight: 700 });
     } else if (!current) {
       ctx.fillStyle = 'rgba(255,255,255,0.55)';
       ctx.font = '600 18px system-ui, sans-serif';
       ctx.fillText('Pick a bet and press Play', W / 2, 290);
     }
     if (result) Cards.banner(ctx, W, 190, result.text, result.color);
+    fx.draw(ctx);
+    pops.draw(ctx);
+    ctx.restore();
     requestAnimationFrame(frame);
   }
 

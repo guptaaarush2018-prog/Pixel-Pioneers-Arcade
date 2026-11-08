@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Timber Haul · Pixel Pioneers Arcade</title>
+  <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../assets/css/arcade.css">
+  <style>
+    .th-cash { font-size: 22px !important; font-weight: 800; color: var(--accent) !important; margin-bottom: 14px !important; }
+    .th-ups { display: grid; gap: 8px; margin: 0 0 18px; text-align: left; }
+    .th-up { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; }
+    .th-ico { font-size: 22px; width: 28px; text-align: center; }
+    .th-info { flex: 1; min-width: 0; font-size: 14px; }
+    .th-info em { font-style: normal; font-size: 12px; color: var(--accent); margin-left: 4px; }
+    .th-info small { display: block; font-size: 12px; color: var(--muted); }
+    .th-info small.th-next { color: #8ef0a0; }
+    .th-buy { padding: 8px 12px; font-size: 14px; min-width: 76px; justify-content: center; }
+    .th-buy:disabled { opacity: .45; cursor: not-allowed; filter: none; }
+  </style>
+</head>
+<body class="game" data-game="timber-haul">
+  <header class="topbar">
+    <a class="back" href="../../index.html">← All games</a>
+    <h1>Timber Haul</h1>
+    <div class="stats">
+      <span>Cash<b id="cash">-</b></span>
+      <span>Load<b id="load">-</b></span>
+      <span>Earned<b id="earned">-</b></span>
+    </div>
+    <button class="icon-btn" id="mute" type="button">Sound on</button>
+  </header>
+
+  <main class="stage">
+    <canvas id="game"></canvas>
+    <div class="overlay" id="overlay" hidden></div>
+  </main>
+
+  <p class="help">Drive with <kbd>WASD</kbd> / arrows or drag the screen · saw trees, sell at the mill, upgrade at the garage</p>
+
+  <script src="../../assets/js/config.js"></script>
+  <script src="../../assets/js/catalog.js"></script>
+  <script src="../../assets/js/arcade.js"></script>
+  <script src="../../assets/js/gfx.js"></script>
+  <script src="../../assets/js/filter.js"></script>
+  <script src="../../assets/js/friends.js"></script>
+  <script src="../../assets/js/online.js"></script>
+  <script src="../../assets/js/chat.js"></script>
+  <script src="../../assets/js/invites.js"></script>
+  <script src="../../assets/js/relay.js"></script>
+  <script src="../../assets/js/versus.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

@@ -31,7 +31,7 @@ function friendsBox(me) {
     </li>`;
   return `<section class="box">
       <h2>Friends</h2>
-      <p class="muted-note">Your friend code is <b class="friend-code">${esc(me.id)}</b>
+      <p class="muted-note">Your friend code is <b class="friend-code">${esc(me.code || me.id)}</b>
         <button class="btn secondary" type="button" id="copy-code">Copy</button>
         Share it in person, and a friend can add you here. Nicknames are private: only you see them.</p>
       <div class="friend-add">
@@ -63,6 +63,71 @@ async function friendStatus() {
   }
 }
 
+// Guest: save the account with an email, or log in to an existing one. Saved: who you're signed in as.
+let accountMode = 'save';
+function accountBox() {
+  const Auth = Online.Auth;
+  if (!Auth?.on) return '';
+  if (Auth.email()) return `<section class="box" id="account">
+      <h2>Account</h2>
+      <p class="muted-note">Signed in as <b>${esc(Auth.email())}</b>. Your progress is backed up, so you can log in on any device.</p>
+      <button class="btn secondary" type="button" id="log-out">Log out</button>
+    </section>`;
+  const saving = accountMode === 'save';
+  return `<section class="box" id="account">
+      <h2>${saving ? 'Save your account' : 'Log in'}</h2>
+      <p class="muted-note">${saving
+        ? 'You\'re playing as a guest, so your progress only lives in this browser. Add your school email and a password to keep it safe and play from any device. Your email stays private: other players only see your player name.'
+        : 'Log in to pick up your saved progress on this device.'}</p>
+      <form class="account-form" id="account-form">
+        <input class="field" type="email" id="acct-email" placeholder="Email" autocomplete="email" required aria-label="Email">
+        <input class="field" type="password" id="acct-pass" placeholder="${saving ? 'New password (6+ characters)' : 'Password'}" autocomplete="${saving ? 'new-password' : 'current-password'}" minlength="6" required aria-label="Password">
+        <button class="btn" type="submit">${saving ? 'Save account' : 'Log in'}</button>
+      </form>
+      <p class="error" id="acct-error"></p>
+      <p class="muted-note">${saving
+        ? 'Already saved an account? <button class="link-btn" type="button" data-mode="login">Log in instead</button>'
+        : '<button class="link-btn" type="button" data-mode="save">Back to saving this account</button> · <button class="link-btn" type="button" id="forgot">Forgot password?</button>'}</p>
+    </section>`;
+}
+
+function wireAccount() {
+  const Auth = Online.Auth;
+  if (!Auth?.on) return;
+  document.getElementById('log-out')?.addEventListener('click', e => {
+    if (!confirm('Log out? Your progress is saved to your account, and this browser goes back to a fresh guest.')) return;
+    e.target.disabled = true;
+    Auth.logOut();
+  });
+  page.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => { accountMode = b.dataset.mode; render(); }));
+  const form = document.getElementById('account-form');
+  if (!form) return;
+  const error = document.getElementById('acct-error');
+  const email = () => document.getElementById('acct-email').value.trim();
+  document.getElementById('forgot')?.addEventListener('click', async () => {
+    if (!email()) return void (error.textContent = 'Type your email above first.');
+    const err = await Auth.resetPassword(email());
+    error.textContent = err || 'If that email has an account, a reset link is on its way. Check your spam folder too.';
+  });
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const pass = document.getElementById('acct-pass').value;
+    if (accountMode === 'login' && Auth.hasProgress()
+      && !confirm('Logging in replaces the guest progress in this browser with your account\'s. Continue?')) return;
+    const button = form.querySelector('button');
+    button.disabled = true;
+    error.textContent = '';
+    const err = accountMode === 'save' ? await Auth.register(email(), pass) : await Auth.logIn(email(), pass);
+    if (err) {
+      error.textContent = err;
+      button.disabled = false;
+    } else if (accountMode === 'save') {
+      Arcade.toast('Account saved', 'You can now log in from any device.');
+      render();
+    }
+  });
+}
+
 function render() {
   const me = Arcade.profile();
   const s = Arcade.stats();
@@ -90,8 +155,10 @@ function render() {
   page.innerHTML = `
     <div class="page-head">
       <h1>Your profile</h1>
-      <p>Everything here is saved in this browser.</p>
+      <p>${Online.Auth?.email() ? 'Saved to your account.' : 'Everything here is saved in this browser.'}</p>
     </div>
+
+    ${accountBox()}
 
     <section class="box">
       <h2>Player name</h2>
@@ -154,13 +221,18 @@ function render() {
 
   const friendError = document.getElementById('friend-error');
   document.getElementById('copy-code').addEventListener('click', e => {
-    navigator.clipboard?.writeText(me.id).then(() => { e.target.textContent = 'Copied'; }).catch(() => {});
+    navigator.clipboard?.writeText(me.code || me.id).then(() => { e.target.textContent = 'Copied'; }).catch(() => {});
   });
-  const addByCode = () => {
+  const addByCode = async () => {
     const code = document.getElementById('friend-code').value.trim().toLowerCase();
-    if (code === me.id) return void (friendError.textContent = 'That\'s your own code.');
-    if (!Friends.ID_RE.test(code)) return void (friendError.textContent = 'Friend codes are letters and numbers, like the one above.');
-    Friends.add(code, '');
+    if (code === (me.code || me.id)) return void (friendError.textContent = 'That\'s your own code.');
+    if (!/^[a-z0-9]{6,12}$/.test(code)) return void (friendError.textContent = 'Friend codes are letters and numbers, like the one above.');
+    // A code points at its player's account. Codes from players who haven't been back since accounts
+    // arrived are added as they are, and swapped for the account once that player returns.
+    let id = code;
+    if (Online.enabled) id = await Online.get(`codes/${code}`).catch(() => null) || code;
+    if (id === me.id) return void (friendError.textContent = 'That\'s your own code.');
+    Friends.add(id, '');
     render();
   };
   document.getElementById('add-friend').addEventListener('click', addByCode);
@@ -181,6 +253,7 @@ function render() {
     if (err) friendError.textContent = err;
     else render();
   }));
+  wireAccount();
   renderDaily(document.getElementById('daily'));
   page.querySelectorAll('[data-slot]').forEach(b => b.addEventListener('click', () => {
     if (Arcade.equip(b.dataset.slot, b.dataset.item)) render();
@@ -212,3 +285,5 @@ function render() {
 }
 
 render();
+// The friend code or player name can change once the account finishes setting up.
+window.addEventListener('arcade:account', () => { if (!document.getElementById('account-form')?.contains(document.activeElement)) render(); });

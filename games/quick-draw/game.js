@@ -15,6 +15,7 @@
   ];
   const ROUNDS_TO_WIN = 2, ONLINE_ROUNDS = 3;
   const LATE = 1.5; // seconds after DRAW before a round is called
+  const GONE = 6;    // online host: seconds after DRAW to give up on a silent opponent
 
   const canvas = document.getElementById('game');
   const ctx = Arcade.setupCanvas(canvas, W, H);
@@ -40,7 +41,9 @@
   }
 
   function beginRound(s) {
-    r = { t: 0, draw: s.draw, fakes: s.fakes, res: [null, null], done: false, loser: -1 };
+    // The round clock is real time, not summed frame times, so a slow device can't stretch it.
+    // shownAt is when DRAW! was first drawn on this screen; reactions are measured from it.
+    r = { t: 0, start: performance.now(), shownAt: null, draw: s.draw, fakes: s.fakes, res: [null, null], done: false, loser: -1, oppAt: null, oppShown: false };
     phase = 'round';
     if (mode === 'cpu') {
       const o = OUTLAWS[outlaw];
@@ -58,10 +61,13 @@
     return f ? f.text : 'Steady…';
   };
 
-  // A player pulls the trigger: early is a foul, otherwise the reaction time counts.
-  function shoot(i) {
+  // A player pulls the trigger: before DRAW! is on screen is a foul, otherwise the time
+  // from DRAW! appearing to the key press (its event timestamp) counts.
+  function shoot(i, at) {
     if (phase !== 'round' || r.done || r.res[i] !== null) return;
-    const res = r.t < r.draw ? 'foul' : Math.round((r.t - r.draw) * 1000);
+    const now = performance.now();
+    if (!(at > 0 && at <= now)) at = now;
+    const res = r.shownAt === null || at < r.shownAt ? 'foul' : Math.round(at - r.shownAt);
     r.res[i] = res;
     Arcade.tone(res === 'foul' ? { freq: 180, dur: 0.15, type: 'square', vol: 0.04 } : { freq: 90, to: 40, dur: 0.25, type: 'sawtooth', vol: 0.08 });
     if (res !== 'foul') { flash = 0.12; dust.push({ x: i === 0 ? 250 : 550, y: GROUND - 70, t: 0 }); }
@@ -72,12 +78,15 @@
   }
 
   // Lower time wins; a foul loses unless both fouled (then it's replayed). Offline this runs
-  // locally; online the host calls it once both results are in, or time runs out.
+  // locally. Online each player times their own round and reports a shot, a foul, or 'miss'
+  // once LATE passes on their own clock; the host decides only when both reports are in.
+  // (The host used to call time on its own clock, which handed it rounds whenever the guest's
+  // round had started late, before the guest had even seen DRAW!.)
   function decide(force = false) {
-    const [a, b] = r.res;
-    const ready = (a !== null && b !== null) || force || a === 'foul' || b === 'foul' ||
-      (typeof a === 'number' && typeof b !== 'number' && r.t > r.draw + LATE) ||
-      (typeof b === 'number' && typeof a !== 'number' && r.t > r.draw + LATE);
+    const [a, b] = r.res.map(v => (v === 'miss' ? null : v));
+    const reported = r.res[0] !== null && r.res[1] !== null;
+    const ready = reported || force || a === 'foul' || b === 'foul' ||
+      (mode !== 'online' && (typeof a === 'number' || typeof b === 'number') && r.t > r.draw + LATE);
     if (!ready || r.done) return;
     let w;
     if (a === 'foul' && b === 'foul') w = -1;
@@ -87,7 +96,7 @@
     else if (a === null) w = 1;
     else if (b === null) w = 0;
     else w = a <= b ? 0 : 1;
-    if (mode === 'online') Match.move({ k: 'res', w, v: r.res });
+    if (mode === 'online') Match.move({ k: 'res', w, v: [a, b] });
     settle(w);
   }
 
@@ -174,8 +183,11 @@
         wins = d.w || wins;
         beginRound(d.s);
       } else if (d.k === 'shot' && r && !r.done) {
-        r.res[1 - me] = d.v === 'foul' ? 'foul' : Math.max(0, d.v | 0);
-        if (d.v !== 'foul') { flash = 0.12; dust.push({ x: me === 0 ? 550 : 250, y: GROUND - 70, t: 0 }); }
+        const v = d.v === 'foul' || d.v === 'miss' ? d.v : Math.max(0, d.v | 0);
+        r.res[1 - me] = v;
+        // Show their shot at the moment it happened on their screen, replayed on ours, so a
+        // round that started a little later here never shows them firing before our DRAW!.
+        if (typeof v === 'number') r.oppAt = r.draw + v / 1000;
         if (me === 0) decide();
       } else if (d.k === 'res' && me === 1 && r && !r.done) {
         r.res = [d.v?.[0] ?? null, d.v?.[1] ?? null];
@@ -197,29 +209,42 @@
   window.addEventListener('keydown', e => {
     if (!$('overlay').hidden || e.repeat) return;
     if (mode === 'local') {
-      if (e.code === 'KeyA') shoot(0);
-      else if (e.code === 'KeyL') shoot(1);
-    } else if (e.code === 'Space' || e.code === 'Enter') shoot(mode === 'online' ? me : 0);
+      if (e.code === 'KeyA') shoot(0, e.timeStamp);
+      else if (e.code === 'KeyL') shoot(1, e.timeStamp);
+    } else if (e.code === 'Space' || e.code === 'Enter') shoot(mode === 'online' ? me : 0, e.timeStamp);
   });
   canvas.addEventListener('pointerdown', e => {
     if (mode === 'local') {
       const rect = canvas.getBoundingClientRect();
-      shoot(e.clientX - rect.left < rect.width / 2 ? 0 : 1);
-    } else shoot(mode === 'online' ? me : 0);
+      shoot(e.clientX - rect.left < rect.width / 2 ? 0 : 1, e.timeStamp);
+    } else shoot(mode === 'online' ? me : 0, e.timeStamp);
   });
 
   // ---------- Loop ----------
 
   function update(dt) {
     if (phase === 'round') {
-      r.t += dt;
+      r.t = (performance.now() - r.start) / 1000;
       if (mode === 'cpu' && r.res[1] === null && r.t >= r.bot.at) {
         r.res[1] = r.bot.foul ? 'foul' : Math.round((r.t - r.draw) * 1000);
         if (!r.bot.foul) { flash = 0.12; dust.push({ x: 550, y: GROUND - 70, t: 0 }); Arcade.tone({ freq: 90, to: 40, dur: 0.25, type: 'sawtooth', vol: 0.08 }); }
         decide();
       }
       if (sign() === 'DRAW!' && !r.rang) { r.rang = true; Arcade.tone({ freq: 1200, dur: 0.08, type: 'square', vol: 0.05 }); }
-      if (r.t > r.draw + LATE && (mode !== 'online' || me === 0)) decide(true);
+      if (mode === 'online') {
+        if (r.oppAt !== null && !r.oppShown && r.t >= r.oppAt) {
+          r.oppShown = true;
+          flash = 0.12;
+          dust.push({ x: me === 0 ? 550 : 250, y: GROUND - 70, t: 0 });
+          Arcade.tone({ freq: 90, to: 40, dur: 0.25, type: 'sawtooth', vol: 0.08 });
+        }
+        if (!r.done && r.res[me] === null && r.t > r.draw + LATE) {
+          r.res[me] = 'miss';
+          Match.move({ k: 'shot', v: 'miss' });
+          if (me === 0) decide();
+        }
+        if (me === 0 && r.t > r.draw + GONE) decide(true);
+      } else if (r.t > r.draw + LATE) decide(true);
     } else if (phase === 'between') {
       betweenT -= dt;
       if (betweenT <= 0) next();
@@ -265,7 +290,7 @@
     ctx.fillStyle = '#5a3a22';
     ctx.fillRect(0, GROUND, W, H - GROUND);
 
-    const shotBy = i => r && typeof r.res[i] === 'number';
+    const shotBy = i => r && typeof r.res[i] === 'number' && (mode !== 'online' || i === me || r.done || r.oppShown);
     const downT = i => (r?.done && r.loser === i ? Math.min(1, (2.2 - betweenT) * 3) : 0);
     gunslinger(250, 1, COLORS[0], downT(0), shotBy(0));
     gunslinger(550, -1, COLORS[1], downT(1), shotBy(1));
@@ -285,6 +310,7 @@
 
     // The sign
     if (r || phase === 'between') {
+      if (phase === 'round' && r.shownAt === null && r.t >= r.draw) r.shownAt = performance.now();
       const text = phase === 'round' ? sign() : r?.done ? (r.winner === -1 ? 'Draw again!' : (mode === 'cpu' && r.winner === 0) || (mode === 'online' && r.winner === me) ? 'You win the round' : `${names[r.winner]} wins the round`) : 'Get ready…';
       const isDraw = text === 'DRAW!';
       ctx.fillStyle = '#6b4226';
@@ -307,7 +333,7 @@
       ctx.fillStyle = COLORS[i];
       ctx.fillText(names[i] + (mode === 'local' ? (i ? ' (L)' : ' (A)') : ''), x, GROUND + 30);
       const v = r?.res[i];
-      if (v !== null && v !== undefined && (r.done || mode !== 'online' || i === me)) {
+      if ((v === 'foul' || typeof v === 'number') && (r.done || mode !== 'online' || i === me)) {
         ctx.fillStyle = v === 'foul' ? '#ff7a7a' : '#fff';
         ctx.font = '800 20px system-ui, sans-serif';
         ctx.fillText(v === 'foul' ? 'FOUL' : `${v} ms`, x, GROUND + 58);

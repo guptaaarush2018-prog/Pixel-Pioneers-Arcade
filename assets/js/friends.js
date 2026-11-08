@@ -9,7 +9,7 @@
 const Friends = (() => {
   const KEY = 'friends', RECENT_KEY = 'friends:recent';
   const NICK_MAX = 20, RECENT_MAX = 12;
-  const ID_RE = /^[a-z0-9]{6,32}$/;
+  const ID_RE = /^[A-Za-z0-9]{6,32}$/; // account ids, or older 9-letter codes
 
   let list = Arcade.load(KEY, {});
   const save = () => Arcade.save(KEY, list);
@@ -78,5 +78,16 @@ const Friends = (() => {
     Arcade.save(RECENT_KEY, [{ id, name, game, t: Date.now() }, ...rest].slice(0, RECENT_MAX));
   }
 
-  return { get, all, add, remove, touch, setNick, askNick, short, display, recent, met, NICK_MAX, ID_RE };
+  // Swaps an older friend code for the account id it now belongs to.
+  function rekey(from, to) {
+    if (!ID_RE.test(to) || from === to) return;
+    if (list[from]) {
+      if (!list[to]) list[to] = list[from];
+      delete list[from];
+      save();
+    }
+    if (recent().some(r => r.id === from)) Arcade.save(RECENT_KEY, recent().map(r => (r.id === from ? { ...r, id: to } : r)));
+  }
+
+  return { get, all, add, remove, touch, rekey, setNick, askNick, short, display, recent, met, NICK_MAX, ID_RE };
 })();

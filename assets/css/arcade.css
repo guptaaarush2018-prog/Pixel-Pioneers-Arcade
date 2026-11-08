@@ -1019,3 +1019,9 @@ body.kingdom-page { overflow: auto; height: auto; min-height: 100vh; }
 
 /* Room under the last line of a page for the floating chat button. */
 @media (max-width: 760px) { body.hub { padding-bottom: 64px; } }
+
+/* ---------- Account (profile page) ---------- */
+
+.account-form { display: flex; flex-wrap: wrap; gap: 8px; max-width: 560px; margin-top: 10px; }
+.account-form .field { flex: 1 1 180px; min-width: 0; text-transform: none; letter-spacing: normal; text-align: left; }
+.link-btn { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; cursor: pointer; }

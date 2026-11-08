@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1a1440"/><stop offset="1" stop-color="#0d2236"/></linearGradient></defs>
+  <rect width="320" height="200" fill="url(#g)"/>
+  <rect x="16" y="14" width="120" height="30" rx="7" fill="#1e222a"/><rect x="16" y="14" width="5" height="30" rx="2" fill="#ffc53d"/>
+  <text x="30" y="34" font-family="system-ui,sans-serif" font-weight="800" font-size="15" fill="#eceef2">You 1,240</text>
+  <rect x="184" y="14" width="120" height="30" rx="7" fill="#1e222a"/><rect x="184" y="14" width="5" height="30" rx="2" fill="#4f8cff"/>
+  <text x="198" y="34" font-family="system-ui,sans-serif" font-weight="800" font-size="15" fill="#eceef2">Rival 1,105</text>
+  <rect x="16" y="56" width="288" height="5" rx="2.5" fill="#2a2f39"/><rect x="16" y="56" width="190" height="5" rx="2.5" fill="#ffc53d"/>
+  <text x="160" y="92" font-family="system-ui,sans-serif" font-weight="800" font-size="19" fill="#eceef2" text-anchor="middle">Which planet has rings?</text>
+  <rect x="16" y="108" width="140" height="34" rx="8" fill="#173d27" stroke="#3ccf8e" stroke-width="2"/>
+  <text x="30" y="130" font-family="system-ui,sans-serif" font-weight="700" font-size="14" fill="#eceef2">Saturn</text>
+  <rect x="112" y="117" width="34" height="16" rx="8" fill="#ffc53d"/><text x="129" y="129" font-family="system-ui,sans-serif" font-weight="800" font-size="10" fill="#111" text-anchor="middle">You</text>
+  <rect x="164" y="108" width="140" height="34" rx="8" fill="#46191e" stroke="#ff6b6b" stroke-width="2"/>
+  <text x="178" y="130" font-family="system-ui,sans-serif" font-weight="700" font-size="14" fill="#eceef2">Mars</text>
+  <rect x="254" y="117" width="40" height="16" rx="8" fill="#4f8cff"/><text x="274" y="129" font-family="system-ui,sans-serif" font-weight="800" font-size="10" fill="#111" text-anchor="middle">Rival</text>
+  <rect x="16" y="150" width="140" height="34" rx="8" fill="#1e222a" opacity=".6"/><text x="30" y="172" font-family="system-ui,sans-serif" font-weight="700" font-size="14" fill="#8d94a1">Venus</text>
+  <rect x="164" y="150" width="140" height="34" rx="8" fill="#1e222a" opacity=".6"/><text x="178" y="172" font-family="system-ui,sans-serif" font-weight="700" font-size="14" fill="#8d94a1">Mercury</text>
+</svg>

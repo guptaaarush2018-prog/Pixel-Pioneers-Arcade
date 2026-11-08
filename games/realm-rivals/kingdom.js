@@ -74,7 +74,7 @@
     const r = seeded('home:' + id);
     return { x: Math.round(220 + r() * (WORLD_W - 440)), y: Math.round(170 + r() * (WORLD_H - 340)) };
   };
-  const HOME = homeOf(me.id);
+  const HOME = homeOf(me.seed || me.id);
 
   // ---------- Save data ----------
 
@@ -163,7 +163,7 @@
 
   // Spread around home on a golden-angle spiral (stronger targets further out). Anything that
   // would land off the map is reflected back across home.
-  const rng = seeded('world:' + me.id);
+  const rng = seeded('world:' + (me.seed || me.id));
   const turn = rng() * Math.PI * 2;
   const near = (n, d) => {
     const a = turn + n * 2.39996;

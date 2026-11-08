@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Buzz Bout · Pixel Pioneers Arcade</title>
+  <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../assets/css/arcade.css">
+  <style>
+    .bz {
+      width: min(760px, 100%);
+      max-height: 100%;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding: 18px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+    .bz:empty { display: none; }
+    .bz-head { display: flex; align-items: center; gap: 10px; }
+    .bz-head.solo { justify-content: space-between; }
+    .bz-chip {
+      flex: 1;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 8px 12px;
+      border-radius: 10px;
+      background: var(--surface-2);
+      border-left: 4px solid var(--c);
+      min-width: 0;
+    }
+    .bz-chip span { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bz-chip b { font-size: 22px; font-variant-numeric: tabular-nums; }
+    .bz-chip em { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-style: normal; font-weight: 700; color: var(--muted); }
+    .bz-chip em.up { color: #3ccf8e; }
+    .bz-chip em.down { color: #ff6b6b; }
+    .bz-vs { color: var(--muted); font-size: 12px; font-weight: 700; }
+    .bz-strikes { font-size: 22px; font-weight: 800; color: #ff6b6b; letter-spacing: 2px; }
+    .bz-strikes i { font-style: normal; color: var(--line); }
+    .bz-meta { text-align: center; font-size: 13px; font-weight: 600; color: var(--muted); }
+    .bz-bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+    .bz-bar i { display: block; height: 100%; background: var(--accent); transition: width .1s linear; }
+    .bz-bar i.low { background: #ff6b6b; }
+    .bz-q { text-align: center; font-size: clamp(19px, 3.2vw, 26px); font-weight: 700; line-height: 1.3; min-height: 2.6em; display: grid; place-items: center; }
+    .bz-sub { text-align: center; margin: -6px 0 0; color: var(--muted); font-size: 14px; }
+    .bz-answers { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; transition: opacity .2s; }
+    .bz-answers.hidden { opacity: 0; }
+    .bz-ans {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 58px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 16px;
+      font-weight: 600;
+      text-align: left;
+      cursor: pointer;
+    }
+    .bz-ans:not([disabled]):hover { border-color: var(--muted); }
+    .bz-ans span { flex: 1; }
+    .bz-ans kbd.p2 { opacity: .7; }
+    .bz-ans i { font-style: normal; font-size: 11px; font-weight: 700; color: #111; padding: 2px 6px; border-radius: 999px; }
+    .bz-ans.locked { border-color: var(--text); }
+    .bz-ans.right { background: #173d27; border-color: #3ccf8e; }
+    .bz-ans.wrong { background: #46191e; border-color: #ff6b6b; }
+    .bz-ans.dim { opacity: .5; }
+    .bz-cats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .bz-cat {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 16px 8px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .bz-cat span { font-size: 30px; }
+    .bz-cat small { color: var(--muted); font-weight: 600; }
+    .bz-cat[disabled] { cursor: default; opacity: .75; }
+    .bz-cat:not([disabled]):hover { border-color: var(--accent); }
+    .bz-wager { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; align-items: center; }
+    .bz-wager > b, .bz-wager > p { grid-column: 1 / -1; text-align: center; margin: 0; }
+    .bz-status { text-align: center; min-height: 1.4em; color: var(--muted); font-size: 14px; }
+    .bz-foot { text-align: center; font-size: 12px; color: var(--muted); }
+    @media (max-width: 560px) {
+      .bz { padding: 12px; gap: 10px; }
+      .bz-answers { grid-template-columns: 1fr; }
+      .bz-ans { min-height: 50px; }
+      .bz-cat { padding: 12px 4px; font-size: 13px; }
+      .bz-cat span { font-size: 24px; }
+    }
+  </style>
+</head>
+<body class="game" data-game="buzz-bout">
+  <header class="topbar">
+    <a class="back" href="../../index.html">← All games</a>
+    <h1>Buzz Bout</h1>
+    <div class="stats">
+      <span>Score<b id="s1">0</b></span>
+      <span>Rival / streak<b id="s2">-</b></span>
+      <span>Best<b id="best">0</b></span>
+    </div>
+    <button class="icon-btn" id="mute" type="button">Sound on</button>
+  </header>
+
+  <main class="stage">
+    <div class="bz" id="bz"></div>
+    <div class="overlay" id="overlay" hidden></div>
+  </main>
+
+  <p class="help">Answer with <kbd>1</kbd>–<kbd>4</kbd> or a click · two players on one device: <kbd>1</kbd>–<kbd>4</kbd> and <kbd>7</kbd> <kbd>8</kbd> <kbd>9</kbd> <kbd>0</kbd></p>
+
+  <script src="../../assets/js/config.js"></script>
+  <script src="../../assets/js/catalog.js"></script>
+  <script src="../../assets/js/arcade.js"></script>
+  <script src="../../assets/js/filter.js"></script>
+  <script src="../../assets/js/friends.js"></script>
+  <script src="../../assets/js/online.js"></script>
+  <script src="../../assets/js/chat.js"></script>
+  <script src="../../assets/js/invites.js"></script>
+  <script src="../../assets/js/relay.js"></script>
+  <script src="../../assets/js/match.js"></script>
+  <script src="questions.js"></script>
+  <script src="questions-opentdb.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

@@ -152,6 +152,9 @@
     day.people.push({
       x: dir > 0 ? -20 : W + 20, dir, speed: Arcade.rand(55, 85), decided: false, inQueue: false, wait: 0, mood: null, moodT: 0,
       color: Arcade.pick(['#ef9a9a', '#90caf9', '#a5d6a7', '#ffe082', '#ce93d8', '#ffab91', '#80cbc4']),
+      // Looks only: rolled from Gfx.rand so duels' seeded Math.random isn't disturbed.
+      skin: SKIN[Math.floor(Gfx.rand(0, SKIN.length))], hair: HAIR[Math.floor(Gfx.rand(0, HAIR.length))],
+      pants: PANTS[Math.floor(Gfx.rand(0, PANTS.length))], tall: Gfx.rand(0.9, 1.12), seed: Gfx.rand(0, 10),
     });
   }
 
@@ -280,6 +283,7 @@
     day.revenue += paid;
     biz.cash += paid;
     biz.rep = Math.min(100, biz.rep + (fair ? 0.35 : 0.1));
+    servedFx(paid);
     if (day.critic) {
       day.critic.served++;
       if (!fair) day.critic.pricey++;
@@ -298,7 +302,7 @@
       day.cooking[w] += serveTime(p.order) * 0.15;
       if (day.cooking[w] >= serveTime(p.order)) serve(w);
     }
-    if (any) Arcade.tone({ freq: 300, dur: 0.03, vol: 0.02 });
+    if (any) { Arcade.tone({ freq: 300, dur: 0.03, vol: 0.02 }); hurryFx(); }
   }
 
   function endDay() {
@@ -438,60 +442,208 @@
     if (e.code === 'Space' && state === 'day') { e.preventDefault(); hurry(); }
   });
 
+  // ---------- Effects ----------
+  // Purely cosmetic, and they roll Gfx.rand (never Math.random) so online duels stay in sync.
+
+  const fx = Gfx.particles(500);
+  const pops = Gfx.floaters();
+  let time = 0, squash = 0, steamT = 0;
+  const clouds = Array.from({ length: 6 }, (_, i) => ({ x: i * 190 + Gfx.rand(0, 120), y: Gfx.rand(30, 130), s: Gfx.rand(0.6, 1.2), v: Gfx.rand(6, 14) }));
+  const SKIN = ['#f6d1b0', '#e9b48a', '#c98b5e', '#a8693f', '#7c4a2a', '#f2c7a0'];
+  const HAIR = ['#2b1d14', '#4a3020', '#7a4a22', '#d9a54a', '#1c1c1c', '#a0522d', '#c0c0c0'];
+  const PANTS = ['#34495e', '#2c3e50', '#5d4037', '#455a64', '#1a237e', '#6d4c41'];
+  const money = n => `$${n % 1 ? n.toFixed(2) : n}`;
+
+  function updateFx(dt) {
+    time += dt;
+    squash = Math.max(0, squash - dt * 6);
+    fx.update(dt);
+    pops.update(dt);
+    for (const c of clouds) {
+      c.x += c.v * dt;
+      if (c.x > W + 120) { c.x = -160; c.y = Gfx.rand(30, 130); }
+    }
+    if (state === 'day' && day) {
+      steamT -= dt;
+      const busy = day.serving.some(Boolean);
+      if (steamT <= 0) {
+        steamT = busy ? 0.07 : 0.4;
+        fx.emit({ x: TRUCK_X + 62 + Gfx.rand(-4, 4), y: SIDEWALK - 196, vx: Gfx.rand(-6, 10), vy: Gfx.rand(-40, -25), drag: 0.4, life: 1.6, size: 4, grow: 9, color: busy ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.25)' });
+      }
+      if (day.rain) for (let i = 0; i < 3; i++) {
+        fx.emit({ x: Gfx.rand(0, W), y: Gfx.rand(SIDEWALK - 10, H), vx: 0, vy: 0, life: 0.25, size: 1.5, grow: 10, color: 'rgba(210,225,255,0.35)' });
+      }
+    }
+  }
+
+  function servedFx(paid) {
+    pops.add('+' + money(paid), TRUCK_X + 150 + Gfx.rand(-10, 10), SIDEWALK - 130, { color: '#9be37a', size: 20 });
+    for (let i = 0; i < 6; i++) {
+      fx.emit({ x: TRUCK_X + 50, y: SIDEWALK - 70, z: 0, vx: Gfx.rand(-60, 90), vy: Gfx.rand(-10, 10), vz: Gfx.rand(120, 220), g: 520, life: 0.8, size: 3.5, color: i % 2 ? '#ffd23f' : '#ffe98a' });
+    }
+  }
+
+  function hurryFx() {
+    squash = 1;
+    for (let i = 0; i < 5; i++) {
+      fx.emit({ x: TRUCK_X + Gfx.rand(-30, 50), y: SIDEWALK - 92, vx: Gfx.rand(-90, 90), vy: Gfx.rand(-140, -60), drag: 2, life: 0.4, size: 2, color: i % 2 ? '#ffb347' : '#ffdd55', shape: 'spark' });
+    }
+  }
+
   // ---------- Drawing ----------
 
-  function button(x, y, w, h, text, { enabled = true, active = false, sub = '', onClick, size = 14 }) {
-    ctx.fillStyle = active ? '#3a2f1a' : enabled ? '#232833' : '#1a1d24';
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = active ? '#ffc53d' : '#2f3540';
-    ctx.lineWidth = active ? 2 : 1;
-    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-    ctx.fillStyle = enabled ? '#eceef2' : '#5c6370';
-    ctx.font = `600 ${size}px system-ui, sans-serif`;
+  let mouse = null;
+  canvas.addEventListener('pointermove', e => {
+    const r = canvas.getBoundingClientRect();
+    mouse = { x: ((e.clientX - r.left) / r.width) * W, y: ((e.clientY - r.top) / r.height) * H };
+  });
+  canvas.addEventListener('pointerleave', () => { mouse = null; });
+  const over = (x, y, w, h) => mouse && mouse.x >= x && mouse.x <= x + w && mouse.y >= y && mouse.y <= y + h;
+
+  function button(x, y, w, h, text, { enabled = true, active = false, primary = false, sub = '', onClick, size = 14 }) {
+    const hov = enabled && over(x, y, w, h);
+    const lift = hov ? -1 : 0;
+    y += lift;
+    ctx.save();
+    if (enabled) {
+      ctx.shadowColor = primary ? 'rgba(255,150,40,0.45)' : 'rgba(0,0,0,0.4)';
+      ctx.shadowBlur = primary ? 18 : hov ? 10 : 6;
+      ctx.shadowOffsetY = 3;
+    }
+    const g = ctx.createLinearGradient(0, y, 0, y + h);
+    if (primary) { g.addColorStop(0, hov ? '#ffc65c' : '#ffb547'); g.addColorStop(1, '#f0841f'); }
+    else if (active) { g.addColorStop(0, '#4b3b1b'); g.addColorStop(1, '#33280f'); }
+    else if (enabled) { g.addColorStop(0, hov ? '#353d4d' : '#2b313d'); g.addColorStop(1, hov ? '#272d39' : '#20252e'); }
+    else { g.addColorStop(0, '#1c1f26'); g.addColorStop(1, '#17191f'); }
+    ctx.fillStyle = g;
+    Gfx.roundRect(ctx, x, y, w, h, 9);
+    ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = primary ? 'rgba(255,240,200,0.6)' : active ? '#ffc53d' : 'rgba(255,255,255,0.07)';
+    ctx.lineWidth = active && !primary ? 2 : 1;
+    Gfx.roundRect(ctx, x + 0.5, y + 0.5, w - 1, h - 1, 9);
+    ctx.stroke();
+    if (enabled && !primary) {
+      ctx.fillStyle = 'rgba(255,255,255,0.05)';
+      Gfx.roundRect(ctx, x + 2, y + 2, w - 4, h * 0.45, 7);
+      ctx.fill();
+    }
+    ctx.fillStyle = primary ? '#3a1d00' : enabled ? '#eceef2' : '#5c6370';
+    ctx.font = `${primary ? 800 : 600} ${size}px system-ui, sans-serif`;
     ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
     ctx.fillText(text, x + w / 2, y + (sub ? h / 2 - 2 : h / 2 + 5));
     if (sub) {
-      ctx.fillStyle = enabled ? '#8d94a1' : '#4a505b';
+      ctx.fillStyle = primary ? 'rgba(58,29,0,0.75)' : enabled ? '#8d94a1' : '#4a505b';
       ctx.font = '500 11px system-ui, sans-serif';
       ctx.fillText(sub, x + w / 2, y + h / 2 + 13, w - 8);
     }
-    buttons.push({ x, y, w, h, enabled, onClick });
+    buttons.push({ x, y: y - lift, w, h, enabled, onClick });
   }
 
   function label(text, x, y, { size = 13, color = '#8d94a1', weight = 600, align = 'left', max } = {}) {
     ctx.fillStyle = color;
     ctx.font = `${weight} ${size}px system-ui, sans-serif`;
     ctx.textAlign = align;
+    ctx.textBaseline = 'alphabetic';
     ctx.fillText(text, x, y, max);
   }
 
+  function cloud(x, y, s, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    for (const [dx, dy, r] of [[0, 0, 22], [24, -10, 26], [50, 0, 20], [26, 6, 22]]) {
+      ctx.moveTo(x + dx * s + r * s, y + dy * s);
+      ctx.arc(x + dx * s, y + dy * s, r * s, 0, Math.PI * 2);
+    }
+    ctx.fill();
+  }
+
+  function weatherIcon(x, y, id, r) {
+    if (id === 'sunny' || id === 'heat') {
+      const c = id === 'heat' ? '#ff7043' : '#ffd54f';
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(time * 0.5);
+      ctx.strokeStyle = c;
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      for (let i = 0; i < 8; i++) {
+        const a = i / 8 * Math.PI * 2;
+        ctx.beginPath(); ctx.moveTo(Math.cos(a) * r * 0.8, Math.sin(a) * r * 0.8); ctx.lineTo(Math.cos(a) * r * 1.15, Math.sin(a) * r * 1.15); ctx.stroke();
+      }
+      ctx.restore();
+      const g = ctx.createRadialGradient(x - r * 0.2, y - r * 0.2, 1, x, y, r * 0.65);
+      g.addColorStop(0, Gfx.shade(c, 0.4));
+      g.addColorStop(1, c);
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(x, y, r * 0.62, 0, Math.PI * 2); ctx.fill();
+      return;
+    }
+    if (id === 'rainy') {
+      ctx.strokeStyle = '#4fc3f7';
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      for (let i = 0; i < 3; i++) {
+        const k = (time * 1.5 + i / 3) % 1;
+        ctx.globalAlpha = 1 - k;
+        ctx.beginPath(); ctx.moveTo(x - 8 + i * 8, y + 4 + k * 10); ctx.lineTo(x - 10 + i * 8, y + 9 + k * 10); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+    cloud(x - r * 0.75, y - 2, r / 34, id === 'rainy' ? '#90a4ae' : '#cfd8dc');
+  }
+
   function drawPlan() {
-    ctx.fillStyle = '#14171d';
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#1a1f29');
+    bg.addColorStop(1, '#11141a');
+    ctx.fillStyle = bg;
     ctx.fillRect(0, 0, W, H);
+    const glow = ctx.createRadialGradient(140, 40, 10, 140, 40, 420);
+    glow.addColorStop(0, 'rgba(255,140,60,0.10)');
+    glow.addColorStop(1, 'rgba(255,140,60,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, H);
+    // Panel behind the right-hand shop.
+    Gfx.card(ctx, 488, 12, 460, 424, { fill: 'rgba(255,255,255,0.025)', r: 14, edge: 'rgba(255,255,255,0.05)' });
+
     label(`${weekday()} · Day ${biz.day}${biz.endless ? ' (endless)' : ` of ${DAYS}`}`, 30, 36, { size: 21, color: '#eceef2', weight: 700 });
     label(`Cash $${Math.round(biz.cash)} · Reputation ${Math.round(biz.rep)}/100${weekend() ? ' · Weekend: parks and beaches fill up' : ''}`, 30, 58, { max: 440 });
 
     // Forecast.
-    ctx.fillStyle = '#1e222a';
-    ctx.fillRect(30, 70, 440, 58);
-    ctx.fillStyle = plan.weather.icon;
-    ctx.beginPath(); ctx.arc(60, 99, 16, 0, Math.PI * 2); ctx.fill();
+    Gfx.card(ctx, 30, 70, 440, 58, { fill: '#1f2531', r: 12 });
+    weatherIcon(60, 99, plan.weather.id, 17);
     label(`Forecast: ${plan.weather.name}`, 88, 92, { color: '#eceef2', size: 14 });
     label(plan.event.text, 88, 113, { size: 11, color: plan.event.place || plan.event.critic || plan.event.rival ? '#ffc53d' : '#8d94a1', max: 374 });
 
     label('Where to park', 30, 150, { color: '#eceef2' });
     PLACES.forEach((p, i) => {
-      button(30 + i * 89, 158, 84, 44, p.name, { active: plan.place === i, sub: `$${p.rent} rent`, size: 13, onClick: () => { plan.place = i; } });
+      const x = 30 + i * 89;
+      button(x, 158, 84, 44, p.name, { active: plan.place === i, sub: `$${p.rent} rent`, size: 13, onClick: () => { plan.place = i; } });
+      // A little strip of the spot's scenery along the top of its button.
+      const g = ctx.createLinearGradient(0, 161, 0, 167);
+      g.addColorStop(0, p.sky);
+      g.addColorStop(1, p.ground);
+      ctx.fillStyle = g;
+      Gfx.roundRect(ctx, x + 6, 161, 72, 5, 2.5);
+      ctx.fill();
+      if (plan.event.place === p.id) { ctx.fillStyle = '#ffc53d'; ctx.beginPath(); ctx.arc(x + 76, 166, 4, 0, Math.PI * 2); ctx.fill(); }
     });
 
     // Menu: price and stock per item.
     label('Menu', 30, 226, { color: '#eceef2' });
     label('Price', 196, 226, { size: 11, align: 'center' });
     label('Stock to buy', 352, 226, { size: 11, align: 'center' });
+    const icons = { taco: '🌮', burrito: '🌯', churro: '🥖', horchata: '🥤' };
     onMenu().forEach((it, k) => {
       const y = 234 + k * 44;
-      label(it.name, 30, y + 18, { color: '#eceef2', size: 14 });
-      label(`${biz.stock[it.id]} left`, 30, y + 34, { size: 11 });
+      ctx.fillStyle = k % 2 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.04)';
+      Gfx.roundRect(ctx, 24, y - 3, 452, 42, 8);
+      ctx.fill();
+      label(icons[it.id], 30, y + 26, { size: 18, color: '#fff' });
+      label(it.name, 56, y + 18, { color: '#eceef2', size: 14, max: 66 });
+      label(`${biz.stock[it.id]} left`, 56, y + 34, { size: 11 });
       button(126, y, 32, 36, '−', { enabled: plan.price[it.id] > 0.5, onClick: () => { plan.price[it.id] = Math.max(0.5, plan.price[it.id] - 0.5); } });
       const fp = fairPrice(it.id), pr = plan.price[it.id];
       label(`$${pr.toFixed(2)}`, 196, y + 18, { size: 16, color: '#eceef2', weight: 700, align: 'center' });
@@ -525,6 +677,7 @@
         onClick: () => {
           biz.cash -= u.cost;
           u.buy();
+          pops.add(`−$${u.cost}`, x + 106, y + 10, { color: '#ffc53d', size: 16 });
           Arcade.tone({ freq: 523, to: 1046, dur: 0.2, type: 'triangle', vol: 0.05 });
         },
       });
@@ -533,116 +686,411 @@
     const costs = dayCosts();
     const can = biz.cash >= costs;
     button(500, 448, 430, 66, can ? 'Open for business!' : 'Not enough cash', {
-      enabled: can, active: can, sub: `Today costs $${costs}: rent $${place().rent}, stock $${stockCost()}${plan.ads ? ', ads $30' : ''}${biz.owned.cook ? ', wages $20' : ''}`,
+      enabled: can, primary: can, sub: `Today costs $${costs}: rent $${place().rent}, stock $${stockCost()}${plan.ads ? ', ads $30' : ''}${biz.owned.cook ? ', wages $20' : ''}`,
       onClick: openShop,
     });
     if (!can) label('Buy less stock or pick a cheaper spot.', 715, 532, { size: 12, color: '#ff7a7a', align: 'center' });
+    pops.draw(ctx);
+    canvas.style.cursor = buttons.some(b => b.enabled && over(b.x, b.y, b.w, b.h)) ? 'pointer' : '';
+  }
+
+  // ---------- Day scene ----------
+
+  function tree(x, y, r, leaf) {
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.beginPath(); ctx.ellipse(x + 6, y + 40, r * 0.9, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#6b4f2e';
+    ctx.fillRect(x - 4, y, 8, 42);
+    ctx.fillStyle = Gfx.shade(leaf, -0.2);
+    ctx.beginPath(); ctx.arc(x, y - 4, r, 0, Math.PI * 2); ctx.arc(x - r * 0.6, y + 6, r * 0.7, 0, Math.PI * 2); ctx.arc(x + r * 0.6, y + 6, r * 0.7, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = leaf;
+    ctx.beginPath(); ctx.arc(x - r * 0.15, y - 8, r * 0.8, 0, Math.PI * 2); ctx.arc(x - r * 0.65, y + 3, r * 0.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = Gfx.shade(leaf, 0.2);
+    ctx.beginPath(); ctx.arc(x - r * 0.35, y - r * 0.45, r * 0.35, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function hills(y, amp, freq, phase, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(0, SIDEWALK);
+    for (let x = 0; x <= W; x += 16) ctx.lineTo(x, y - Math.sin(x * freq + phase) * amp - Math.sin(x * freq * 2.3 + phase * 2) * amp * 0.4);
+    ctx.lineTo(W, SIDEWALK);
+    ctx.fill();
+  }
+
+  function backdrop(p) {
+    const r = Gfx.rng(p.rent * 7 + 3);
+    if (p.id === 'downtown') {
+      for (let i = 0; i < 12; i++) {
+        const bh = 140 + r() * 160, bx = i * 84 - 20;
+        ctx.fillStyle = Gfx.mix(p.sky, '#4a5466', 0.45);
+        ctx.fillRect(bx, SIDEWALK - 40 - bh - 30, 80, bh + 30);
+      }
+      for (let i = 0; i < 9; i++) {
+        const bh = 110 + r() * 140, bx = i * 110, bw = 100;
+        const g = ctx.createLinearGradient(bx, 0, bx + bw, 0);
+        g.addColorStop(0, i % 2 ? '#525b6c' : '#5c6678');
+        g.addColorStop(1, i % 2 ? '#434b5a' : '#4b5466');
+        ctx.fillStyle = g;
+        ctx.fillRect(bx, SIDEWALK - 40 - bh, bw, bh + 20);
+        ctx.fillStyle = 'rgba(0,0,0,0.18)';
+        ctx.fillRect(bx, SIDEWALK - 40 - bh, bw, 6);
+        if (r() < 0.4) { ctx.fillStyle = '#3b414d'; ctx.fillRect(bx + 60, SIDEWALK - 40 - bh - 22, 22, 22); ctx.fillRect(bx + 63, SIDEWALK - 40 - bh - 26, 16, 4); }
+        for (let wy = SIDEWALK - 30 - bh; wy < SIDEWALK - 60; wy += 26) for (let wx = 10; wx < 90; wx += 24) {
+          const lit = r() < 0.55;
+          ctx.fillStyle = lit ? 'rgba(255,226,150,0.75)' : 'rgba(30,40,60,0.45)';
+          ctx.fillRect(bx + wx, wy, 13, 15);
+        }
+      }
+    } else if (p.id === 'beach') {
+      const sea = ctx.createLinearGradient(0, 200, 0, 290);
+      sea.addColorStop(0, '#2a86c4');
+      sea.addColorStop(1, '#4fb3dd');
+      ctx.fillStyle = sea;
+      ctx.fillRect(0, 200, W, 92);
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.lineWidth = 2;
+      for (let row = 0; row < 4; row++) {
+        ctx.beginPath();
+        for (let x = 0; x <= W; x += 12) ctx.lineTo(x, 218 + row * 20 + Math.sin(x / 40 + time * 1.5 + row) * 3);
+        ctx.stroke();
+      }
+      const sand = ctx.createLinearGradient(0, 284, 0, SIDEWALK);
+      sand.addColorStop(0, '#f2dea4');
+      sand.addColorStop(1, '#e2c784');
+      ctx.fillStyle = sand;
+      ctx.beginPath();
+      ctx.moveTo(0, 292);
+      for (let x = 0; x <= W; x += 20) ctx.lineTo(x, 286 + Math.sin(x / 70 + time) * 3);
+      ctx.lineTo(W, SIDEWALK); ctx.lineTo(0, SIDEWALK);
+      ctx.fill();
+      for (const [x, c] of [[120, '#ef5350'], [760, '#42a5f5']]) {
+        ctx.strokeStyle = '#ddd';
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(x, 300); ctx.lineTo(x + 6, 380); ctx.stroke();
+        ctx.fillStyle = c;
+        ctx.beginPath(); ctx.moveTo(x - 50, 312); ctx.quadraticCurveTo(x, 270, x + 50, 304); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        ctx.beginPath(); ctx.moveTo(x - 16, 300); ctx.quadraticCurveTo(x, 282, x + 16, 298); ctx.lineTo(x, 302); ctx.fill();
+      }
+      for (const x of [300, 880]) {
+        ctx.strokeStyle = '#8d6e48';
+        ctx.lineWidth = 9;
+        ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(x, 390); ctx.quadraticCurveTo(x - 10, 300, x + 18, 220); ctx.stroke();
+        ctx.fillStyle = '#3f9b4a';
+        for (let k = 0; k < 6; k++) {
+          const a = -Math.PI / 2 + (k - 2.5) * 0.55 + Math.sin(time + k) * 0.05;
+          ctx.save();
+          ctx.translate(x + 18, 220);
+          ctx.rotate(a);
+          ctx.beginPath(); ctx.ellipse(32, 0, 34, 8, 0.25, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        }
+      }
+    } else if (p.id === 'campus') {
+      hills(330, 10, 0.006, 1, '#7aa86a');
+      const bx = 150, by = 175, bw = 660, bh = 200;
+      const g = ctx.createLinearGradient(0, by, 0, by + bh);
+      g.addColorStop(0, '#a5644f');
+      g.addColorStop(1, '#8a4f3d');
+      ctx.fillStyle = g;
+      ctx.fillRect(bx, by, bw, bh);
+      ctx.fillStyle = 'rgba(0,0,0,0.08)';
+      for (let y = by + 6; y < by + bh; y += 10) for (let x = bx + ((y / 10) % 2) * 12; x < bx + bw; x += 24) ctx.fillRect(x, y, 22, 1);
+      ctx.fillStyle = '#c99a7e';
+      ctx.beginPath(); ctx.moveTo(bx - 24, by); ctx.lineTo(480, by - 82); ctx.lineTo(bx + bw + 24, by); ctx.fill();
+      ctx.fillStyle = '#b5856a';
+      ctx.fillRect(bx - 24, by - 6, bw + 48, 12);
+      ctx.fillStyle = '#f5ecd8';
+      ctx.beginPath(); ctx.arc(480, by - 34, 20, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#3b2b20';
+      ctx.lineWidth = 2;
+      const hr = (11 + Math.min(1, day.t / DAY_SECONDS) * 3) / 12 * Math.PI * 2;
+      ctx.beginPath(); ctx.moveTo(480, by - 34); ctx.lineTo(480 + Math.sin(hr) * 10, by - 34 - Math.cos(hr) * 10); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(480, by - 34); ctx.lineTo(480, by - 50); ctx.stroke();
+      for (let cx = 360; cx <= 600; cx += 48) {
+        ctx.fillStyle = '#efe4cf';
+        ctx.fillRect(cx - 8, by + 20, 16, bh - 20);
+        ctx.fillStyle = 'rgba(0,0,0,0.12)';
+        ctx.fillRect(cx + 4, by + 20, 4, bh - 20);
+      }
+      for (let wx = bx + 30; wx < bx + bw - 20; wx += 58) {
+        if (wx > 330 && wx < 620) continue;
+        ctx.fillStyle = '#f7e7b8';
+        Gfx.roundRect(ctx, wx, by + 40, 28, 44, 12); ctx.fill();
+        ctx.fillStyle = '#6a3c2c';
+        ctx.fillRect(wx + 13, by + 40, 2, 44);
+        ctx.fillStyle = '#f7e7b8';
+        Gfx.roundRect(ctx, wx, by + 110, 28, 44, 4); ctx.fill();
+      }
+      tree(80, 300, 42, '#4f9a45');
+      tree(880, 300, 42, '#4f9a45');
+    } else if (p.id === 'stadium') {
+      const g = ctx.createLinearGradient(0, 160, 0, 360);
+      g.addColorStop(0, '#7d8a9b');
+      g.addColorStop(1, '#5c6878');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.ellipse(480, 360, 470, 200, 0, Math.PI, 0); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+      ctx.lineWidth = 2;
+      for (let k = 1; k < 6; k++) { ctx.beginPath(); ctx.ellipse(480, 360, 470 - k * 22, 200 - k * 22, 0, Math.PI, 0); ctx.stroke(); }
+      const cols = ['#ef5350', '#ffd54f', '#42a5f5', '#ffffff', '#66bb6a', '#ff8a65'];
+      for (let i = 0; i < 260; i++) {
+        const a = Math.PI + r() * Math.PI, k = 0.55 + r() * 0.42;
+        const x = 480 + Math.cos(a) * 470 * k, y = 360 + Math.sin(a) * 200 * k + (day && r() < 0.3 ? Math.sin(time * 8 + i) * 1.5 : 0);
+        ctx.fillStyle = cols[i % cols.length];
+        ctx.fillRect(x, y, 3, 3);
+      }
+      for (const lx of [150, 810]) {
+        ctx.fillStyle = '#d9dee5';
+        ctx.fillRect(lx, 80, 6, 200);
+        ctx.fillStyle = '#eef2f6';
+        Gfx.roundRect(ctx, lx - 24, 62, 54, 22, 4); ctx.fill();
+        const lg = ctx.createRadialGradient(lx + 3, 73, 4, lx + 3, 73, 90);
+        lg.addColorStop(0, 'rgba(255,255,220,0.5)');
+        lg.addColorStop(1, 'rgba(255,255,220,0)');
+        ctx.fillStyle = lg;
+        ctx.beginPath(); ctx.arc(lx + 3, 73, 90, 0, Math.PI * 2); ctx.fill();
+      }
+      for (const [fx0, c] of [[300, '#ef5350'], [660, '#42a5f5']]) {
+        ctx.fillStyle = '#ccc';
+        ctx.fillRect(fx0, 130, 3, 40);
+        ctx.fillStyle = c;
+        ctx.beginPath(); ctx.moveTo(fx0 + 3, 130); ctx.lineTo(fx0 + 30 + Math.sin(time * 5) * 3, 138); ctx.lineTo(fx0 + 3, 146); ctx.fill();
+      }
+    } else {
+      hills(300, 26, 0.008, 0.5, '#8cc58a');
+      hills(338, 16, 0.011, 2, '#6aaa66');
+      for (let i = 0; i < 9; i++) tree(40 + i * 110 + (i % 2) * 20, 300 + (i % 3) * 8, 36 + (i % 3) * 6, i % 2 ? '#3f8a3c' : '#4a9a45');
+      ctx.fillStyle = '#7b5a3a';
+      ctx.fillRect(700, 372, 70, 6);
+      ctx.fillRect(704, 378, 5, 14); ctx.fillRect(760, 378, 5, 14);
+      ctx.fillRect(700, 358, 70, 5);
+    }
+  }
+
+  function drawTruck(x, base, { body = '#ff7043', trim = '#ffd54f', text = 'TACOS', neon = false, awning = false, scale = 1, cooks = 1, bars = null, sq = 0 }) {
+    ctx.save();
+    ctx.translate(x, base);
+    ctx.scale(scale * (1 + sq * 0.03), scale * (1 - sq * 0.05));
+    Gfx.shadow(ctx, 6, 2, 130, 14, 0.35);
+    // Body.
+    const g = ctx.createLinearGradient(0, -170, 0, -20);
+    g.addColorStop(0, Gfx.shade(body, 0.15));
+    g.addColorStop(1, Gfx.shade(body, -0.12));
+    ctx.fillStyle = g;
+    Gfx.roundRect(ctx, -110, -160, 220, 132, 14);
+    ctx.fill();
+    // Cab with windshield on the left.
+    ctx.fillStyle = Gfx.shade(body, -0.05);
+    Gfx.roundRect(ctx, -132, -110, 40, 82, 10);
+    ctx.fill();
+    ctx.fillStyle = '#9ad3f0';
+    Gfx.roundRect(ctx, -128, -104, 26, 34, 6);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.beginPath(); ctx.moveTo(-124, -100); ctx.lineTo(-112, -100); ctx.lineTo(-124, -80); ctx.fill();
+    // Trim stripe and bumper.
+    ctx.fillStyle = trim;
+    ctx.fillRect(-110, -50, 220, 8);
+    ctx.fillStyle = '#9aa3ad';
+    Gfx.roundRect(ctx, -136, -32, 274, 8, 4);
+    ctx.fill();
+    // Serving window with the kitchen inside.
+    ctx.fillStyle = '#3a2a24';
+    Gfx.roundRect(ctx, -72, -132, 120, 58, 6);
+    ctx.fill();
+    const inner = ctx.createLinearGradient(0, -132, 0, -74);
+    inner.addColorStop(0, '#5a4038');
+    inner.addColorStop(1, '#3a2a24');
+    ctx.fillStyle = inner;
+    Gfx.roundRect(ctx, -68, -128, 112, 50, 4);
+    ctx.fill();
+    for (let c = 0; c < cooks; c++) {
+      const cx = -36 + c * 50, bob = Math.sin(time * 10 + c * 2) * (bars ? 1.5 : 0.3);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(cx - 9, -96 + bob, 18, 18);
+      ctx.fillStyle = SKIN[c + 1];
+      ctx.beginPath(); ctx.arc(cx, -104 + bob, 8, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      Gfx.roundRect(ctx, cx - 8, -122 + bob, 16, 10, 4); ctx.fill();
+      ctx.fillRect(cx - 9, -114 + bob, 18, 3);
+    }
+    // Counter ledge.
+    ctx.fillStyle = '#c4ccd4';
+    Gfx.roundRect(ctx, -78, -78, 132, 8, 3);
+    ctx.fill();
+    // Cooking progress, one bar per window, on the counter.
+    if (bars) bars.forEach((t, i) => { if (t >= 0) Gfx.bar(ctx, -66, -126 + i * 9, 108, 6, t, '#9be37a', 'rgba(0,0,0,0.45)'); });
+    // Awning.
+    if (awning) {
+      for (let k = 0; k < 7; k++) {
+        ctx.fillStyle = k % 2 ? '#ffffff' : '#e53935';
+        ctx.beginPath();
+        ctx.moveTo(-86 + k * 21, -148); ctx.lineTo(-86 + (k + 1) * 21, -148);
+        ctx.lineTo(-86 + (k + 1) * 21 + 4, -136); ctx.arc(-86 + k * 21 + 12.5, -136, 10.5, 0, Math.PI); ctx.closePath();
+        ctx.fill();
+      }
+    }
+    // Side menu board.
+    ctx.fillStyle = '#2b2f36';
+    Gfx.roundRect(ctx, 60, -128, 40, 54, 4);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    for (let k = 0; k < 4; k++) ctx.fillRect(66, -120 + k * 12, 18 + (k % 2) * 8, 3);
+    // Roof sign.
+    ctx.fillStyle = Gfx.shade(trim, -0.15);
+    ctx.fillRect(-60, -170, 6, 12); ctx.fillRect(54, -170, 6, 12);
+    ctx.fillStyle = trim;
+    Gfx.roundRect(ctx, -86, -194, 172, 28, 8);
+    ctx.fill();
+    if (neon) {
+      ctx.save();
+      ctx.shadowColor = '#ff4fa3';
+      ctx.shadowBlur = 14 + Math.sin(time * 6) * 4;
+      Gfx.text(ctx, '★ ' + text + ' ★', 0, -180, { size: 17, color: '#ff4fa3', stroke: '#5d2a14', width: 2 });
+      ctx.restore();
+      for (let k = 0; k < 9; k++) {
+        ctx.fillStyle = (Math.floor(time * 4) + k) % 2 ? '#fff6b0' : '#ffb347';
+        ctx.beginPath(); ctx.arc(-78 + k * 19.5, -165, 2.4, 0, Math.PI * 2); ctx.fill();
+      }
+    } else {
+      Gfx.text(ctx, text, 0, -180, { size: 16, color: '#5d2a14', stroke: null });
+    }
+    // Chimney for the grill.
+    ctx.fillStyle = '#8b8f96';
+    ctx.fillRect(56, -186, 12, 26);
+    // Wheels.
+    for (const wx of [-70, 66]) {
+      ctx.fillStyle = '#1f2428';
+      ctx.beginPath(); ctx.arc(wx, -20, 20, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#9aa3ad';
+      ctx.beginPath(); ctx.arc(wx, -20, 9, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#d0d6dc';
+      ctx.beginPath(); ctx.arc(wx - 2, -22, 4, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawPerson(per) {
+    const walking = !per.inQueue;
+    const step = walking ? Math.sin((per.x + per.seed * 50) / 7) : 0;
+    const bob = walking ? Math.abs(step) * -2 : 0;
+    const x = per.x, base = SIDEWALK - 4, h = per.tall;
+    Gfx.shadow(ctx, x, base, 13, 4, 0.3);
+    // Legs.
+    ctx.fillStyle = per.pants;
+    ctx.save();
+    ctx.translate(x - 4, base - 16 * h + bob);
+    ctx.rotate(step * 0.35);
+    Gfx.roundRect(ctx, -3, 0, 6, 16 * h, 3); ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.translate(x + 4, base - 16 * h + bob);
+    ctx.rotate(-step * 0.35);
+    Gfx.roundRect(ctx, -3, 0, 6, 16 * h, 3); ctx.fill();
+    ctx.restore();
+    // Body.
+    const top = base - 16 * h - 22 * h + bob;
+    const g = ctx.createLinearGradient(x - 10, 0, x + 10, 0);
+    g.addColorStop(0, Gfx.shade(per.color, 0.12));
+    g.addColorStop(1, Gfx.shade(per.color, -0.18));
+    ctx.fillStyle = g;
+    Gfx.roundRect(ctx, x - 10, top, 20, 24 * h, 7);
+    ctx.fill();
+    // Head and hair.
+    ctx.fillStyle = per.skin;
+    ctx.beginPath(); ctx.arc(x, top - 9, 9, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = per.hair;
+    ctx.beginPath(); ctx.arc(x, top - 11, 9, Math.PI * 1.05, Math.PI * 1.95); ctx.fill();
+    ctx.fillStyle = '#2a2a2a';
+    const look = per.inQueue ? -1 : per.dir;
+    ctx.fillRect(x + look * 3 - 1, top - 10, 2, 2);
+
+    // Speech bubble: a mood, or the order while they wait.
+    const bubble = per.moodT > 0 && per.mood ? per.mood : per.inQueue && per.order ? ({ taco: '🌮', burrito: '🌯', churro: '🥖' }[per.order] + (per.drink ? '🥤' : '')) : null;
+    if (bubble) {
+      if (bubble !== per.shown) { per.shown = bubble; per.shownAt = time; }
+      const age = Math.min(1, (time - per.shownAt) / 0.25);
+      const k = Gfx.ease.outBack(Math.max(0, age));
+      const by = top - 34;
+      ctx.save();
+      ctx.translate(x, by);
+      ctx.scale(k, k);
+      const bw = per.drink && per.moodT <= 0 ? 44 : 30;
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      Gfx.roundRect(ctx, -bw / 2, -14, bw, 24, 10);
+      ctx.fill();
+      ctx.beginPath(); ctx.moveTo(-4, 9); ctx.lineTo(4, 9); ctx.lineTo(0, 15); ctx.fill();
+      ctx.font = '15px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(bubble, 0, -1);
+      ctx.restore();
+    }
+    if (per.inQueue && per.wait > PATIENCE * 0.5) {
+      Gfx.bar(ctx, x - 12, top - 52, 24, 4, 1 - per.wait / PATIENCE, per.wait > PATIENCE * 0.8 ? '#ff5a4a' : '#ffb347');
+    }
   }
 
   function drawDay() {
-    const p = place();
-    ctx.fillStyle = p.sky;
+    const p = place(), wid = plan.weather.id, gloomy = wid === 'rainy' || wid === 'cloudy';
+    // A real blue sky, lightly tinted by the spot's colour.
+    const tint = Gfx.mix('#5aa8e6', p.sky, 0.18);
+    const sky = ctx.createLinearGradient(0, 0, 0, SIDEWALK);
+    sky.addColorStop(0, gloomy ? Gfx.mix(tint, '#4c5562', 0.6) : Gfx.shade(tint, -0.08));
+    sky.addColorStop(1, gloomy ? Gfx.mix(tint, '#a3adb7', 0.55) : wid === 'heat' ? Gfx.mix(tint, '#ffcc80', 0.55) : Gfx.shade(tint, 0.5));
+    ctx.fillStyle = sky;
     ctx.fillRect(0, 0, W, H);
-    if (plan.weather.id === 'rainy' || plan.weather.id === 'cloudy') {
-      ctx.fillStyle = 'rgba(40,50,60,0.35)';
-      ctx.fillRect(0, 0, W, H);
+    if (wid === 'sunny' || wid === 'heat') {
+      const c = wid === 'heat' ? '#ff9a5a' : '#ffe27a';
+      const glow = ctx.createRadialGradient(860, 74, 10, 860, 74, 150);
+      glow.addColorStop(0, Gfx.alpha(c, 0.55));
+      glow.addColorStop(1, Gfx.alpha(c, 0));
+      ctx.fillStyle = glow;
+      ctx.fillRect(700, 0, 260, 240);
+      ctx.fillStyle = c;
+      ctx.beginPath(); ctx.arc(860, 74, 34, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      ctx.beginPath(); ctx.arc(850, 64, 14, 0, Math.PI * 2); ctx.fill();
     }
-    // Backdrop.
-    if (p.id === 'downtown') {
-      for (let i = 0; i < 9; i++) {
-        ctx.fillStyle = i % 2 ? '#4a5262' : '#545d6e';
-        const bh = 120 + ((i * 53) % 140);
-        ctx.fillRect(i * 110, SIDEWALK - 60 - bh, 100, bh);
-        ctx.fillStyle = 'rgba(255,230,150,0.5)';
-        for (let wy = SIDEWALK - 50 - bh; wy < SIDEWALK - 80; wy += 28) for (let wx = 10; wx < 90; wx += 26) ctx.fillRect(i * 110 + wx, wy, 12, 14);
-      }
-    } else if (p.id === 'beach') {
-      ctx.fillStyle = '#2f8fc9';
-      ctx.fillRect(0, 200, W, 80);
-      ctx.fillStyle = '#e6cf8f';
-      ctx.fillRect(0, 280, W, 100);
-    } else if (p.id === 'campus') {
-      ctx.fillStyle = '#8f5a4a';
-      ctx.fillRect(120, 170, 720, 200);
-      ctx.fillStyle = '#a36b58';
-      ctx.beginPath(); ctx.moveTo(100, 170); ctx.lineTo(480, 90); ctx.lineTo(860, 170); ctx.fill();
-      ctx.fillStyle = 'rgba(255,240,200,0.6)';
-      for (let wx = 160; wx < 820; wx += 60) ctx.fillRect(wx, 210, 26, 40);
-    } else if (p.id === 'stadium') {
-      ctx.fillStyle = '#6d7a8a';
-      ctx.beginPath(); ctx.ellipse(480, 330, 460, 170, 0, Math.PI, 0); ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      for (const lx of [150, 810]) { ctx.fillRect(lx, 80, 6, 120); ctx.fillRect(lx - 20, 70, 46, 16); }
-    } else {
-      for (let i = 0; i < 10; i++) {
-        ctx.fillStyle = '#3e7a3b';
-        ctx.beginPath(); ctx.arc(50 + i * 100, 300, 40, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#6b4f2e';
-        ctx.fillRect(46 + i * 100, 330, 8, 40);
-      }
-    }
-    if (plan.weather.id === 'sunny' || plan.weather.id === 'heat') {
-      ctx.fillStyle = plan.weather.icon;
-      ctx.beginPath(); ctx.arc(860, 70, 36, 0, Math.PI * 2); ctx.fill();
-    }
-    ctx.fillStyle = p.ground;
-    ctx.fillRect(0, SIDEWALK - 20, W, H);
-    ctx.fillStyle = 'rgba(0,0,0,0.12)';
-    ctx.fillRect(0, SIDEWALK + 20, W, 4);
+    for (const c of clouds) cloud(c.x, c.y, c.s, gloomy ? 'rgba(120,130,140,0.75)' : 'rgba(255,255,255,0.8)');
+    backdrop(p);
+
+    // Sidewalk and street.
+    const walk = Gfx.mix(p.ground, '#d8d2c4', 0.45);
+    ctx.fillStyle = walk;
+    ctx.fillRect(0, SIDEWALK - 22, W, 44);
+    ctx.fillStyle = 'rgba(0,0,0,0.08)';
+    for (let x = 0; x < W; x += 64) ctx.fillRect(x, SIDEWALK - 22, 2, 44);
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    ctx.fillRect(0, SIDEWALK - 22, W, 3);
+    ctx.fillStyle = Gfx.shade(walk, -0.3);
+    ctx.fillRect(0, SIDEWALK + 22, W, 6);
+    const street = ctx.createLinearGradient(0, SIDEWALK + 28, 0, H);
+    street.addColorStop(0, Gfx.shade(p.ground, -0.25));
+    street.addColorStop(1, Gfx.shade(p.ground, -0.4));
+    ctx.fillStyle = street;
+    ctx.fillRect(0, SIDEWALK + 28, W, H);
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    for (let x = 0; x < W; x += 80) ctx.fillRect(x, SIDEWALK + 70, 40, 4);
+    if (gloomy) { ctx.fillStyle = 'rgba(30,40,55,0.18)'; ctx.fillRect(0, 0, W, H); }
 
     // The rival, if they're here today.
     if (plan.event.rivalAt === p.id) {
-      ctx.fillStyle = '#5c6bc0';
-      ctx.fillRect(40, SIDEWALK - 120, 150, 92);
-      ctx.fillStyle = '#c5cae9';
-      ctx.fillRect(60, SIDEWALK - 104, 80, 36);
-      label(`RIVAL · $${plan.event.rivalPrice}`, 115, SIDEWALK - 128, { size: 12, color: '#1a237e', weight: 800, align: 'center' });
+      drawTruck(115, SIDEWALK - 8, { body: '#5c6bc0', trim: '#c5cae9', text: `RIVAL $${plan.event.rivalPrice}`, scale: 0.62 });
     }
 
-    // Truck.
-    ctx.fillStyle = '#ff7043';
-    ctx.fillRect(TRUCK_X - 100, SIDEWALK - 150, 200, 120);
-    ctx.fillStyle = '#ffccbc';
-    ctx.fillRect(TRUCK_X - 70, SIDEWALK - 128, 110, 50);
-    if (biz.owned.awning) {
-      ctx.fillStyle = '#e53935';
-      for (let k = 0; k < 6; k++) { ctx.fillStyle = k % 2 ? '#ffffff' : '#e53935'; ctx.fillRect(TRUCK_X - 110 + k * 37, SIDEWALK - 146, 37, 14); }
-    }
-    ctx.fillStyle = '#ffd54f';
-    ctx.fillRect(TRUCK_X - 100, SIDEWALK - 168, 200, 22);
-    label(biz.owned.sign ? '★ TACOS ★' : 'TACOS', TRUCK_X, SIDEWALK - 151, { size: 15, color: '#5d2a14', weight: 800, align: 'center' });
-    ctx.fillStyle = '#263238';
-    for (const wx of [-60, 60]) { ctx.beginPath(); ctx.arc(TRUCK_X + wx, SIDEWALK - 28, 18, 0, Math.PI * 2); ctx.fill(); }
-    // Cooking progress, one bar per window.
-    for (let w = 0; w < lanes(); w++) {
-      const sv = day.serving[w];
-      if (!sv) continue;
-      ctx.fillStyle = 'rgba(0,0,0,0.4)';
-      ctx.fillRect(TRUCK_X - 70, SIDEWALK - 72 + w * 10, 110, 8);
-      ctx.fillStyle = '#9be37a';
-      ctx.fillRect(TRUCK_X - 70, SIDEWALK - 72 + w * 10, 110 * Math.min(1, day.cooking[w] / serveTime(sv.order)), 8);
-    }
+    // Our truck.
+    const bars = Array.from({ length: lanes() }, (_, w) => day.serving[w] ? Math.min(1, day.cooking[w] / serveTime(day.serving[w].order)) : -1);
+    drawTruck(TRUCK_X, SIDEWALK - 8, { neon: biz.owned.sign, awning: biz.owned.awning, cooks: biz.owned.cook ? 2 : 1, bars, sq: squash });
 
-    // People.
-    const icons = { taco: '🌮', burrito: '🌯', churro: '🥖' };
-    for (const per of day.people) {
-      const bob = Math.sin((per.x + day.t * 200) / 12) * (per.inQueue ? 0 : 2);
-      ctx.fillStyle = per.color;
-      ctx.fillRect(per.x - 8, SIDEWALK - 30 + bob, 16, 24);
-      ctx.beginPath(); ctx.arc(per.x, SIDEWALK - 40 + bob, 9, 0, Math.PI * 2); ctx.fill();
-      ctx.font = '20px system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      if (per.moodT > 0 && per.mood) ctx.fillText(per.mood, per.x, SIDEWALK - 58);
-      else if (per.inQueue && per.order) {
-        ctx.font = '14px system-ui, sans-serif';
-        ctx.fillText(icons[per.order] + (per.drink ? '🥤' : ''), per.x, SIDEWALK - 58);
-      }
-      if (per.inQueue && per.wait > PATIENCE * 0.6) {
-        ctx.fillStyle = '#ff7a7a';
-        ctx.fillRect(per.x - 8, SIDEWALK - 76, 16 * (1 - per.wait / PATIENCE), 3);
-      }
-    }
+    // People, back to front isn't needed on a single sidewalk; queue draws last so bubbles sit on top.
+    for (const per of day.people) if (!per.inQueue) drawPerson(per);
+    for (const per of day.people) if (per.inQueue) drawPerson(per);
 
+    fx.draw(ctx);
     if (day.rain) {
       ctx.strokeStyle = 'rgba(200,220,255,0.5)';
       ctx.lineWidth = 1;
@@ -653,16 +1101,18 @@
       }
       ctx.stroke();
     }
+    pops.draw(ctx);
 
     // Clock and tallies.
-    ctx.fillStyle = 'rgba(14,16,20,0.75)';
-    ctx.fillRect(20, 16, 360, 64);
+    Gfx.card(ctx, 20, 16, 380, 64, { fill: 'rgba(14,16,20,0.9)', r: 12 });
     const hour = 11 + Math.min(1, day.t / DAY_SECONDS) * 3;
     label(`${Math.floor(hour) > 12 ? Math.floor(hour) - 12 : Math.floor(hour)}:${String(Math.floor((hour % 1) * 60)).padStart(2, '0')} ${hour >= 12 ? 'pm' : 'am'}  ·  ${weekday()}  ·  ${p.name}${day.critic ? '  ·  critic in town' : ''}`, 34, 40, { color: '#eceef2', size: 15 });
     const stockText = onMenu().map(i => `${biz.stock[i.id]} ${i.name.toLowerCase()}`).join(' · ');
     const low = onMenu().some(i => !i.addon && biz.stock[i.id] > 0 && biz.stock[i.id] < 5);
-    label(`$${Math.round(day.revenue)} today · ${stockText}`, 34, 64, { size: 12, color: low ? '#ff7a7a' : '#8d94a1', max: 336 });
-    label('Tap the truck (or press Space) to cook faster!', W / 2, H - 16, { size: 13, color: '#14171d', align: 'center' });
+    label(`$${Math.round(day.revenue)} today · ${stockText}`, 34, 64, { size: 12, color: low ? '#ff7a7a' : '#8d94a1', max: 356 });
+    Gfx.bar(ctx, 34, 72, 352, 3, day.t / DAY_SECONDS, '#ffc53d', 'rgba(255,255,255,0.08)');
+    Gfx.text(ctx, 'Tap the truck (or press Space) to cook faster!', W / 2, H - 18, { size: 13, color: '#ffffff', stroke: 'rgba(0,0,0,0.45)', width: 3, weight: 700 });
+    canvas.style.cursor = mouse && Math.abs(mouse.x - TRUCK_X) < 110 && mouse.y > 260 && mouse.y < 460 ? 'pointer' : '';
   }
 
   function updateHud() {
@@ -676,6 +1126,7 @@
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
     buttons = [];
+    updateFx(dt);
     if (state === 'day') {
       tickDay(dt);
       if (state === 'day') drawDay();
