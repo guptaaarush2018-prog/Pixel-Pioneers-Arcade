@@ -1,7 +1,7 @@
 // Gem Mine content: everything you can buy, find or unlock. game.js holds the rules.
 // Effects (fx) are combined by kind; see FX in game.js. Ores are named by the layer they come from.
 window.GEM = (() => {
-  const ORES = ['copper', 'iron', 'crystal', 'obsidian', 'gold', 'starstone'];
+  const ORES = ['copper', 'iron', 'crystal', 'obsidian', 'gold', 'starstone', 'voidglass', 'prismite', 'heartstone'];
 
   // A run starts at the top of a fresh shaft. Breaching a layer's bedrock costs gems plus that layer's ore,
   // opens the next layer's diggers and ore, and makes everything 25% richer.
@@ -11,7 +11,11 @@ window.GEM = (() => {
     { name: 'Crystal Caves', ore: 'Crystal', oreColor: '#7fdbff', price: 1.2e4, breach: { gems: 2e7, ore: 80 }, rock: '#3f5a73', top: '#557a99', hue: 200 },
     { name: 'Magma Rivers', ore: 'Obsidian', oreColor: '#a58cff', price: 1.5e6, breach: { gems: 3e9, ore: 100 }, rock: '#6b3a2e', top: '#8a4b3a', hue: 15 },
     { name: 'Outer Core', ore: 'Gold', oreColor: '#ffd54f', price: 2e8, breach: { gems: 5e11, ore: 120 }, rock: '#7a5a1f', top: '#9c7628', hue: 40 },
-    { name: 'Starfall Deep', ore: 'Starstone', oreColor: '#f48fb1', price: 3e10, breach: null, rock: '#2e2a5c', top: '#433d85', hue: 250 },
+    { name: 'Starfall Deep', ore: 'Starstone', oreColor: '#f48fb1', price: 3e10, breach: { gems: 1e14, ore: 140 }, rock: '#2e2a5c', top: '#433d85', hue: 250 },
+    // The deep endgame, past the old bottom of the shaft. Reaching the Void Rift lets you collapse the core.
+    { name: 'Void Rift', ore: 'Voidglass', oreColor: '#80deea', price: 5e12, breach: { gems: 3e16, ore: 160 }, rock: '#141826', top: '#232a40', hue: 190 },
+    { name: 'Prism Abyss', ore: 'Prismite', oreColor: '#ea80fc', price: 8e14, breach: { gems: 1e19, ore: 180 }, rock: '#3a1f4d', top: '#56307a', hue: 300 },
+    { name: 'World Heart', ore: 'Heartstone', oreColor: '#ff5252', price: 1.2e17, breach: null, rock: '#4a1418', top: '#6e1f26', hue: 355 },
   ];
 
   // `layer`: the layer you have to reach (this run) before you can hire them.
@@ -26,6 +30,9 @@ window.GEM = (() => {
     { name: 'Star Forge', cost: 3.3e8, rate: 80000, color: '#4fc3f7', layer: 3 },
     { name: 'Void Drill', cost: 5.1e9, rate: 470000, color: '#7e57c2', layer: 4 },
     { name: 'Planet Cracker', cost: 7.5e10, rate: 2.8e6, color: '#ec407a', layer: 5 },
+    { name: 'Rift Walker', cost: 1.1e12, rate: 1.65e7, color: '#26c6da', layer: 6 },
+    { name: 'Prism Engine', cost: 1.6e13, rate: 9.8e7, color: '#e040fb', layer: 7 },
+    { name: 'Heart Siphon', cost: 2.4e14, rate: 5.8e8, color: '#ff1744', layer: 8 },
   ];
 
   // Lab research: one-time, for this run only. Costs gems plus the ore of its layer.
@@ -46,6 +53,12 @@ window.GEM = (() => {
     { id: 'molten', name: 'Molten Core', layer: 4, gems: 4e10, ore: 30, desc: 'Diggers dig three times as fast', fx: { dig: 3 } },
     { id: 'twin', name: 'Twin Shafts', layer: 4, gems: 8e10, ore: 45, desc: 'A second expedition at a time', fx: { trips: 1 } },
     { id: 'lattice', name: 'Star Lattice', layer: 5, gems: 1e13, ore: 25, desc: 'Diggers and clicks ×2', fx: { dig: 2, click: 2 } },
+    { id: 'comet', name: 'Comet Lure', layer: 5, gems: 3e13, ore: 50, desc: 'Gem rushes stack one higher', fx: { rushMax: 1 } },
+    { id: 'rift', name: 'Rift Pumps', layer: 6, gems: 5e15, ore: 25, desc: 'Diggers dig three times as fast', fx: { dig: 3 } },
+    { id: 'echoes', name: 'Echo Chamber', layer: 6, gems: 1.5e16, ore: 45, desc: 'Overdrive ×3 instead of ×2', fx: { overdrive: 3 } },
+    { id: 'refract', name: 'Refraction', layer: 7, gems: 2e18, ore: 30, desc: 'Diggers and clicks ×3', fx: { dig: 3, click: 3 } },
+    { id: 'spectrum', name: 'Spectrum Veins', layer: 7, gems: 5e18, ore: 50, desc: 'Veins pay ×5 and need only 3 hits', fx: { veinPay: 5, veinHits: 3 } },
+    { id: 'pulse', name: 'Heart Pulse', layer: 8, gems: 5e20, ore: 30, desc: 'Diggers ×5', fx: { dig: 5 } },
   ];
 
   const ABILITIES = [
@@ -63,6 +76,8 @@ window.GEM = (() => {
     { id: 'furnace', name: 'Furnace Bit', cost: { obsidian: 300 }, desc: 'Ore costs half as much, diggers −15%', fx: { orePrice: 0.5, dig: 0.85 } },
     { id: 'abyss', name: 'Abyss Bit', cost: { obsidian: 600, gold: 60 }, desc: 'Diggers ×2, but clicking does nothing', fx: { dig: 2, noClick: true } },
     { id: 'star', name: 'Star Bit', cost: { starstone: 250 }, desc: 'Diggers and clicks +75%', fx: { dig: 1.75, click: 1.75 } },
+    { id: 'rift', name: 'Rift Bit', cost: { voidglass: 200 }, desc: 'Gem rushes ×2, nuggets 50% more often', fx: { rushPay: 2, nuggetFreq: 1.5 } },
+    { id: 'heart', name: 'Heart Bit', cost: { prismite: 150, heartstone: 40 }, desc: 'Diggers ×3', fx: { dig: 3 } },
   ];
 
   // Relics are permanent. Expeditions find set relics (from sets whose layer you've ever reached);
@@ -130,10 +145,23 @@ window.GEM = (() => {
     { id: 'l2', branch: 2, cost: 2, name: 'Rich Veins', desc: 'Veins drop twice the ore', fx: { veinOre: 2 } },
     { id: 'l3', branch: 2, cost: 3, name: 'Treasure Nose', desc: 'Relics 50% likelier on trips', fx: { relicChance: 1.5 } },
     { id: 'l4', branch: 2, cost: 5, name: 'Tool Belt', desc: 'A second drill bit slot', fx: { bitSlots: 1 } },
-    { id: 'l5', branch: 2, cost: 8, name: 'Golden Age', desc: 'Gem rushes are ×10 and +10s', fx: { rushMult: 10, rushTime: 10 } },
+    { id: 'l5', branch: 2, cost: 8, name: 'Golden Age', desc: 'Gem rushes start at ×10 and +10s', fx: { rushMult: 10, rushTime: 10 } },
   ];
   const BRANCHES = ['Active', 'Idle', 'Luck'];
 
-  return { ORES, LAYERS, DIGGERS, RESEARCH, ABILITIES, BITS, SETS, RELICS, CHALLENGES, TRIPS, CORE, BRANCHES };
+  // Collapse: the second prestige. Reach the Void Rift, then collapse the core: shards, the core tree
+  // and shard difficulty reset, and you get echoes (each +100% to everything, kept forever) plus one
+  // legacy perk of your choice. Relics, drill bits and challenge wins stay.
+  const LEGACY = [
+    { id: 'deep', name: 'Deep Start', desc: 'Start every run in Crystal Caves', fx: { startLayer: 2 } },
+    { id: 'foreman', name: 'Auto Foreman', desc: 'Hires diggers for you (toggle in this tab)', fx: { autoHire: true } },
+    { id: 'fever', name: 'Gold Fever', desc: 'Gem rushes stack two higher and last 10s longer', fx: { rushMax: 2, rushTime: 10 } },
+    { id: 'sense', name: 'Shard Sense', desc: '+2 core shards every dive', fx: { shardDive: 2 } },
+    { id: 'bench', name: 'Workbench', desc: 'One more drill bit slot', fx: { bitSlots: 1 } },
+    { id: 'scholar', name: 'Scholar', desc: 'Research costs half as much', fx: { research: 0.5 } },
+    { id: 'caravan', name: 'Caravan', desc: 'Expeditions 40% shorter, one more at a time', fx: { tripTime: 0.6, trips: 1 } },
+  ];
+
+  return { ORES, LAYERS, DIGGERS, RESEARCH, ABILITIES, BITS, SETS, RELICS, CHALLENGES, TRIPS, CORE, BRANCHES, LEGACY };
 })();
 if (typeof module !== 'undefined') module.exports = window.GEM;

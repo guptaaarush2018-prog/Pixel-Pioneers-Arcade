@@ -3,6 +3,13 @@
   const KINDS = 6;
   const COLORS = ['#ff6b6b', '#4f8cff', '#3ddc84', '#ffc53d', '#c77dff', '#5ec8d8'];
   const ROUND_TIME = 60;
+  // Flow chain: each matching swap within FLOW_WINDOW seconds of the last adds FLOW_STEP to the
+  // points multiplier, up to FLOW_MAX.
+  const FLOW_WINDOW = 3, FLOW_STEP = 0.1, FLOW_MAX = 2;
+  const PRISM = -1;   // a prism has no colour, so it never lines up in a normal match
+  const fx = Gfx.particles(600);
+  const pops = Gfx.floaters();
+  const shake = Gfx.shaker();
 
   const canvas = document.getElementById('game');
   const ctx = Arcade.setupCanvas(canvas, W, H);
@@ -10,11 +17,13 @@
   const $ = id => document.getElementById(id);
 
   let state = 'ready';
-  let grid, phase, selected, swapPair, cascade, score, timeLeft, popups, dragFrom, bestCombo;
+  let grid, phase, selected, swapPair, cascade, score, timeLeft, dragFrom, bestCombo;
+  let flow = 0, lastMatch = -99, clock = 0;
+  const flowMult = () => Math.min(FLOW_MAX, 1 + flow * FLOW_STEP);
 
   // ---------- Board ----------
 
-  const gem = k => ({ k, dx: 0, dy: 0, dying: 0 });
+  const gem = k => ({ k, dx: 0, dy: 0, dying: 0, special: null });
   const inside = (r, c) => r >= 0 && c >= 0 && r < N && c < N;
 
   function fill() {
@@ -31,14 +40,18 @@
     }
   }
 
-  // Every run of 3+ in a row or column. Returns the cells to clear and the run lengths.
+  // Every run of 3+ in a row or column. Returns the cells to clear and each run's cells.
   function findMatches() {
     const cells = new Set(), runs = [];
     for (let r = 0; r < N; r++) {
       for (let c = 0; c < N;) {
         let e = c;
         while (e + 1 < N && grid[r][e + 1].k === grid[r][c].k) e++;
-        if (e - c >= 2) { runs.push(e - c + 1); for (let i = c; i <= e; i++) cells.add(r * N + i); }
+        if (e - c >= 2 && grid[r][c].k !== PRISM) {
+          const run = [];
+          for (let i = c; i <= e; i++) { cells.add(r * N + i); run.push(r * N + i); }
+          runs.push(run);
+        }
         c = e + 1;
       }
     }
@@ -46,11 +59,40 @@
       for (let r = 0; r < N;) {
         let e = r;
         while (e + 1 < N && grid[e + 1][c].k === grid[r][c].k) e++;
-        if (e - r >= 2) { runs.push(e - r + 1); for (let i = r; i <= e; i++) cells.add(i * N + c); }
+        if (e - r >= 2 && grid[r][c].k !== PRISM) {
+          const run = [];
+          for (let i = r; i <= e; i++) { cells.add(i * N + c); run.push(i * N + c); }
+          runs.push(run);
+        }
         r = e + 1;
       }
     }
     return { cells, runs };
+  }
+
+  // Blast crystals caught in a clear take the 3×3 around them too (and can set off more).
+  function expandBlasts(cells) {
+    const done = new Set();
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const i of [...cells]) {
+        const r = Math.floor(i / N), c = i % N;
+        if (grid[r][c].special !== 'blast' || done.has(i)) continue;
+        done.add(i);
+        grew = true;
+        shake.add(0.3);
+        fx.burst(18, () => {
+          const a = Gfx.rand(0, Math.PI * 2), sp = Gfx.rand(80, 300);
+          return { x: c * CELL + CELL / 2, y: r * CELL + CELL / 2, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, drag: 3, life: Gfx.rand(0.3, 0.55), size: Gfx.rand(3, 6), grow: -5, color: Gfx.rand() < 0.5 ? '#fff' : COLORS[grid[r][c].k] };
+        });
+        for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) if (inside(r + dr, c + dc)) cells.add((r + dr) * N + c + dc);
+      }
+    }
+    if (done.size) {
+      Arcade.flag('crystal-swap-blast');
+      Arcade.tone({ freq: 140, to: 50, dur: 0.3, type: 'sawtooth', vol: 0.05 });
+    }
   }
 
   function swap(a, b) {
@@ -60,6 +102,7 @@
   }
 
   function hasMoves() {
+    if (grid.some(row => row.some(g => g.k === PRISM))) return true;
     for (let r = 0; r < N; r++) {
       for (let c = 0; c < N; c++) {
         for (const [dr, dc] of [[0, 1], [1, 0]]) {
@@ -77,7 +120,7 @@
 
   function reshuffle() {
     do fill(); while (!hasMoves());
-    popups.push({ x: W / 2, y: H / 2, text: 'Shuffle!', life: 1 });
+    pops.add('Shuffle!', W / 2, H / 2, { size: 28, color: '#fff', life: 1 });
   }
 
   const animating = () => grid.some(row => row.some(g => g.dx || g.dy || g.dying));
@@ -96,31 +139,103 @@
     Arcade.tone({ freq: 500, dur: 0.05, vol: 0.03 });
   }
 
+  // A matching swap keeps the flow chain going if it came quickly enough after the last one.
+  function bumpFlow() {
+    flow = clock - lastMatch <= FLOW_WINDOW ? flow + 1 : 0;
+    lastMatch = clock;
+    if (flowMult() >= FLOW_MAX) Arcade.flag('crystal-swap-flow');
+  }
+
   function resolve() {
     const { cells, runs } = findMatches();
     if (!cells.size) {
       cascade = 1;
+      swapPair = null;
       phase = 'idle';
       if (!hasMoves()) reshuffle();
       return;
     }
-    let gained = 0;
-    for (const len of runs) {
-      gained += len * 20 * cascade;
-      if (len >= 4) timeLeft += len - 2; // big matches buy time
-      if (len >= 5) Arcade.flag('crystal-swap-five');
+    if (cascade === 1 && swapPair) bumpFlow();
+    // Match 4 makes a blast crystal, 5 or more a prism. It forms where you moved, if that's in the run.
+    const makes = new Map();
+    const moved = swapPair ? swapPair.map(p => p.r * N + p.c) : [];
+    for (const run of runs) {
+      if (run.length < 4) continue;
+      const at = run.find(i => moved.includes(i)) ?? run[Math.floor(run.length / 2)];
+      if (makes.get(at) !== 'prism') makes.set(at, run.length >= 5 ? 'prism' : 'blast');
     }
+    swapPair = null;
+    for (const at of makes.keys()) cells.delete(at);
+    expandBlasts(cells);
+    for (const at of makes.keys()) cells.delete(at);
+    const mult = cascade * flowMult();
+    let gained = 0;
+    for (const run of runs) {
+      gained += run.length * 20 * mult;
+      if (run.length >= 4) timeLeft += run.length - 2; // big matches buy time
+      if (run.length >= 5) Arcade.flag('crystal-swap-five');
+    }
+    const counted = runs.reduce((n, run) => n + run.length, 0);
+    gained += Math.max(0, cells.size + makes.size - counted) * 20 * mult;   // extra crystals from blasts
+    gained = Math.round(gained);
     score += gained;
     bestCombo = Math.max(bestCombo, cascade);
     if (cascade >= 4) Arcade.flag('crystal-swap-cascade');
-    const first = [...cells][0];
-    popups.push({
-      x: (first % N) * CELL + CELL / 2, y: Math.floor(first / N) * CELL + CELL / 2,
-      text: cascade > 1 ? `+${gained} x${cascade}` : `+${gained}`, life: 0.8,
-    });
-    for (const i of cells) grid[Math.floor(i / N)][i % N].dying = 1;
+    const first = [...cells][0] ?? [...makes.keys()][0];
+    const label = [cascade > 1 ? `x${cascade}` : '', flow > 0 ? `flow ×${flowMult().toFixed(2)}` : ''].filter(Boolean).join(' · ');
+    pops.add(`+${gained}${label ? ' ' + label : ''}`, (first % N) * CELL + CELL / 2, Math.floor(first / N) * CELL + CELL / 2, { size: 18 + Math.min(8, cascade * 2), color: cascade > 2 ? '#ffc53d' : '#fff', life: 0.9 });
+    for (const [at, kind] of makes) {
+      const g = grid[Math.floor(at / N)][at % N];
+      g.special = kind;
+      if (kind === 'prism') g.k = PRISM;
+      g.dying = 0;
+      pops.add(kind === 'prism' ? 'Prism!' : 'Blast!', (at % N) * CELL + CELL / 2, Math.floor(at / N) * CELL + 10, { size: 16, color: kind === 'prism' ? '#fff' : '#ffc53d', life: 0.9 });
+    }
+    for (const i of cells) {
+      const g = grid[Math.floor(i / N)][i % N];
+      g.dying = 1;
+      burstAt(Math.floor(i / N), i % N, g.k === PRISM ? '#ffffff' : COLORS[g.k], 6);
+    }
     Arcade.tone({ freq: 520 + cascade * 110, to: 780 + cascade * 110, dur: 0.12, type: 'triangle', vol: 0.05 });
     cascade++;
+    phase = 'clearing';
+    updateHud();
+  }
+
+  function burstAt(r, c, color, n) {
+    fx.burst(n, () => ({
+      x: c * CELL + CELL / 2, y: r * CELL + CELL / 2, vx: Gfx.rand(-160, 160), vy: Gfx.rand(-200, 60), drag: 2.5,
+      life: Gfx.rand(0.35, 0.65), size: Gfx.rand(2.5, 4.5), color, shape: Gfx.rand() < 0.5 ? 'square' : 'chip', spin: Gfx.rand(-10, 10),
+    }));
+  }
+
+  // A prism swapped with a crystal clears every crystal of that colour (two prisms clear the board).
+  function firePrism(a, b) {
+    const ga = grid[a.r][a.c], gb = grid[b.r][b.c];
+    const color = ga.k === PRISM ? gb.k : ga.k;
+    const cells = new Set();
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      const g = grid[r][c];
+      if (color === PRISM || g.k === color) cells.add(r * N + c);
+    }
+    cells.add(a.r * N + a.c);
+    cells.add(b.r * N + b.c);
+    expandBlasts(cells);
+    bumpFlow();
+    const gained = Math.round(cells.size * 30 * flowMult());
+    score += gained;
+    timeLeft += 3;
+    shake.add(0.5);
+    Arcade.flag('crystal-swap-prism');
+    pops.add(`PRISM +${gained} · +3s`, W / 2, H / 2, { size: 26, color: '#fff', life: 1.2 });
+    for (const i of cells) {
+      const g = grid[Math.floor(i / N)][i % N];
+      g.dying = 1;
+      burstAt(Math.floor(i / N), i % N, g.k === PRISM ? '#ffffff' : COLORS[g.k], 8);
+    }
+    Arcade.tone({ freq: 400, to: 1600, dur: 0.45, type: 'triangle', vol: 0.06 });
+    swapPair = null;
+    cascade = 2;
     phase = 'clearing';
     updateHud();
   }
@@ -145,7 +260,9 @@
   }
 
   function update(dt) {
+    clock += dt;
     timeLeft = Math.max(0, timeLeft - dt);
+    if (flow && clock - lastMatch > FLOW_WINDOW) flow = 0;
     for (const row of grid) {
       for (const g of row) {
         const step = dt * 9;
@@ -157,16 +274,15 @@
         }
       }
     }
-    for (const p of popups) { p.y -= 40 * dt; p.life -= dt; }
-    popups = popups.filter(p => p.life > 0);
     updateHud();
 
     if (animating()) return;
     if (phase === 'swapping') {
-      if (findMatches().cells.size) resolve();
+      const [a, b] = swapPair;
+      if (grid[a.r][a.c].k === PRISM || grid[b.r][b.c].k === PRISM) firePrism(a, b);
+      else if (findMatches().cells.size) resolve();
       else {
         // Not a match: swap back.
-        const [a, b] = swapPair;
         swap(a, b);
         grid[a.r][a.c].dx = b.c - a.c; grid[a.r][a.c].dy = b.r - a.r;
         grid[b.r][b.c].dx = a.c - b.c; grid[b.r][b.c].dy = a.r - b.r;
@@ -201,7 +317,10 @@
   }
 
   function start() {
-    popups = [];
+    fx.clear();
+    flow = 0;
+    lastMatch = -99;
+    clock = 0;
     fill();
     while (!hasMoves()) fill();
     phase = 'start';
@@ -272,7 +391,11 @@
   // ---------- Drawing ----------
 
   function shape(k, x, y, s) {
-    ctx.fillStyle = COLORS[k];
+    if (k === PRISM) return drawPrism(x, y, s);
+    const grad = ctx.createLinearGradient(x, y - s, x, y + s);
+    grad.addColorStop(0, Gfx.shade(COLORS[k], 0.3));
+    grad.addColorStop(1, Gfx.shade(COLORS[k], -0.2));
+    ctx.fillStyle = grad;
     ctx.beginPath();
     if (k === 0) ctx.arc(x, y, s, 0, Math.PI * 2);
     else if (k === 1) { ctx.moveTo(x, y - s * 1.15); ctx.lineTo(x + s, y); ctx.lineTo(x, y + s * 1.15); ctx.lineTo(x - s, y); }
@@ -285,6 +408,9 @@
     }
     ctx.closePath();
     ctx.fill();
+    ctx.strokeStyle = Gfx.shade(COLORS[k], -0.45);
+    ctx.lineWidth = 2;
+    ctx.stroke();
     // Shine.
     ctx.fillStyle = 'rgba(255,255,255,0.35)';
     ctx.beginPath();
@@ -292,9 +418,36 @@
     ctx.fill();
   }
 
+  // A rainbow star that spins.
+  function drawPrism(x, y, s) {
+    const t = performance.now() / 600;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(t);
+    ctx.shadowColor = '#fff';
+    ctx.shadowBlur = 14;
+    for (let i = 0; i < 6; i++) {
+      ctx.fillStyle = COLORS[i];
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, s * 1.05, (i / 6) * Math.PI * 2, ((i + 1) / 6) * Math.PI * 2);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(0, 0, s * 0.38, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
   function draw() {
+    const sh = shake.offset(7);
+    ctx.save();
+    ctx.translate(sh.x, sh.y);
     ctx.fillStyle = '#161920';
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(-10, -10, W + 20, H + 20);
     for (let r = 0; r < N; r++) {
       for (let c = 0; c < N; c++) {
         if ((r + c) % 2) {
@@ -303,7 +456,7 @@
         }
       }
     }
-    if (!grid) return;
+    if (!grid) { ctx.restore(); return; }
     if (selected) {
       ctx.strokeStyle = '#eceef2';
       ctx.lineWidth = 3;
@@ -318,32 +471,51 @@
         const g = grid[r][c];
         if (g.dead) continue;
         const size = 20 * (g.dying ? g.dying : 1);
-        shape(g.k, (c + g.dx) * CELL + CELL / 2, (r + g.dy) * CELL + CELL / 2, size);
+        const gx = (c + g.dx) * CELL + CELL / 2, gy = (r + g.dy) * CELL + CELL / 2;
+        if (g.special === 'blast') {
+          const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 150);
+          ctx.strokeStyle = `rgba(255,255,255,${0.4 + pulse * 0.5})`;
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(gx, gy, size * 1.32, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        shape(g.k, gx, gy, size);
+        if (g.special === 'blast') {
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(gx - 2, gy - 7, 4, 14);
+          ctx.fillRect(gx - 7, gy - 2, 14, 4);
+        }
       }
     }
     ctx.restore();
 
-    ctx.font = '700 18px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    for (const p of popups) {
-      ctx.globalAlpha = Math.min(1, p.life * 2);
-      ctx.fillStyle = '#fff';
-      ctx.fillText(p.text, p.x, p.y);
+    fx.draw(ctx);
+    pops.draw(ctx);
+    if (state === 'playing' && flow > 0) {
+      Gfx.card(ctx, W / 2 - 70, 6, 140, 26, { r: 13 });
+      Gfx.text(ctx, `Flow ×${flowMult().toFixed(2)}`, W / 2, 16, { size: 13, color: flowMult() >= FLOW_MAX ? '#ffc53d' : '#7fdbff', width: 3 });
+      Gfx.bar(ctx, W / 2 - 50, 25, 100, 3, Math.max(0, 1 - (clock - lastMatch) / FLOW_WINDOW), '#7fdbff');
     }
-    ctx.globalAlpha = 1;
 
     if (state === 'playing' && timeLeft < 10) {
       ctx.fillStyle = `rgba(255,107,107,${0.1 + Math.sin(timeLeft * 10) * 0.05})`;
       ctx.fillRect(0, 0, W, 4);
       ctx.fillRect(0, H - 4, W, 4);
     }
+    ctx.restore();
   }
 
   let last = performance.now();
   function frame(now) {
     const dt = Math.min(0.033, (now - last) / 1000);
     last = now;
-    if (state === 'playing') update(dt);
+    if (state === 'playing') {
+      update(dt);
+      fx.update(dt);
+      pops.update(dt);
+      shake.update(dt);
+    }
     draw();
     requestAnimationFrame(frame);
   }
@@ -356,7 +528,8 @@
       title: 'Crystal Swap',
       html: `<ul>
         <li>Swap two neighboring crystals to line up 3 or more of the same kind.</li>
-        <li>Chain reactions multiply your points.</li>
+        <li>Chain reactions multiply your points, and quick matches build your <b>flow</b> (up to ×${FLOW_MAX}).</li>
+        <li>Match 4 for a <b>blast crystal</b> (clears the 3×3 around it). Match 5 for a <b>prism</b>: swap it with any crystal to clear that whole colour.</li>
         <li>You have 60 seconds. Matching 4 or 5 adds extra time.</li>
       </ul>`,
       button: 'Start',

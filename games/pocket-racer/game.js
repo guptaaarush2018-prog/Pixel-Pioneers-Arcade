@@ -109,6 +109,8 @@
   const lapKey = id => 'lap:' + id;
   const timeKey = (id, laps) => laps === 3 ? 'time:' + id : `time:${id}:${laps}`;
   const ghostKey = (id, laps) => laps === 3 ? 'ghost:' + id : `ghost:${id}:${laps}`;
+  // Which ghost a time trial races: 'world', 'mine', or a friend's id.
+  let ghostPick = Arcade.load('racer:ghostPick', 'world');
   // World leaderboards store "higher is better", so lap times go in as 10,000,000 minus milliseconds.
   const lapBoard = id => 'prt-' + id;
   const toScore = t => Math.max(0, 1e7 - Math.round(t * 1000));
@@ -365,16 +367,36 @@
   });
 
   // The world ghost is the fastest 3-lap race on a built-in track; custom tracks and other
-  // lap counts keep a ghost on this device only.
+  // lap counts keep a ghost on this device only. Every player's own best 3-lap race is also kept
+  // online (pghosts/<track>/<id>), so a time trial can race a friend's ghost instead.
+  const friendGhostPath = (trackId, id) => `pghosts/${trackId}/${id}`;
   function loadGhost() {
     const local = Arcade.load(ghostKey(track.id, laps), null);
     const use = g => { if (g && g.frames) ghost = { ...g, frames: decode(g.frames) }; };
-    use(local && { ...local, name: 'Your best' });
-    if (!Online.enabled || track.custom || laps !== 3) return;
+    const mine = () => use(local && { ...local, name: 'Your best', skin: mySkin().id });
+    const pick = mode === 'trial' ? ghostPick : 'world';
+    if (pick === 'mine' || !Online.enabled || track.custom || laps !== 3) return mine();
     const forTrack = track;
-    Online.getGhost(track.id)
+    const world = () => Online.getGhost(track.id)
       .then(g => { if (g && forTrack === track && laps === 3 && (!local || g.time <= local.time)) use({ ...g, name: g.name }); })
       .catch(() => {});
+    const friend = pick !== 'world' && Friends.get(pick);
+    if (!friend) {
+      mine();
+      return world();
+    }
+    const name = Friends.short(pick, friend.name);
+    Online.get(friendGhostPath(track.id, pick))
+      .then(g => {
+        if (forTrack !== track) return;
+        if (g && g.frames) use({ ...g, name, friend: pick });
+        else {
+          Arcade.toast('No ghost yet', `${name} hasn't raced ${track.name} yet. Racing the world ghost.`);
+          mine();
+          world();
+        }
+      })
+      .catch(() => { mine(); world(); });
   }
 
   function saveGhost(time) {
@@ -382,7 +404,18 @@
     const key = ghostKey(track.id, laps);
     const local = Arcade.load(key, null);
     if (!local || time < local.time) Arcade.save(key, { time, frames });
-    if (posting() && !track.custom && laps === 3) Online.saveGhost(track.id, time, frames).catch(() => {}); // rules keep only faster times
+    if (!posting() || track.custom || laps !== 3) return;
+    Online.saveGhost(track.id, time, frames).catch(() => {}); // rules keep only faster times
+    // Our own best race goes up for friends to chase. 'ghost:up:<track>' remembers the time we
+    // last sent, so a best set before this existed still gets uploaded once.
+    const best = Arcade.load(key, null);
+    const upKey = 'ghost:up:' + track.id;
+    if (best && Arcade.load(upKey, null) !== best.time) {
+      const me = Arcade.profile();
+      Online.put(friendGhostPath(track.id, me.id), { name: me.name, time: best.time, frames: best.frames, skin: mySkin().id, t: Online.TIMESTAMP })
+        .then(() => Arcade.save(upKey, best.time))
+        .catch(() => {});   // a slower time than the one already up is refused: harmless
+    }
   }
 
   function ghostAt(t) {
@@ -714,7 +747,7 @@
 
     const racingNow = state !== 'menu';
     const g = racingNow ? ghostAt(raceTime) : null;
-    if (g) A.drawCar(ctx, mySkin(), g.x, g.y, g.a, { alpha: 0.32 });
+    if (g) A.drawCar(ctx, ghost.skin ? skinById(ghost.skin) : mySkin(), g.x, g.y, g.a, { alpha: ghost.friend ? 0.45 : 0.32 });
 
     // Rivals are see-through where they overlap you, so your own car always stays visible.
     const others = cars.filter(c => c !== player || mode === 'demo');
@@ -728,8 +761,8 @@
     ctx.textAlign = 'center';
     ctx.font = '700 10px system-ui, sans-serif';
     if (g) {
-      ctx.fillStyle = 'rgba(255,255,255,0.7)';
-      ctx.fillText(`${ghost.name} · ${ghost.time.toFixed(1)}s`, g.x, g.y - 18);
+      ctx.fillStyle = ghost.friend ? 'rgba(255,214,102,0.9)' : 'rgba(255,255,255,0.7)';
+      ctx.fillText(`${ghost.friend ? '★ ' : ''}${ghost.name} · ${ghost.time.toFixed(1)}s`, g.x, g.y - 18);
     }
     for (const car of cars) {
       if (car === player || mode === 'demo' || (!car.remote && !following())) continue;
@@ -1051,9 +1084,18 @@
     if (earned) setTimeout(() => S.sfx.coin(), 600);
     Arcade.countPlay();
     const board = !track.custom && posting();
+    // Racing a friend's ghost: did we beat it?
+    let vsFriend = '';
+    if (ghost?.friend) {
+      const gap = Math.abs(ghost.time - time).toFixed(2);
+      if (time < ghost.time) {
+        vsFriend = `<p><b style="color:#3ddc84">You beat ${esc(ghost.name)}'s ghost by ${gap}s!</b></p>`;
+        Arcade.flag('pocket-racer-ghostbuster');
+      } else vsFriend = `<p>${esc(ghost.name)}'s ghost was ${gap}s faster.</p>`;
+    }
     ui.show({
-      title: rec.newLap ? 'New lap record!' : 'Time trial',
-      html: `<p class="big">${fmt(bestLap)}</p><p>Best lap · ${esc(track.name)}</p><p>Race ${fmt(time)} · record ${fmt(Arcade.load(lapKey(track.id), null))}</p>
+      title: ghost?.friend && time < ghost.time ? 'Ghost beaten!' : rec.newLap ? 'New lap record!' : 'Time trial',
+      html: `<p class="big">${fmt(bestLap)}</p><p>Best lap · ${esc(track.name)}</p><p>Race ${fmt(time)} · record ${fmt(Arcade.load(lapKey(track.id), null))}</p>${vsFriend}
         ${earned ? `<div class="reward"><span><span class="coin">●</span> +${earned}</span></div>` : ''}
         ${track.custom ? '<p class="muted-note">Your own tracks keep records on this device only.</p>' : ''}
         ${board ? '<div class="board" data-board><p class="board-note">Loading the track leaderboard…</p></div>' : ''}`,
@@ -1120,6 +1162,7 @@
     Arcade.countPlay();
     if (net) {
       Arcade.flag('online-match');
+      Relay.result(won ? 'w' : 'l');
       net.wins[won ? 0 : 1]++;
       addCoins(won ? 50 : 20);
     }
@@ -1172,7 +1215,7 @@
   async function goOnline(how, code) {
     let cancelled = false;
     const cancel = () => { cancelled = true; leaveOnline(); };
-    ui.show({ title: 'Connecting…', html: '<p>Waking up the game server. The first connection can take up to a minute.</p>', button: 'Cancel', onAction: cancel });
+    ui.show({ title: 'Connecting…', html: Relay.CONNECTING, button: 'Cancel', onAction: cancel, onRender: Relay.ticker });
     const handlers = {
       ready: () => {
         if (cancelled || !net) return;
@@ -1407,7 +1450,7 @@
         <div>
           <div class="tiles">
             ${tile('quick', '🏁', 'Quick race', 'Any track, three rivals', '#ff4d5e')}
-            ${tile('trial', '⏱️', 'Time trial', 'Chase the world ghost', '#4f8cff')}
+            ${tile('trial', '⏱️', 'Time trial', 'Chase the world or a friend', '#4f8cff')}
             ${tile('online', '🌐', 'Online', Relay.enabled ? 'Race a real player' : 'Not set up here', '#3ddc84')}
             ${tile('garage', '🚗', 'Garage', `${D.SKINS.filter(skinUnlocked).length}/${D.SKINS.length} cars`, '#c77dff')}
             ${tile('records', '🏆', 'Records', 'World leaderboards', '#ffc53d')}
@@ -1496,10 +1539,10 @@
     const levels = D.LEVELS.map(l => `<button class="chip" type="button" data-level="${l.id}" aria-pressed="${l === menuLevel}">${l.name}</button>`).join('');
     const lapsChips = [1, 2, 3, 5].map(n => `<button class="chip" type="button" data-laps="${n}" aria-pressed="${n === quickPick.laps}">${n} lap${n > 1 ? 's' : ''}</button>`).join('');
     return {
-      html: `${head(trial ? 'Time trial' : 'Quick race', trial ? 'Three laps alone against the ghost of the fastest racer in the world. Your best lap goes on the track\'s leaderboard.' : 'Pick a track and race three rivals.')}
+      html: `${head(trial ? 'Time trial' : 'Quick race', trial ? 'Three laps against a ghost: the world record, your own best, or a friend\'s best race. Your best lap goes on the track\'s leaderboard.' : 'Pick a track and race three rivals.')}
         <div class="track-grid">${all.map(t => trackCard(t, quickPick.trackId)).join('')}</div>
         <div class="race-setup">
-          ${trial ? '' : `<div class="setup-row"><label>Rivals</label><div class="filters">${levels}</div><label>Laps</label><div class="filters">${lapsChips}</div></div>`}
+          ${trial ? `<div class="setup-row"><label>Ghost</label><div class="filters" data-ghosts>${ghostChips()}</div></div>` : `<div class="setup-row"><label>Rivals</label><div class="filters">${levels}</div><label>Laps</label><div class="filters">${lapsChips}</div></div>`}
           <button class="big-btn" type="button" data-start>${trial ? 'Start time trial' : 'Start race'}</button>
         </div>`,
       wire: el => {
@@ -1508,7 +1551,9 @@
           quickPick.trackId = b.dataset.track;
           Arcade.save('racer:track', quickPick.trackId);
           el.querySelectorAll('[data-track]').forEach(x => x.setAttribute('aria-pressed', x === b));
+          if (trial) wireGhosts(el);
         }));
+        if (trial) wireGhosts(el);
         el.querySelectorAll('[data-level]').forEach(b => b.addEventListener('click', () => {
           menuLevel = D.LEVELS.find(l => l.id === b.dataset.level);
           Arcade.save('racer:level', menuLevel.id);
@@ -1525,6 +1570,42 @@
         });
       },
     };
+  }
+
+  // Ghost picker for time trials: world record, your best, and each friend, with their time on
+  // the selected track filled in once it loads.
+  function ghostChips() {
+    const friends = typeof Friends !== 'undefined' ? Friends.all().slice(0, 16) : [];
+    if (ghostPick !== 'world' && ghostPick !== 'mine' && !friends.some(f => f.id === ghostPick)) ghostPick = 'world';
+    const chip = (id, label) => `<button class="chip" type="button" data-ghost="${esc(id)}" aria-pressed="${id === ghostPick}">${label}</button>`;
+    return chip('world', 'World record <small data-gtime="world"></small>') + chip('mine', 'Your best <small data-gtime="mine"></small>') +
+      friends.map(f => chip(f.id, `★ ${esc(Friends.short(f.id, f.name) || 'Friend')} <small data-gtime="${esc(f.id)}"></small>`)).join('') +
+      (friends.length ? '' : '<span class="muted-note">Add friends to race their ghosts.</span>');
+  }
+
+  function wireGhosts(el) {
+    const box = el.querySelector('[data-ghosts]');
+    if (!box) return;
+    box.innerHTML = ghostChips();
+    box.querySelectorAll('[data-ghost]').forEach(b => b.addEventListener('click', () => {
+      S.sfx.tick();
+      ghostPick = b.dataset.ghost;
+      Arcade.save('racer:ghostPick', ghostPick);
+      box.querySelectorAll('[data-ghost]').forEach(x => x.setAttribute('aria-pressed', x === b));
+    }));
+    const t = findTrack(quickPick.trackId);
+    const setTime = (id, v) => {
+      const slot = box.querySelector(`[data-gtime="${CSS.escape(id)}"]`);
+      if (slot) slot.textContent = v == null ? '· none' : `· ${v.toFixed(1)}s`;
+    };
+    setTime('mine', Arcade.load(ghostKey(quickPick.trackId, 3), null)?.time);
+    if (!t || t.custom || !Online.enabled) return;
+    const forId = t.id;
+    const still = () => quickPick.trackId === forId;
+    Online.get(`ghosts/${forId}/time`).then(v => still() && setTime('world', v)).catch(() => {});
+    for (const f of Friends.all().slice(0, 16)) {
+      Online.get(`${friendGhostPath(forId, f.id)}/time`).then(v => still() && setTime(f.id, v)).catch(() => {});
+    }
   }
 
   function onlineView() {

@@ -310,7 +310,7 @@
   async function goOnline(how, code) {
     let cancelled = false;
     const cancel = () => { cancelled = true; showMenu(); };
-    ui.show({ title: 'Connecting…', html: '<p>Waking up the game server. The first connection can take up to a minute.</p>', button: 'Cancel', onAction: cancel });
+    ui.show({ title: 'Connecting…', html: Relay.CONNECTING, button: 'Cancel', onAction: cancel, onRender: Relay.ticker });
     const handlers = {
       ready: () => {
         if (cancelled || !net) return;
@@ -319,7 +319,7 @@
       },
       event: onNet,
       left: opponentLeft,
-      closed: () => { if (net) opponentLeft(); },
+      closed: () => { if (net) opponentLeft(true); },
     };
     try {
       const res = how === 'quick' ? await Relay.quickMatch('sudoku', handlers, 'Race')
@@ -389,6 +389,7 @@
     state = 'over';
     Arcade.countPlay();
     Arcade.flag('online-match');
+    Relay.result(won ? 'w' : 'l');
     if (won) Arcade.flag('sudoku-siege-online-win');
     Arcade.tone(won ? { freq: 660, to: 1320, dur: 0.4, type: 'triangle', vol: 0.06 } : { freq: 330, to: 160, dur: 0.5, type: 'sawtooth', vol: 0.04 });
     ui.show({
@@ -408,14 +409,21 @@
     });
   }
 
-  function opponentLeft() {
+  // lost: our own connection dropped. Nobody wins that, so it isn't counted.
+  function opponentLeft(lost = false) {
     if (!net) return;
     const name = net.names[1];
     const wasPlaying = state === 'playing' || state === 'waiting';
     leaveNet(false);
+    if (lost) {
+      if (wasPlaying) state = 'over';
+      ui.show({ title: 'Connection lost', html: '<p>Lost the connection to the game server, so this match doesn\'t count.</p>', button: 'Back to menu', onAction: () => showMenu() });
+      return;
+    }
     if (wasPlaying) {
       state = 'over';
       Arcade.countPlay();
+      Relay.result('w');
       ui.show({ title: `${esc(name)} left`, html: '<p>You win by forfeit.</p>', button: 'Back to menu', onAction: () => showMenu() });
     } else if (state === 'over') {
       const w = document.querySelector('[data-wait]');

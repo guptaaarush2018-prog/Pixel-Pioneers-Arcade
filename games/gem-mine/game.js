@@ -1,5 +1,5 @@
 (() => {
-  const { ORES, LAYERS, DIGGERS, RESEARCH, ABILITIES, BITS, SETS, RELICS, CHALLENGES, TRIPS, CORE, BRANCHES } = window.GEM;
+  const { ORES, LAYERS, DIGGERS, RESEARCH, ABILITIES, BITS, SETS, RELICS, CHALLENGES, TRIPS, CORE, BRANCHES, LEGACY } = window.GEM;
   const W = 960, H = 540;
   const LIST_X = 440, LIST_W = W - LIST_X - 24;
   const SAVE_KEY = 'gem-mine:save';
@@ -14,16 +14,23 @@
   // Core shards: the first needs 1M gems dug in a run (and Granite reached). Each dive makes the
   // next one need 8× more, and every tenfold past that adds one more shard.
   const SHARD_BASE = 1e6, SHARD_STEP = 8;
+  // Combos. A nugget caught during a gem rush stacks the rush: each stack adds half the rush
+  // multiplier again and half a rush of time. Overclock and a rush together are Overdrive.
+  const RUSH_MAX = 5, RUSH_STACK = 0.5, RUSH_CAP = 90;
+  const OVER_CAP = 45;
+  // Collapse (second prestige): needs this layer reached in the current run. Each echo is +100%.
+  const COLLAPSE_LAYER = 6, ECHO_PCT = 100;
 
   // How each effect key combines across research, bits, relics, sets, the core tree and challenges.
   const FX = {
     dig: 'mul', click: 'mul', nuggetFreq: 'mul', veinFreq: 'mul', veinPay: 'mul', veinOre: 'mul', orePrice: 'mul',
     cd: 'mul', dyn: 'mul', tripTime: 'mul', relicChance: 'mul', cost: 'mul', synergy: 'mul', research: 'mul', nuggetPay: 'mul',
-    clickPct: 'add', rushTime: 'add', offline: 'add', trips: 'add', bitSlots: 'add', shardDive: 'add',
-    offlineCap: 'max', rushMult: 'max', startLayer: 'max', veinHits: 'min', growth: 'growth',
-    noClick: 'flag', noLab: 'flag', ability: 'list',
+    rushPay: 'mul',
+    clickPct: 'add', rushTime: 'add', offline: 'add', trips: 'add', bitSlots: 'add', shardDive: 'add', rushMax: 'add',
+    offlineCap: 'max', rushMult: 'max', startLayer: 'max', overdrive: 'max', veinHits: 'min', growth: 'growth',
+    noClick: 'flag', noLab: 'flag', autoHire: 'flag', ability: 'list',
   };
-  const FX_BASE = { offlineCap: 8, rushMult: 7, startLayer: 0, veinHits: 8, growth: 1.15 };
+  const FX_BASE = { offlineCap: 8, rushMult: 7, startLayer: 0, overdrive: 2, veinHits: 8, growth: 1.15 };
 
   const canvas = document.getElementById('game');
   const ctx = Arcade.setupCanvas(canvas, W, H);
@@ -36,8 +43,9 @@
   let buyMode = 1;     // 1 | 10 | 'max'
   let floaters = [], chips = [];
   let tab = 'diggers';
+  let labPage = 0;
   let tripTier = -1;
-  let nugget = null, nuggetT = 70, frenzy = 0;
+  let nugget = null, nuggetT = 70, frenzy = 0, rushStacks = 0, wasOverdrive = false;
   let vein = null, veinT = 30;
   let overT = 0;       // Overclock: 30 → 10 boosted, 10 → 0 sluggish
   let clickTimes = [], overheat = 0, spaceHeld = false;
@@ -51,6 +59,7 @@
       ore: ORES.map(() => 0), refine: 0.2, target: 0, layer: 0, maxLayer: 0,
       shards: 0, core: [], asc: 0, dives: 0, clicks: 0,
       bits: [], equip: [], relics: [], trips: [], cd: {}, challenge: null, done: [],
+      echoes: 0, collapses: 0, legacy: [], autoHire: true,
       runId: newRunId(), saved: Date.now(), ...keep,
     };
   }
@@ -117,6 +126,7 @@
     for (const id of s.relics) list.push(RELICS.find(r => r.id === id)?.fx);
     for (const set of SETS) if (set.id !== 'trial' && setDone(set)) list.push(set.fx);
     for (const id of s.core) list.push(CORE.find(c => c.id === id)?.fx);
+    for (const id of s.legacy) list.push(LEGACY.find(c => c.id === id)?.fx);
     if (chal) list.push(chal.fx);
     return list.filter(Boolean);
   }
@@ -143,7 +153,9 @@
 
   // ---------- Economy ----------
 
-  const shardMult = () => 1 + s.shards * SHARD_PCT / 100;
+  const shardMult = () => (1 + s.shards * SHARD_PCT / 100) * echoMult();
+  const echoMult = () => 1 + s.echoes * ECHO_PCT / 100;
+  const rushMax = () => RUSH_MAX + F.rushMax;
   const coreSpent = () => s.core.reduce((t, id) => t + CORE.find(c => c.id === id).cost, 0);
   const milestoneMult = i => Math.pow(2, MILESTONES.filter(m => s.owned[i] >= m).length);
   const awayCount = i => s.trips.filter(t => t.tier === i && t.runId === s.runId).reduce((n, t) => n + t.n, 0);
@@ -154,7 +166,12 @@
   const diggerRate = (i, n = working(i)) => DIGGERS[i].rate * n * milestoneMult(i) * synergy(i) * digMult();
   const baseRate = () => DIGGERS.reduce((t, _, i) => t + diggerRate(i), 0);
   const overMult = () => (overT > 10 ? 3 : overT > 0 ? 0.5 : 1);
-  const perSecond = () => baseRate() * overMult() * (frenzy > 0 ? F.rushMult : 1);
+  const rushMult = () => (frenzy > 0 ? F.rushMult * F.rushPay * (1 + RUSH_STACK * (Math.max(1, rushStacks) - 1)) : 1);
+  const overdrive = () => frenzy > 0 && overT > 10;
+  const perSecond = () => baseRate() * overMult() * rushMult() * (overdrive() ? F.overdrive : 1);
+  // Dynamite set off during a boost: ×2 in a rush and +1 per extra stack, ×2 again under Overclock.
+  const blastCombo = () => (frenzy > 0 ? 1 + Math.max(1, rushStacks) : 1) * (overT > 10 ? 2 : 1);
+  const fmtX = n => (n % 1 ? n.toFixed(1) : String(n));
   const clickPct = () => 0.01 + 0.005 * s.pick + F.clickPct;
   // Clicks: a small flat amount plus a slice of your diggers' base rate. No doubling, so clicking
   // stays a bonus on top of a good mine, never a replacement for one.
@@ -239,7 +256,9 @@
     Arcade.toast(`Breached into ${next.name}`, `${opens} for hire · ${next.ore.toLowerCase()} ore · +${LAYER_BONUS * 100}% gems`);
     Arcade.tone({ freq: 140, to: 60, dur: 0.5, type: 'sawtooth', vol: 0.06 });
     Arcade.tone({ freq: 440, to: 1320, dur: 0.4, type: 'triangle', vol: 0.05, delay: 0.25 });
-    if (s.layer === LAYERS.length - 1) Arcade.flag('gem-mine-starfall');
+    if (s.layer === 5) Arcade.flag('gem-mine-starfall');
+    if (s.layer === COLLAPSE_LAYER) Arcade.toast('The core is unstable', 'Open the Echo tab to collapse it for echoes and a legacy perk');
+    if (s.layer === LAYERS.length - 1) Arcade.flag('gem-mine-heart');
     const chal = challenge();
     if (chal && s.layer >= chal.goal && !s.done.includes(chal.id)) completeChallenge(chal);
   }
@@ -338,11 +357,13 @@
     const ab = ABILITIES.find(a => a.id === id);
     s.cd[id] = Date.now() + ab.cd * F.cd * 1000;
     if (id === 'dyn') {
-      const n = Math.max(baseRate() * 60, clickPower() * 50, 50) * F.dyn;
+      const combo = blastCombo();
+      const n = Math.max(baseRate() * 60, clickPower() * 50, 50) * F.dyn * combo;
       earn(n);
-      shake = 0.4;
-      floaters.push({ x: ROCK.x, y: ROCK.y - 30, text: `BOOM! +${fmt(n)}`, t: 0, big: true });
-      for (let k = 0; k < 30; k++) chips.push({ x: ROCK.x, y: ROCK.y, vx: Arcade.rand(-320, 320), vy: Arcade.rand(-420, -60), t: 0, c: Arcade.pick(['#ffb300', '#ff7043', '#ffe082']) });
+      shake = combo > 1 ? 0.7 : 0.4;
+      const name = combo === 1 ? 'BOOM!' : `${frenzy > 0 ? 'GOLDEN BLAST' : 'POWER BLAST'} ×${combo}!`;
+      floaters.push({ x: ROCK.x, y: ROCK.y - 30, text: `${name} +${fmt(n)}`, t: 0, big: true });
+      for (let k = 0; k < 30 + 12 * (combo - 1); k++) chips.push({ x: ROCK.x, y: ROCK.y, vx: Arcade.rand(-320, 320), vy: Arcade.rand(-420, -60), t: 0, c: Arcade.pick(['#ffb300', '#ff7043', '#ffe082']) });
       Arcade.tone({ freq: 90, to: 40, dur: 0.5, type: 'sawtooth', vol: 0.08 });
     } else if (id === 'over') {
       overT = 30;
@@ -397,11 +418,15 @@
   function hitVein() {
     vein.hits++;
     if (vein.hits < vein.need) return;
-    const n = veinPayout();
+    const base = veinPayout();
+    // Struck during a rush: double gems (not ore) and the rush runs 5s longer.
+    const rush = frenzy > 0;
+    const n = base * (rush ? 2 : 1);
     earn(n, false);
-    const ore = Math.max(1, Math.ceil((n * 0.2) / orePrice(s.layer))) * F.veinOre;
+    const ore = Math.max(1, Math.ceil((base * 0.2) / orePrice(s.layer))) * F.veinOre;
     s.ore[s.layer] += ore;
-    floaters.push({ x: vein.x, y: vein.y - 10, text: `Vein! +${fmt(n)} · +${fmt(ore)} ${ORES[s.layer]}`, t: 0, big: true });
+    if (rush) frenzy = Math.min(Math.max(frenzy, RUSH_CAP), frenzy + 5);
+    floaters.push({ x: vein.x, y: vein.y - 10, text: `${rush ? 'Rush vein ×2!' : 'Vein!'} +${fmt(n)} · +${fmt(ore)} ${ORES[s.layer]}`, t: 0, big: true });
     Arcade.tone({ freq: 520, to: 1560, dur: 0.35, type: 'triangle', vol: 0.05 });
     vein = null;
   }
@@ -416,13 +441,33 @@
   const nextWait = (lo, hi, freq) => (freq > 0 ? Arcade.rand(lo, hi) / freq : Infinity);
 
   function catchNugget() {
-    if (Math.random() < 0.5) {
+    const full = 20 + F.rushTime;
+    const lucky = () => {
       const n = Math.max(baseRate() * 60, clickPower() * 30, 25) * F.nuggetPay;
       earn(n, false);
       floaters.push({ x: nugget.x, y: nugget.y, text: `Lucky! +${fmt(n)}`, t: 0, big: true });
+    };
+    if (frenzy > 0) {
+      // A nugget during a rush always stacks it. At full stacks it pays out as well.
+      const maxed = rushStacks >= rushMax();
+      rushStacks = Math.min(rushMax(), rushStacks + 1);
+      frenzy = Math.min(Math.max(frenzy, RUSH_CAP), frenzy + full / 2);
+      if (maxed) lucky();
+      floaters.push({ x: nugget.x, y: nugget.y - (maxed ? 22 : 0), text: maxed ? `Rush +${fmtX(full / 2)}s` : `Rush stack ${rushStacks}! ×${fmtX(rushMult())}`, t: 0, big: true });
+      for (let k = 0; k < 16; k++) chips.push({ x: nugget.x, y: nugget.y, vx: Arcade.rand(-220, 220), vy: Arcade.rand(-320, -40), t: 0, c: Arcade.pick(['#ffd54f', '#ffe082', '#fff3c4']) });
+      if (rushStacks >= 3) Arcade.flag('gem-mine-stack');
+      if (rushStacks >= 7) Arcade.flag('gem-mine-fever');
+    } else if (Math.random() < 0.5) {
+      lucky();
     } else {
-      frenzy = 20 + F.rushTime;
-      floaters.push({ x: nugget.x, y: nugget.y, text: `Gem rush! ×${F.rushMult} for ${frenzy}s`, t: 0, big: true });
+      frenzy = full;
+      rushStacks = 1;
+      floaters.push({ x: nugget.x, y: nugget.y, text: `Gem rush! ×${fmtX(rushMult())} for ${frenzy}s`, t: 0, big: true });
+    }
+    // Nuggets keep an Overclock running hot a little longer.
+    if (overT > 10 && overT < OVER_CAP) {
+      overT = Math.min(OVER_CAP, overT + 5);
+      floaters.push({ x: nugget.x, y: nugget.y + 22, text: 'Overclock +5s', t: 0 });
     }
     nugget = null;
     Arcade.flag('gem-mine-nugget');
@@ -476,7 +521,7 @@
     s.owned[0] = 10;
     refresh();
     s.layer = s.target = F.startLayer;
-    overT = frenzy = 0;
+    overT = frenzy = rushStacks = 0;
     vein = nugget = null;
     persist();
     Arcade.flag('gem-mine-dive');
@@ -511,6 +556,75 @@
     s.core = [];
     refresh();
     while (s.equip.length > bitSlots()) s.equip.shift();
+  }
+
+  // ---------- Collapse (second prestige) ----------
+
+  // Echoes: the square root of your shards, plus 2 for every layer past the Void Rift this run.
+  const echoesOnCollapse = () => (s.layer < COLLAPSE_LAYER ? 0 : Math.floor(Math.sqrt(s.shards)) + 2 * (s.layer - COLLAPSE_LAYER));
+
+  function openCollapse() {
+    const got = echoesOnCollapse();
+    if (got < 1) return;
+    const left = LEGACY.filter(l => !s.legacy.includes(l.id));
+    const perks = left.map(l => `<button class="btn secondary" type="button" data-l="${l.id}" style="flex-direction:column;align-items:flex-start;text-align:left;line-height:1.3">
+        <span>${l.name}</span><small style="font-weight:400;opacity:.8">${l.desc}</small></button>`).join('');
+    ui.show({
+      title: 'Collapse the core?',
+      html: `<p>You'll gain <b>${got} echo${got > 1 ? 'es' : ''}</b> (+${ECHO_PCT}% to everything each, forever)${left.length ? ' and a <b>legacy perk</b> you pick below' : ''}.</p>
+        <p>Your ${s.shards} core shards and the Core tree reset, and shards get easy again. Relics, drill bits and challenge wins stay.</p>
+        <div class="menu">${left.length ? perks : '<button class="btn" type="button" data-l="">Collapse</button>'}
+          <button class="btn secondary" type="button" data-x>Not yet</button></div>`,
+      button: null,
+      onRender: panel => {
+        panel.querySelectorAll('[data-l]').forEach(b => b.addEventListener('click', () => collapse(b.dataset.l || null)));
+        panel.querySelector('[data-x]').addEventListener('click', () => ui.hide());
+      },
+    });
+  }
+
+  function collapse(perk) {
+    const got = echoesOnCollapse();
+    if (got < 1) return;
+    const score = depth();
+    const legacy = perk && !s.legacy.includes(perk) ? [...s.legacy, perk] : s.legacy;
+    s = fresh({
+      lifetime: s.lifetime, dives: s.dives, bits: s.bits, equip: s.equip, relics: s.relics, trips: s.trips, done: s.done,
+      maxLayer: s.maxLayer, clicks: s.clicks, refine: s.refine, autoHire: s.autoHire,
+      echoes: s.echoes + got, collapses: s.collapses + 1, legacy,
+    });
+    s.owned[0] = 10;
+    refresh();
+    while (s.equip.length > bitSlots()) s.equip.shift();
+    s.layer = s.target = F.startLayer;
+    overT = frenzy = rushStacks = 0;
+    vein = nugget = null;
+    shake = 0.8;
+    persist();
+    Arcade.flag('gem-mine-collapse');
+    const p = LEGACY.find(l => l.id === perk);
+    Arcade.finish(ui, {
+      score,
+      title: 'The core collapses!',
+      lines: [
+        `+${got} echo${got > 1 ? 'es' : ''}. You now have ${s.echoes}: ×${fmtX(echoMult())} to everything.`,
+        p ? `Legacy perk: ${p.name}. ${p.desc}.` : 'Core shards are easy to find again.',
+      ],
+      button: 'Start again',
+      onAction: () => ui.hide(),
+    });
+  }
+
+  // Auto Foreman: once a second, hire up to 10 of the best diggers that each cost under a quarter of
+  // your gems, so it never eats the savings for a breach.
+  function autoHire() {
+    if (!F.autoHire || !s.autoHire) return;
+    for (let k = 0; k < 10; k++) {
+      const i = DIGGERS.findLastIndex((d, j) => d.layer <= s.layer && unitCost(j) <= s.gems * 0.25);
+      if (i < 0) return;
+      s.gems -= unitCost(i);
+      s.owned[i]++;
+    }
   }
 
   // ---------- Input ----------
@@ -626,9 +740,9 @@
     ctx.save();
     ctx.translate(ROCK.x + (shake > 0.2 ? Arcade.rand(-3, 3) : 0), ROCK.y);
     ctx.scale(k, k);
-    if (overT > 10) {
-      ctx.shadowColor = '#4fc3f7';
-      ctx.shadowBlur = 30;
+    if (frenzy > 0 || overT > 10) {
+      ctx.shadowColor = overdrive() ? '#ff8a65' : frenzy > 0 ? '#ffd54f' : '#4fc3f7';
+      ctx.shadowBlur = 22 + rushStacks * 6 + Math.sin(t * (overdrive() ? 14 : 6)) * 6;
     }
     ctx.fillStyle = L.rock;
     ctx.beginPath();
@@ -675,8 +789,8 @@
     font(700, 32);
     text(fmt(s.gems), ROCK.x, 44, '#eceef2', 'center');
     font(600, 13);
-    const tags = [frenzy > 0 && `RUSH ${Math.ceil(frenzy)}s`, overT > 10 && `OVERCLOCK ${Math.ceil(overT - 10)}s`, overT > 0 && overT <= 10 && `COOLING ${Math.ceil(overT)}s`].filter(Boolean);
-    text(`gems · ${fmt(perSecond())}/s${tags.length ? '  ·  ' + tags.join(' · ') : ''}`, ROCK.x, 64, tags.length ? '#ffd54f' : '#8d94a1', 'center');
+    const boosted = frenzy > 0 || overT > 10;
+    text(`gems · ${fmt(perSecond())}/s`, ROCK.x, 64, overdrive() ? '#ff8a65' : boosted ? '#ffd54f' : '#8d94a1', 'center');
     font(600, 11);
     text(`${L.name.toUpperCase()} · LAYER ${s.layer + 1} OF ${LAYERS.length} · +${s.layer * LAYER_BONUS * 100}% GEMS`, ROCK.x, 84, '#8d94a1', 'center');
     font(500, 11);
@@ -686,6 +800,24 @@
     if (chal) {
       font(600, 11);
       text(`CHALLENGE · ${chal.name}: reach ${LAYERS[chal.goal].name}`, ROCK.x, 122, '#ff8a80', 'center');
+    }
+
+    // Active boosts, as pills above the rock.
+    const pills = [];
+    if (frenzy > 0) pills.push([`RUSH ×${fmtX(rushMult())} ${'●'.repeat(rushStacks)}${'○'.repeat(Math.max(0, rushMax() - rushStacks))} ${Math.ceil(frenzy)}s`, '#ffd54f']);
+    if (overT > 10) pills.push([`OVERCLOCK ×3 ${Math.ceil(overT - 10)}s`, '#4fc3f7']);
+    else if (overT > 0) pills.push([`COOLING ×½ ${Math.ceil(overT)}s`, '#8d94a1']);
+    if (overdrive()) pills.push([`OVERDRIVE ×${F.overdrive}`, '#ff8a65']);
+    if (pills.length) {
+      font(700, 11);
+      const widths = pills.map(([label]) => ctx.measureText(label).width + 16);
+      let x = ROCK.x - (widths.reduce((a, b) => a + b, 0) + 6 * (pills.length - 1)) / 2;
+      const y = chal ? 130 : 112;
+      pills.forEach(([label, color], n) => {
+        box(x, y, widths[n], 18, 'rgba(14,16,20,0.85)', color);
+        text(label, x + widths[n] / 2, y + 13, color, 'center');
+        x += widths[n] + 6;
+      });
     }
 
     // Heat gauge.
@@ -746,22 +878,23 @@
     { id: 'trips', label: 'Trips', open: () => s.maxLayer >= 1, why: 'Reach Granite to send expeditions' },
     { id: 'core', label: 'Core', open: () => s.dives > 0 || s.shards > 0, why: 'Dive deeper once to open the Core tree' },
     { id: 'relics', label: 'Relics', open: () => s.dives > 0 || s.relics.length > 0 || s.maxLayer >= 1, why: 'Reach Granite to start finding relics' },
+    { id: 'echo', label: 'Echo', open: () => s.maxLayer >= COLLAPSE_LAYER || s.collapses > 0, why: 'Breach into the Void Rift to open the Echo tab' },
   ];
 
   function drawList() {
     ctx.fillStyle = '#161920';
     ctx.fillRect(LIST_X, 0, W - LIST_X, H);
-    const tw = (LIST_W - 6 * 4) / TABS.length;
+    const tw = (LIST_W - (TABS.length - 1) * 4) / TABS.length;
     TABS.forEach((tb, n) => {
       const x = LIST_X + 12 + n * (tw + 4);
       const open = tb.open();
       box(x, 10, tw, 24, tab === tb.id ? '#eceef2' : '#232833');
-      font(600, 12);
+      font(600, 11);
       text(open ? tb.label : '🔒', x + tw / 2, 26, tab === tb.id ? '#0e1014' : open ? '#8d94a1' : '#4a505c', 'center');
       button(x, 10, tw, 24, { enabled: open, onClick: () => { tab = tb.id; }, why: tb.why });
     });
     if (!TABS.find(x => x.id === tab).open()) tab = 'diggers';
-    ({ diggers: drawDiggers, lab: drawLab, ore: drawOre, forge: drawForge, trips: drawTrips, core: drawCore, relics: drawRelics })[tab]();
+    ({ diggers: drawDiggers, lab: drawLab, ore: drawOre, forge: drawForge, trips: drawTrips, core: drawCore, relics: drawRelics, echo: drawEcho })[tab]();
   }
 
   function drawDiggers() {
@@ -776,8 +909,11 @@
       button(x, 42, 46, 22, { enabled: true, onClick: () => { buyMode = val; } });
     });
 
-    const rowH = 46;
-    DIGGERS.forEach((d, i) => {
+    // Rows shrink to fit once the deep diggers show up.
+    const shown = DIGGERS.filter((d, i) => i < 10 || d.layer <= s.maxLayer + 1);
+    const rowH = Math.min(46, Math.floor((H - 74) / shown.length));
+    const tight = rowH < 42;
+    shown.forEach((d, i) => {
       const y = 72 + i * rowH;
       const reached = d.layer <= s.layer;
       const known = reached && (i === 0 || s.owned[i - 1] > 0 || s.owned[i] > 0 || DIGGERS[i - 1].layer < d.layer);
@@ -786,21 +922,21 @@
       box(LIST_X + 12, y, LIST_W, rowH - 5, can ? '#1f2530' : '#1a1d24', can ? '#3b4658' : null);
       ctx.fillStyle = known ? d.color : '#2a2f39';
       ctx.beginPath();
-      ctx.arc(LIST_X + 36, y + 20, 12, 0, Math.PI * 2);
+      ctx.arc(LIST_X + 36, y + (tight ? 16 : 20), tight ? 10 : 12, 0, Math.PI * 2);
       ctx.fill();
-      font(600, 14);
-      text(known ? d.name : reached ? '???' : `Locked: ${LAYERS[d.layer].name}`, LIST_X + 58, y + 17, known ? '#eceef2' : '#5c6370');
+      font(600, tight ? 13 : 14);
+      text(known ? d.name : reached ? '???' : `Locked: ${LAYERS[d.layer].name}`, LIST_X + 58, y + (tight ? 14 : 17), known ? '#eceef2' : '#5c6370');
       font(500, 11);
       const away = awayCount(i);
       const next = MILESTONES.find(m => m > s.owned[i]);
       const syn = synergy(i) >= 1.01 ? ` · +${Math.round((synergy(i) - 1) * 100)}% teamwork` : '';
       const info = known ? `${fmt(diggerRate(i))}/s${next ? ` · ×2 at ${next}` : ''}${syn}${away ? ` · ${away} on a trip` : ''}`
         : reached ? 'Hire the one above to discover' : `Breach into ${LAYERS[d.layer].name} to hire`;
-      text(clip(info, 300), LIST_X + 58, y + 32, '#8d94a1');
-      font(700, 20);
-      text(String(s.owned[i]), W - 140, y + 27, '#eceef2', 'right');
+      text(clip(info, 300), LIST_X + 58, y + (tight ? 27 : 32), '#8d94a1');
+      font(700, tight ? 17 : 20);
+      text(String(s.owned[i]), W - 140, y + (tight ? 22 : 27), '#eceef2', 'right');
       font(600, 13);
-      text(known ? `${n > 1 ? `×${n} ` : ''}${fmt(total)}` : '', W - 22, y + 26, can ? '#ffc53d' : '#5c6370', 'right');
+      text(known ? `${n > 1 ? `×${n} ` : ''}${fmt(total)}` : '', W - 22, y + (tight ? 21 : 26), can ? '#ffc53d' : '#5c6370', 'right');
       button(LIST_X + 12, y, LIST_W, rowH - 5, { enabled: can, onClick: () => buy(i) });
     });
   }
@@ -811,10 +947,25 @@
       text('Empty Lab challenge: no research this run.', LIST_X + LIST_W / 2 + 12, 120, '#ff8a80', 'center');
       return;
     }
+    // Two pages: layers 1–4, then (once you reach the Outer Core) 5 and below.
+    const deep = s.maxLayer >= 4;
+    if (!deep) labPage = 0;
+    const list = RESEARCH.filter(r => (labPage ? r.layer >= 4 : r.layer < 4));
+    let top = 44;
+    if (deep) {
+      ['Shallow', 'Deep'].forEach((label, n) => {
+        const x = LIST_X + 12 + n * 92;
+        box(x, 40, 86, 20, labPage === n ? '#eceef2' : '#232833');
+        font(600, 11);
+        text(label, x + 43, 54, labPage === n ? '#0e1014' : '#8d94a1', 'center');
+        button(x, 40, 86, 20, { enabled: true, onClick: () => { labPage = n; } });
+      });
+      top = 66;
+    }
     const cw = (LIST_W - 8) / 2, ch = 54;
-    RESEARCH.forEach((r, n) => {
+    list.forEach((r, n) => {
       const x = LIST_X + 12 + (n % 2) * (cw + 8);
-      const y = 44 + Math.floor(n / 2) * (ch + 5);
+      const y = top + Math.floor(n / 2) * (ch + 5);
       const owned = s.lab.includes(r.id);
       const reached = r.layer <= s.layer;
       const c = labCost(r);
@@ -850,21 +1001,26 @@
       button(x, 90, 52, 22, { enabled: true, onClick: () => { s.refine = p; } });
     });
 
-    LAYERS.forEach((L, t) => {
-      const y = 122 + t * 44;
+    // The deep ores only get a row once you're close to them.
+    const oreRows = LAYERS.map((L, t) => t).filter(t => t < 6 || t <= s.maxLayer + 1);
+    const oh = Math.min(44, Math.floor(270 / oreRows.length));
+    oreRows.forEach((t, k) => {
+      const L = LAYERS[t];
+      const y = 122 + k * oh;
       const open = t <= s.layer;
       const sel = s.target === t;
-      box(LIST_X + 12, y, LIST_W, 39, sel ? '#232b38' : '#1a1d24', sel ? L.oreColor : null);
+      const one = oh < 36;   // single-line rows
+      box(LIST_X + 12, y, LIST_W, oh - 4, sel ? '#232b38' : '#1a1d24', sel ? L.oreColor : null);
       ctx.fillStyle = open ? L.oreColor : '#2a2f39';
-      ctx.fillRect(LIST_X + 26, y + 12, 14, 14);
-      font(600, 14);
-      text(open || s.ore[t] > 0 ? L.ore : '???', LIST_X + 52, y + 17, open ? '#eceef2' : '#5c6370');
+      ctx.fillRect(LIST_X + 26, y + (oh - 4) / 2 - 7, 14, 14);
+      font(600, one ? 13 : 14);
+      text(open || s.ore[t] > 0 ? L.ore : '???', LIST_X + 52, y + (one ? (oh - 4) / 2 + 5 : 17), open ? '#eceef2' : '#5c6370');
       font(500, 11);
       const rate = sel && s.refine > 0 ? ` · +${fmt((perSecond() * s.refine) / orePrice(t))}/s` : '';
-      text(open ? `${fmt(orePrice(t))} gems each${rate}${sel ? ' · refining' : ' · tap to refine'}` : `Reach ${L.name}`, LIST_X + 52, y + 32, '#8d94a1');
-      font(700, 18);
-      text(fmt(s.ore[t]), W - 22, y + 26, open ? L.oreColor : '#5c6370', 'right');
-      button(LIST_X + 12, y, LIST_W, 39, { enabled: open, onClick: () => { s.target = t; }, why: `Breach into ${L.name} to refine ${L.ore.toLowerCase()}` });
+      text(open ? `${fmt(orePrice(t))} each${rate}${sel ? ' · refining' : one ? '' : ' · tap to refine'}` : `Reach ${L.name}`, one ? LIST_X + 140 : LIST_X + 52, y + (one ? (oh - 4) / 2 + 5 : 32), '#8d94a1');
+      font(700, one ? 15 : 18);
+      text(fmt(s.ore[t]), W - 22, y + (one ? (oh - 4) / 2 + 6 : 26), open ? L.oreColor : '#5c6370', 'right');
+      button(LIST_X + 12, y, LIST_W, oh - 4, { enabled: open, onClick: () => { s.target = t; }, why: `Breach into ${L.name} to refine ${L.ore.toLowerCase()}` });
     });
 
     const L = LAYERS[s.layer];
@@ -874,7 +1030,7 @@
     if (!L.breach) {
       text('You are at the bottom of the shaft.', LIST_X + 24, y + 22, '#eceef2');
       font(500, 11);
-      text('Dive deeper for core shards, or keep sending expeditions for relics.', LIST_X + 24, y + 42, '#8d94a1');
+      text('This is the World Heart. Dive or collapse the core to go again, stronger.', LIST_X + 24, y + 42, '#8d94a1');
       return;
     }
     const N = LAYERS[s.layer + 1];
@@ -894,16 +1050,17 @@
   function drawForge() {
     font(500, 11);
     text(`Bit slots: ${s.equip.length}/${bitSlots()} · bits are kept forever, ore is spent`, LIST_X + 14, 54, '#8d94a1');
+    const bh = Math.min(52, Math.floor((H - 70) / BITS.length));
     BITS.forEach((b, n) => {
-      const y = 66 + n * 52;
+      const y = 66 + n * bh;
       const made = s.bits.includes(b.id);
       const on = s.equip.includes(b.id);
       const can = !made && Object.entries(b.cost).every(([k, v]) => s.ore[ORES.indexOf(k)] >= v);
-      box(LIST_X + 12, y, LIST_W, 47, on ? '#1a2a22' : made || can ? '#1f2530' : '#1a1d24', on ? '#9be37a' : can ? '#3b4658' : null);
+      box(LIST_X + 12, y, LIST_W, bh - 5, on ? '#1a2a22' : made || can ? '#1f2530' : '#1a1d24', on ? '#9be37a' : can ? '#3b4658' : null);
       font(600, 14);
-      text(b.name, LIST_X + 24, y + 19, made || can ? '#eceef2' : '#8d94a1');
+      text(b.name, LIST_X + 24, y + 18, made || can ? '#eceef2' : '#8d94a1');
       font(500, 11);
-      text(clip(b.desc, 300), LIST_X + 24, y + 36, '#8d94a1');
+      text(clip(b.desc, 300), LIST_X + 24, y + 34, '#8d94a1');
       font(600, 12);
       if (made) text(on ? 'Equipped · tap to remove' : 'Tap to equip', W - 22, y + 28, on ? '#9be37a' : '#ffc53d', 'right');
       else {
@@ -915,7 +1072,7 @@
           x -= ctx.measureText(str).width + 10;
         }
       }
-      button(LIST_X + 12, y, LIST_W, 47, { enabled: made || can, onClick: () => forge(b), why: `Forging needs ${oreText(b.cost)}` });
+      button(LIST_X + 12, y, LIST_W, bh - 5, { enabled: made || can, onClick: () => forge(b), why: `Forging needs ${oreText(b.cost)}` });
     });
   }
 
@@ -1040,6 +1197,38 @@
     });
   }
 
+  function drawEcho() {
+    const got = echoesOnCollapse();
+    font(700, 15);
+    text(`${s.echoes} echo${s.echoes === 1 ? '' : 'es'} · ×${fmtX(echoMult())} to everything`, LIST_X + 14, 60, '#80deea');
+    font(500, 11);
+    const lines = wrap(`Collapse the core from the Void Rift or deeper. Echoes = √shards (${Math.floor(Math.sqrt(s.shards))} now) + 2 for each layer past the Void Rift this run. Shards, the Core tree and shard difficulty reset; relics, bits and challenge wins stay.`, LIST_W - 4);
+    lines.forEach((l, k) => text(l, LIST_X + 14, 80 + k * 14, '#8d94a1'));
+    const by = 84 + lines.length * 14;
+    drawBtn(LIST_X + 12, by, LIST_W, 46, got ? `Collapse the core · +${got} echo${got > 1 ? 'es' : ''}` : 'Collapse the core',
+      got ? `then pick a legacy perk · collapse ${s.collapses + 1}` : `Breach into the ${LAYERS[COLLAPSE_LAYER].name} this run first`, got > 0, openCollapse,
+      { accent: '#80deea', why: `Reach the ${LAYERS[COLLAPSE_LAYER].name} in this run to collapse the core` });
+
+    font(700, 12);
+    text('LEGACY PERKS · one per collapse, kept forever', LIST_X + 14, by + 70, '#8d94a1');
+    const cw = (LIST_W - 8) / 2, ch = 44;
+    LEGACY.forEach((l, n) => {
+      const x = LIST_X + 12 + (n % 2) * (cw + 8);
+      const y = by + 80 + Math.floor(n / 2) * (ch + 5);
+      const have = s.legacy.includes(l.id);
+      box(x, y, cw, ch, have ? '#14282c' : '#1a1d24', have ? '#80deea' : null);
+      font(600, 12);
+      text(l.name, x + 8, y + 17, have ? '#80deea' : '#a7adb8');
+      font(500, 10);
+      text(clip(l.desc, cw - 16), x + 8, y + 33, have ? '#a7adb8' : '#5c6370');
+      if (l.id === 'foreman' && have) {
+        font(700, 10);
+        text(s.autoHire ? 'ON' : 'OFF', x + cw - 8, y + 17, s.autoHire ? '#9be37a' : '#ff8a80', 'right');
+        button(x, y, cw, ch, { enabled: true, onClick: () => { s.autoHire = !s.autoHire; } });
+      }
+    });
+  }
+
   function drawEffects(dt) {
     for (const f of floaters) f.t += dt;
     floaters = floaters.filter(f => f.t < 1.2);
@@ -1091,12 +1280,29 @@
     earn(perSecond() * dt);
     shake = Math.max(0, shake - dt);
     frenzy = Math.max(0, frenzy - dt);
+    if (frenzy <= 0) rushStacks = 0;
     overheat = Math.max(0, overheat - dt);
     overT = Math.max(0, overT - dt);
+
+    // Overdrive: announce it once each time the two boosts overlap.
+    const od = overdrive();
+    if (od && !wasOverdrive) {
+      shake = Math.max(shake, 0.4);
+      floaters.push({ x: ROCK.x, y: ROCK.y - 60, text: `OVERDRIVE! ×${F.overdrive} on top`, t: 0, big: true, hot: true });
+      Arcade.tone({ freq: 220, to: 1760, dur: 0.5, type: 'sawtooth', vol: 0.05 });
+      Arcade.flag('gem-mine-overdrive');
+    }
+    wasOverdrive = od;
+    // Gold sparks fly off the rock during a rush, more with every stack.
+    if (frenzy > 0 && Math.random() < dt * 5 * rushStacks) {
+      const a = Arcade.rand(0, Math.PI * 2);
+      chips.push({ x: ROCK.x + Math.cos(a) * 90, y: ROCK.y + Math.sin(a) * 90, vx: Math.cos(a) * 120, vy: -Arcade.rand(140, 300), t: 0, c: od ? '#ff8a65' : '#ffd54f' });
+    }
 
     if ((tripCheck -= dt) <= 0) {
       tripCheck = 1;
       checkTrips();
+      autoHire();
       // Never stuck: with clicking off and nothing digging, a Pebble Pup shows up for free.
       if (F.noClick && s.gems < unitCost(0) && s.owned.every((n, i) => working(i) === 0)) s.owned[0]++;
     }
@@ -1153,7 +1359,9 @@
         <li>The <b>refinery</b> turns part of what you dig into <b>ore</b>. Spend gems and ore to <b>breach the bedrock</b> into deeper, richer layers.</li>
         <li>Research in the <b>Lab</b>, unlock <b>abilities</b> (keys 1–3), forge <b>drill bits</b>, and send diggers on <b>expeditions</b> for relics.</li>
         <li>Catch the <b>golden nugget</b>, and hit <b>glowing veins</b> for gems and ore. Click over ${MAX_CPS} a second and your pick <b>overheats</b>.</li>
+        <li><b>Combos:</b> a nugget caught during a gem rush <b>stacks</b> the rush (up to ${RUSH_MAX}). Overclock during a rush is <b>Overdrive</b>, and Dynamite or a vein hits much harder while a boost is running.</li>
         <li>Once you've dug ${fmt(SHARD_BASE)} gems in a run, <b>dive deeper</b> for core shards. Each dive makes the next shard harder to get.</li>
+        <li>Far below Starfall Deep, reach the <b>Void Rift</b> to <b>collapse the core</b> for echoes and legacy perks.</li>
       </ul>`,
       button: 'Start digging',
       onAction: () => ui.hide(),

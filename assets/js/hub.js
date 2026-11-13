@@ -87,3 +87,18 @@ if (Online.enabled) {
 window.addEventListener('pageshow', renderCards);
 
 renderDaily(document.getElementById('daily'));
+
+// Friends who beat one of your scores this week, each with a link to go and take it back.
+if (Online.enabled) {
+  Online.passedBy().then(items => {
+    if (!items.length) return;
+    const el = document.getElementById('passed');
+    const esc = Online.escape;
+    el.innerHTML = `<h2>Friends who passed you</h2>
+      <ul class="waiting-list">${items.slice(0, 3).map(i => `<li>
+        <span class="who"><b>${esc(Friends.display(i.id, i.name))} beat you at ${esc(i.title)}</b>
+          <span>${Number(i.score).toLocaleString()} to your ${Number(i.mine).toLocaleString()}</span></span>
+        <a class="btn" href="games/${esc(i.game)}/index.html">Win it back</a></li>`).join('')}</ul>`;
+    el.hidden = false;
+  }).catch(() => {});
+}

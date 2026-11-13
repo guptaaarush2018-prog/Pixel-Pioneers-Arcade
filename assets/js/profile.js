@@ -47,6 +47,28 @@ function friendsBox(me) {
     </section>`;
 }
 
+// Your record against everyone you've played online, friends first.
+function rivalsBox() {
+  const list = Friends.records().sort((a, b) => !!Friends.get(b.id) - !!Friends.get(a.id) || b.t - a.t).slice(0, 12);
+  if (!list.length) return '';
+  const row = r => {
+    const games = Object.entries(r.games || {}).sort((a, b) => (b[1].w + b[1].l + b[1].d) - (a[1].w + a[1].l + a[1].d))
+      .slice(0, 4).map(([id, g]) => `${titleOf(id) || id} ${Friends.tally(g)}`).join(' · ');
+    const lead = r.w > r.l ? 'You lead' : r.w < r.l ? 'You trail' : 'Level';
+    return `<li>
+      <span class="who"><b>${esc(Friends.display(r.id, r.name || 'Player'))}</b><span>${esc(games)}</span></span>
+      <span class="board-note">${lead}</span>
+      <b class="num">${r.w} – ${r.l}</b>
+      ${typeof Invites !== 'undefined' && Invites && Friends.get(r.id) ? `<button class="btn" type="button" data-challenge="${esc(r.id)}">Rematch</button>` : ''}
+    </li>`;
+  };
+  return `<section class="box">
+      <h2>Head-to-head</h2>
+      <p class="muted-note">Wins and losses from your online matches and duels, counted on this device.</p>
+      <ul class="waiting-list">${list.map(row).join('')}</ul>
+    </section>`;
+}
+
 // Online or not, and where: friends' heartbeats are in presence/<id>, which also carries their current name.
 async function friendStatus() {
   if (!Online.enabled) return;
@@ -171,6 +193,7 @@ function render() {
     </section>
 
     ${friendsBox(me)}
+    ${rivalsBox()}
 
     <section class="box daily" id="daily"></section>
 

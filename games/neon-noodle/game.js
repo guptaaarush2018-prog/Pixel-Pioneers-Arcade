@@ -2,6 +2,9 @@
   const ID = 'neon-noodle';
   const COLS = 24, ROWS = 24, CELL = 20, W = COLS * CELL, H = ROWS * CELL;
   const COMBO_WINDOW = 3000;
+  // Combos run to x8; from FEVER up the noodle glows gold and every orb grows you one less.
+  const COMBO_MAX = 8, FEVER = 6;
+  const MAGNET_RANGE = 3;
 
   const canvas = document.getElementById('game');
   const ctx = Arcade.setupCanvas(canvas, W, H);
@@ -14,11 +17,19 @@
     orb:   { color: '#3ef0ff', points: 10, grow: 1, ttl: Infinity },
     prism: { color: '#ff4fd8', points: 50, grow: 3, ttl: 7000 },
     clock: { color: '#ffd23f', points: 25, grow: 0, ttl: 7000 },
+    magnet: { color: '#ff8a3d', points: 25, grow: 0, ttl: 7000 },
+    frenzy: { color: '#9dff6a', points: 25, grow: 0, ttl: 7000 },
+    shatter: { color: '#ff5d5d', points: 25, grow: 0, ttl: 7000 },
+    gold: { color: '#ffe066', points: 20, grow: 1, ttl: 6000 },
   };
+  const LABEL = { prism: 'Ghost!', clock: 'Slow-mo!', magnet: 'Magnet!', frenzy: 'Feeding frenzy!', shatter: 'Rocks shattered!' };
+  const fx = Gfx.particles(500);
+  const pops = Gfx.floaters();
+  const shaker = Gfx.shaker();
 
   let state = 'ready';
-  let snake, dir, queue, grow, pellets, rocks, particles;
-  let score, combo, lastEat, eaten, stepMs, acc, time, phaseUntil, slowUntil, shake;
+  let snake, dir, queue, grow, pellets, rocks;
+  let score, combo, lastEat, eaten, stepMs, acc, time, phaseUntil, slowUntil, magnetUntil, shake;
 
   function reset() {
     snake = [{ x: 8, y: 12 }, { x: 7, y: 12 }, { x: 6, y: 12 }];
@@ -27,7 +38,6 @@
     grow = 0;
     pellets = [];
     rocks = [];
-    particles = [];
     score = 0;
     combo = 1;
     lastEat = -Infinity;
@@ -37,7 +47,9 @@
     time = 0;
     phaseUntil = 0;
     slowUntil = 0;
+    magnetUntil = 0;
     shake = 0;
+    fx.clear();
     spawn('orb');
     updateHud();
   }
@@ -96,46 +108,84 @@
 
     const hit = pellets.findIndex(p => same(p, next));
     if (hit >= 0) eat(pellets.splice(hit, 1)[0]);
+    // Magnet: orbs within range fly into your mouth.
+    if (time < magnetUntil && state === 'playing') {
+      for (const p of pellets.filter(p => (p.type === 'orb' || p.type === 'gold') && wrapDist(p, next) <= MAGNET_RANGE)) {
+        pellets.splice(pellets.indexOf(p), 1);
+        fx.burst(8, k => ({ x: (p.x + 0.5) * CELL, y: (p.y + 0.5) * CELL, vx: ((next.x - p.x) * CELL) * 3 + Gfx.rand(-30, 30), vy: ((next.y - p.y) * CELL) * 3 + Gfx.rand(-30, 30), drag: 4, life: 0.3, size: 2.5, color: PELLETS.magnet.color }));
+        eat(p);
+      }
+    }
   }
+
+  const wrapDist = (a, b) => Math.min(Math.abs(a.x - b.x), COLS - Math.abs(a.x - b.x)) + Math.min(Math.abs(a.y - b.y), ROWS - Math.abs(a.y - b.y));
 
   function eat(p) {
     const kind = PELLETS[p.type];
-    combo = time - lastEat < COMBO_WINDOW ? Math.min(5, combo + 1) : 1;
+    combo = time - lastEat < COMBO_WINDOW ? Math.min(COMBO_MAX, combo + 1) : 1;
     lastEat = time;
-    score += kind.points * combo;
-    grow += kind.grow;
-    burst(p.x, p.y, kind.color, 14);
+    const pts = kind.points * combo;
+    score += pts;
+    // Fever trims growth so long combos don't fill the board as fast.
+    grow += combo >= FEVER ? Math.max(0, kind.grow - 1) : kind.grow;
+    burst(p.x, p.y, kind.color, combo >= FEVER ? 22 : 14);
+    pops.add(`+${pts}`, (p.x + 0.5) * CELL, p.y * CELL, { size: 12 + combo, color: combo >= FEVER ? '#ffe066' : kind.color, life: 0.7, rise: 28 });
+    if (combo === FEVER) {
+      pops.add('FEVER!', W / 2, H / 2 - 40, { size: 34, color: '#ffe066', life: 1.1 });
+      shaker.add(0.3);
+    }
 
     if (combo >= 5) Arcade.flag('neon-noodle-combo');
+    if (combo >= COMBO_MAX) Arcade.flag('neon-noodle-fever');
     if (snake.length >= 40) Arcade.flag('neon-noodle-long');
     if (p.type === 'orb') {
       eaten++;
       spawn('orb');
-      if (eaten % 5 === 0) spawn(Arcade.pick(['prism', 'clock']));
+      if (eaten % 5 === 0) spawn(Arcade.pick(rocks.length >= 2 ? ['prism', 'clock', 'magnet', 'frenzy', 'shatter'] : ['prism', 'clock', 'magnet', 'frenzy']));
       if (eaten % 8 === 0) {
         addRock();
         stepMs = Math.max(62, stepMs - 7);
       }
       Arcade.tone({ freq: 520 + combo * 90, to: 880 + combo * 90, dur: 0.07 });
-    } else if (p.type === 'prism') {
-      phaseUntil = time + 5000;
-      Arcade.tone({ freq: 400, to: 1400, dur: 0.25, type: 'triangle', vol: 0.07 });
+    } else if (p.type === 'gold') {
+      Arcade.tone({ freq: 700 + combo * 80, to: 1100 + combo * 80, dur: 0.07, type: 'triangle' });
     } else {
-      slowUntil = time + 5000;
-      Arcade.tone({ freq: 900, to: 300, dur: 0.3, type: 'triangle', vol: 0.07 });
+      pops.add(LABEL[p.type], W / 2, H / 2, { size: 26, color: kind.color, life: 1 });
+      if (p.type === 'prism') {
+        phaseUntil = time + 5000;
+        Arcade.tone({ freq: 400, to: 1400, dur: 0.25, type: 'triangle', vol: 0.07 });
+      } else if (p.type === 'clock') {
+        slowUntil = time + 5000;
+        Arcade.tone({ freq: 900, to: 300, dur: 0.3, type: 'triangle', vol: 0.07 });
+      } else if (p.type === 'magnet') {
+        magnetUntil = time + 6000;
+        Arcade.tone({ freq: 300, to: 900, dur: 0.3, type: 'square', vol: 0.04 });
+      } else if (p.type === 'frenzy') {
+        for (let k = 0; k < 5; k++) spawn('gold');
+        Arcade.tone({ freq: 600, to: 1500, dur: 0.35, type: 'triangle', vol: 0.06 });
+      } else if (p.type === 'shatter') {
+        // Breaks every rock within 6 cells, or the nearest one if none are that close.
+        const near = rocks.filter(r => wrapDist(r, snake[0]) <= 6);
+        const gone = near.length ? near : rocks.slice().sort((a, b) => wrapDist(a, snake[0]) - wrapDist(b, snake[0])).slice(0, 1);
+        for (const r of gone) {
+          rocks.splice(rocks.indexOf(r), 1);
+          burst(r.x, r.y, '#8a80d0', 18);
+          score += 30;
+        }
+        shaker.add(0.45);
+        if (gone.length) Arcade.flag('neon-noodle-shatter');
+        Arcade.tone({ freq: 160, to: 50, dur: 0.4, type: 'sawtooth', vol: 0.06 });
+      }
     }
     updateHud();
   }
 
+  // Cosmetic, so it uses Gfx.rand and leaves the seeded Math.random alone.
   function burst(cx, cy, color, n) {
-    for (let i = 0; i < n; i++) {
-      const a = Math.random() * Math.PI * 2, s = Arcade.rand(40, 160);
-      particles.push({
-        x: (cx + 0.5) * CELL, y: (cy + 0.5) * CELL,
-        vx: Math.cos(a) * s, vy: Math.sin(a) * s,
-        life: Arcade.rand(0.3, 0.7), color,
-      });
-    }
+    fx.burst(n, () => {
+      const a = Gfx.rand(0, Math.PI * 2), sp = Gfx.rand(40, 170);
+      return { x: (cx + 0.5) * CELL, y: (cy + 0.5) * CELL, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, drag: 3, life: Gfx.rand(0.3, 0.7), size: Gfx.rand(1.8, 3.2), color, shape: Gfx.rand() < 0.5 ? 'square' : 'circle' };
+    });
   }
 
   function updateHud() {
@@ -182,7 +232,8 @@
       intro: {
         title: 'Neon Noodle',
         html: `<ul>
-          <li><b style="color:#3ef0ff">Orbs</b> grow you. Eat them quickly to build a combo up to x5.</li>
+          <li><b style="color:#3ef0ff">Orbs</b> grow you. Eat them quickly to build a combo up to x${COMBO_MAX}. From x${FEVER} you're in <b style="color:#ffe066">fever</b>.</li>
+          <li><b style="color:#ff8a3d">Magnets</b> pull in nearby orbs, <b style="color:#9dff6a">frenzy</b> scatters gold orbs, and <b style="color:#ff5d5d">shatter</b> smashes nearby rocks.</li>
           <li><b style="color:#ff4fd8">Prisms</b> let you pass through your own body for 5 seconds.</li>
           <li><b style="color:#ffd23f">Clocks</b> slow time for 5 seconds.</li>
           <li>The edges wrap around, but rocks appear as you grow. Don't hit them.</li>
@@ -224,9 +275,34 @@
     ctx.shadowColor = kind.color;
     ctx.shadowBlur = 14;
     ctx.fillStyle = kind.color;
-    if (p.type === 'orb') {
+    if (p.type === 'orb' || p.type === 'gold') {
       ctx.beginPath();
-      ctx.arc(0, 0, 5.5 * pulse, 0, Math.PI * 2);
+      ctx.arc(0, 0, (p.type === 'gold' ? 6.5 : 5.5) * pulse, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (p.type === 'magnet') {
+      ctx.shadowBlur = 10;
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = kind.color;
+      ctx.beginPath();
+      ctx.arc(0, 1, 6 * pulse, Math.PI, 0);
+      ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(-8 * pulse, 0, 4, 5);
+      ctx.fillRect(4 * pulse, 0, 4, 5);
+    } else if (p.type === 'frenzy') {
+      ctx.rotate(time / 300);
+      for (let k = 0; k < 5; k++) {
+        ctx.beginPath();
+        ctx.arc(Math.cos(k * 1.2566) * 5 * pulse, Math.sin(k * 1.2566) * 5 * pulse, 2.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (p.type === 'shatter') {
+      ctx.beginPath();
+      for (let k = 0; k < 10; k++) {
+        const r = (k % 2 ? 3.5 : 8.5) * pulse, a = (k / 10) * Math.PI * 2;
+        ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      ctx.closePath();
       ctx.fill();
     } else if (p.type === 'prism') {
       ctx.rotate(time / 400);
@@ -251,7 +327,9 @@
 
   function draw() {
     ctx.save();
-    if (shake > 0) ctx.translate(Arcade.rand(-shake, shake), Arcade.rand(-shake, shake));
+    if (shake > 0) ctx.translate(Gfx.rand(-shake, shake), Gfx.rand(-shake, shake));
+    const so = shaker.offset(7);
+    ctx.translate(so.x, so.y);
 
     ctx.fillStyle = '#0b0a1a';
     ctx.fillRect(-20, -20, W + 40, H + 40);
@@ -279,12 +357,29 @@
 
     if (state !== 'ready') drawSnake();
 
-    for (const p of particles) {
-      ctx.globalAlpha = Math.max(0, p.life * 1.6);
-      ctx.fillStyle = p.color;
-      ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+    fx.draw(ctx);
+    pops.draw(ctx);
+
+    if (time < magnetUntil && state === 'playing') {
+      const h = snake[0];
+      ctx.strokeStyle = `rgba(255,138,61,${0.25 + 0.15 * Math.sin(time / 90)})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc((h.x + 0.5) * CELL, (h.y + 0.5) * CELL, (MAGNET_RANGE + 0.5) * CELL, 0, Math.PI * 2);
+      ctx.stroke();
     }
-    ctx.globalAlpha = 1;
+
+    // Combo meter: how long until the combo drops.
+    if (state === 'playing' && combo > 1) {
+      const left = Math.max(0, 1 - (time - lastEat) / COMBO_WINDOW);
+      Gfx.text(ctx, `x${combo}${combo >= FEVER ? ' FEVER' : ''}`, W / 2, 16, { size: 15, color: combo >= FEVER ? '#ffe066' : '#3ef0ff', width: 3 });
+      Gfx.bar(ctx, W / 2 - 50, 28, 100, 5, left, combo >= FEVER ? '#ffe066' : '#3ef0ff');
+    }
+    const timers = [['Ghost', phaseUntil, 5000, PELLETS.prism.color], ['Slow', slowUntil, 5000, PELLETS.clock.color], ['Magnet', magnetUntil, 6000, PELLETS.magnet.color]].filter(([, u]) => time < u);
+    timers.forEach(([label, until, len, color], i) => {
+      Gfx.text(ctx, label, 10, H - 14 - i * 16, { size: 11, color, align: 'left', width: 3 });
+      Gfx.bar(ctx, 60, H - 17 - i * 16, 60, 5, (until - time) / len, color);
+    });
 
     if (time < slowUntil && state === 'playing') {
       ctx.fillStyle = 'rgba(255, 210, 63, 0.06)';
@@ -302,7 +397,8 @@
       const s = snake[i];
       const t = i / Math.max(1, n - 1);
       const hue = Math.min(i * 7, 120);
-      ctx.fillStyle = phasing ? `hsl(${300 + hue / 3}, 100%, ${65 - t * 20}%)` : `hsl(${180 + hue}, 100%, ${62 - t * 18}%)`;
+      const fever = combo >= FEVER && state === 'playing';
+      ctx.fillStyle = phasing ? `hsl(${300 + hue / 3}, 100%, ${65 - t * 20}%)` : fever ? `hsl(${45 + Math.sin(time / 120 + i * 0.5) * 12}, 100%, ${62 - t * 18}%)` : `hsl(${180 + hue}, 100%, ${62 - t * 18}%)`;
       const inset = 1 + t * 2;
       roundRect(s.x * CELL + inset, s.y * CELL + inset, CELL - inset * 2, CELL - inset * 2, 6);
     }
@@ -344,14 +440,11 @@
       }
     }
 
-    for (const p of particles) {
-      p.x += p.vx * dt / 1000;
-      p.y += p.vy * dt / 1000;
-      p.vx *= 0.95;
-      p.vy *= 0.95;
-      p.life -= dt / 1000;
+    if (state !== 'paused') {
+      fx.update(dt / 1000);
+      pops.update(dt / 1000);
+      shaker.update(dt / 1000);
     }
-    particles = particles.filter(p => p.life > 0);
     shake = Math.max(0, shake - dt * 0.03);
 
     draw();

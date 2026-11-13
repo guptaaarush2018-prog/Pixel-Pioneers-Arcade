@@ -345,6 +345,8 @@
     if (delivered) notes.push(`Your delivery bike sold leftovers for $${delivered}.`);
 
     if (!biz.endless && biz.day >= DAYS) return finishSeason(profit);
+    // A season takes a while and isn't saved, so each day's closing cash counts as a score too.
+    Arcade.submitScore(Arcade.gameId, Math.max(0, Math.round(biz.cash)));
     const soldList = onMenu().map(i => `${day.sold[i.id] || 0} ${i.name.toLowerCase()}`).join(', ');
     ui.show({
       title: `Day ${biz.day} report`,

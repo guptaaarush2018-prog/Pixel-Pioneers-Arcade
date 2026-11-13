@@ -11,18 +11,41 @@ const Relay = (() => {
   const QUEUE_ROOMS = 30;
 
   // The relay runs on free hosting that sleeps when idle; any request wakes it (up to a minute).
+  // Gives up waiting after 75 seconds; the socket attempt that follows says whether it worked.
   let awake = null;
   function wake() {
-    awake ||= fetch(base + '/healthz', { mode: 'no-cors', cache: 'no-store' }).catch(() => {});
+    awake ||= Promise.race([
+      fetch(base + '/healthz', { mode: 'no-cors', cache: 'no-store' }).catch(() => {}),
+      new Promise(r => setTimeout(r, 75000)),
+    ]);
     return awake;
   }
+
+  // The "Connecting…" panel text, with a seconds counter so a slow wake-up doesn't look frozen.
+  // Call ticker() from the panel's onRender; it stops by itself once the panel is replaced.
+  const CONNECTING = '<p>Waking up the game server. The first connection can take up to a minute.</p><p class="muted-note" data-elapsed></p>';
+  function ticker(panel) {
+    const el = panel?.querySelector('[data-elapsed]');
+    if (!el) return;
+    const t0 = Date.now();
+    const tick = () => {
+      if (!el.isConnected) return clearInterval(timer);
+      const s = Math.round((Date.now() - t0) / 1000);
+      el.textContent = s < 3 ? '' : s < 20 ? `${s}s…` : `${s}s · still waking up, hang on…`;
+    };
+    const timer = setInterval(tick, 1000);
+  }
+  const UNREACHABLE = "Couldn't reach the game server. Try again in a minute. (Some school networks block live games.)";
 
   // Opens a socket and joins `room` (at most 20 characters; the relay truncates longer names).
   // Handlers: joined(slot) where slot is 1 or 2, full(), ready() once both are in,
   // event(name, data), state(data), left() when the other player goes, closed() on network loss.
   function join(room, handlers) {
+    peer = null;
     const ws = new WebSocket(wsUrl);
     let live = true, them = 'Opponent';
+    // A network that silently blocks WebSockets would otherwise leave the player waiting forever.
+    const giveUp = setTimeout(() => { if (live) { try { ws.close(); } catch {} lost(); } }, 20000);
     const emit = (ev, data) => { if (ws.readyState === 1) ws.send('42' + JSON.stringify([ev, data])); };
     ws.onmessage = e => {
       const m = String(e.data);
@@ -32,8 +55,8 @@ const Relay = (() => {
       if (!m.startsWith('42')) return;
       let ev, data;
       try { [ev, data] = JSON.parse(m.slice(2)); } catch { return; }
-      if (ev === 'joined') handlers.joined?.(data.slot);
-      else if (ev === 'roomFull') handlers.full?.();
+      if (ev === 'joined') { clearTimeout(giveUp); handlers.joined?.(data.slot); }
+      else if (ev === 'roomFull') { clearTimeout(giveUp); handlers.full?.(); }
       else if (ev === 'bothConnected') {
         QuickChat.show(i => emit('gameEvent', { event: '__qc', data: { i } }));
         handlers.ready?.();
@@ -49,12 +72,13 @@ const Relay = (() => {
         handlers.left?.();
       }
     };
-    const lost = () => {
+    function lost() {
+      clearTimeout(giveUp);
       QuickChat.hide();
       if (!live) return;
       live = false;
       handlers.closed?.();
-    };
+    }
     ws.onclose = lost;
     ws.onerror = lost;
     return {
@@ -63,6 +87,7 @@ const Relay = (() => {
       state: data => emit('playerState', data),
       close() {
         QuickChat.hide();
+        clearTimeout(giveUp);
         live = false;
         try { ws.close(); } catch {}
       },
@@ -122,7 +147,18 @@ const Relay = (() => {
   function greet(d) {
     if (!d || typeof Friends === 'undefined' || !/^[A-Z][a-z]+[A-Z][a-z]+[0-9]{2}$/.test(d.name || '')) return d;
     Friends.met(d.id, d.name);
+    peer = { id: d.id, name: d.name };
     return { ...d, name: Friends.short(d.id, d.name) };
+  }
+
+  // Games report how an online match ended ('w', 'l' or 'd' from this player's side). It goes on
+  // the head-to-head record against whoever was in the room, with a toast showing where it stands.
+  let peer = null;
+  function result(outcome) {
+    if (!peer || typeof Friends === 'undefined') return null;
+    const r = Friends.result(peer.id, peer.name, outcome);
+    if (r) Arcade.toast('Head-to-head', `You ${r.w} – ${r.l} ${Friends.short(peer.id, peer.name)}${r.d ? ` · ${r.d} drawn` : ''}`);
+    return r;
   }
 
   // Shared plumbing for quickMatch / createRoom / joinRoom: resolves with { conn, slot } once
@@ -154,7 +190,7 @@ const Relay = (() => {
         if (res.slot === 1) listing.start(res.conn);
         return res;
       } catch (e) {
-        if (e.message !== 'full') throw new Error("Couldn't reach the game server.");
+        if (e.message !== 'full') throw new Error(UNREACHABLE);
       }
     }
     throw new Error('Every public room is busy. Try again in a minute.');
@@ -200,7 +236,7 @@ const Relay = (() => {
     } catch (e) {
       if (e.message === 'full') throw new Error('Someone else got there first.');
       if (e.message === 'reject') throw new Error('That player has already left.');
-      throw new Error("Couldn't reach the game server.");
+      throw new Error(UNREACHABLE);
     }
   }
 
@@ -212,7 +248,7 @@ const Relay = (() => {
       try {
         return { code, ...await seat(`pp-${tag}-${code.toLowerCase()}`, handlers, slot => slot === 1) };
       } catch (e) {
-        if (e.message === 'closed') throw new Error("Couldn't reach the game server.");
+        if (e.message === 'closed') throw new Error(UNREACHABLE);
       }
     }
     throw new Error("Couldn't create a room.");
@@ -228,7 +264,7 @@ const Relay = (() => {
     } catch (e) {
       if (e.message === 'full') throw new Error('That room is already full.');
       if (e.message === 'reject') throw new Error('No room with that code.');
-      throw new Error("Couldn't reach the game server.");
+      throw new Error(UNREACHABLE);
     }
   }
 
@@ -264,5 +300,5 @@ const Relay = (() => {
 
   if (enabled) wake();
 
-  return { enabled, join, quickMatch, createRoom, joinRoom, joinPublic, takeInvite, showWaiting };
+  return { enabled, join, quickMatch, createRoom, joinRoom, joinPublic, takeInvite, showWaiting, result, CONNECTING, ticker };
 })();

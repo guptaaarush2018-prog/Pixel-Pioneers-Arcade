@@ -62,6 +62,10 @@
     { id: 'mill', name: 'Sawmill', icon: '🏭', base: 60, grow: 1.65, max: 25, show: lv => `Logs sell for ×${millMult(lv).toFixed(2)}` },
   ];
   const upCost = (u, lv) => Math.round(u.base * Math.pow(u.grow, lv));
+  // Timber Frenzy, the stacking boost: a lucky tree starts it (logs sell ×FRENZY_BASE, your saw
+  // cuts ×FRENZY_SAW). While it runs, extra lucky trees sprout nearby; each one cut adds a stack
+  // (+FRENZY_STACK of the base each) and more time.
+  const FRENZY_TIME = 30, FRENZY_ADD = 15, FRENZY_CAP = 75, FRENZY_MAX = 5, FRENZY_BASE = 2, FRENZY_STACK = 0.5, FRENZY_SAW = 1.5;
   const CREW_COST = [400, 1500, 6000, 25000, 100000, 400000];
   const crewCap = () => 8 + s.lv.cap * 2;
   const crewDmg = () => sawDmg(s.lv.saw) * 0.5;
@@ -391,7 +395,7 @@
   function cut(v, t, dmg, dt) {
     const T = TYPES[t.type];
     if (loadOf(v).length + v.incoming + T.logs > capFor(v)) return false;
-    t.hp -= dmg * dt;
+    t.hp -= dmg * dt * (v.player && frenzy > 0 ? FRENZY_SAW : 1);
     t.shake = 0.12;
     v.cutting = true;
     if (Math.random() < dt * 30) chips(t, 1);
@@ -426,8 +430,24 @@
       sfx.lucky();
       shake.add(0.3);
       Arcade.flag('timber-haul-lucky');
-      Arcade.toast('Lucky tree', `+${money(bonus)} bonus`);
+      if (frenzy <= 0) Arcade.toast('Lucky tree', `+${money(bonus)} bonus · Timber Frenzy! Cut more gold trees to stack it`);
+      startFrenzy(t);
     }
+  }
+
+  let frenzy = 0, stacks = 0, frenzyLuckyT = 0;
+  const frenzyMult = () => (frenzy > 0 ? FRENZY_BASE * (1 + FRENZY_STACK * (stacks - 1)) : 1);
+  function startFrenzy(t) {
+    if (frenzy > 0) {
+      stacks = Math.min(FRENZY_MAX, stacks + 1);
+      frenzy = Math.min(FRENZY_CAP, frenzy + FRENZY_ADD);
+    } else {
+      frenzy = FRENZY_TIME;
+      stacks = 1;
+      frenzyLuckyT = 6;
+    }
+    pops.add(`TIMBER FRENZY ×${frenzyMult().toFixed(1)}!`, t.x, t.y - 100, { color: '#ff9d3d', size: 22, life: 1.6, rise: 50 });
+    if (stacks >= 3) Arcade.flag('timber-haul-frenzy');
   }
 
   function earn(n) {
@@ -436,7 +456,7 @@
   }
 
   function sell(type, v) {
-    const value = TYPES[type].value * millMult(s.lv.mill);
+    const value = TYPES[type].value * millMult(s.lv.mill) * frenzyMult();
     earn(value);
     belt.push({ type, p: 0 });
     beltOn = 1.2;
@@ -459,9 +479,10 @@
     if (o && o.type === type) {
       o.have++;
       if (o.have >= o.need) {
-        earn(o.reward);
-        pops.add('ORDER DONE +' + money(o.reward), truck.x, truck.y - 90, { color: '#8ef0a0', size: 22, life: 1.6, rise: 50 });
-        Arcade.toast('Order complete', `${o.need} ${TYPES[o.type].name} logs: +${money(o.reward)}`);
+        const reward = Math.round(o.reward * frenzyMult());
+        earn(reward);
+        pops.add('ORDER DONE +' + money(reward), truck.x, truck.y - 90, { color: '#8ef0a0', size: 22, life: 1.6, rise: 50 });
+        Arcade.toast('Order complete', `${o.need} ${TYPES[o.type].name} logs: +${money(reward)}${frenzy > 0 ? ` (frenzy ×${frenzyMult().toFixed(1)})` : ''}`);
         sfx.unlock();
         newOrder();
       }
@@ -706,6 +727,20 @@
         if (Math.random() < dt * 10) {
           fx.emit({ x: t.x + Arcade.rand(-20, 20), y: t.y - Arcade.rand(20, 70), vy: -20, life: 0.8, size: 2, color: '#fff3b0', shape: 'square', spin: 6 });
         }
+      }
+    }
+    // During a frenzy, gold trees keep sprouting close by so you can stack it.
+    if (frenzy > 0) {
+      frenzy = Math.max(0, frenzy - dt);
+      if (frenzy <= 0) {
+        stacks = 0;
+        pops.add('Frenzy over', truck.x, truck.y - 80, { color: '#ffd9a8', size: 16 });
+      }
+      frenzyLuckyT -= dt;
+      if (frenzyLuckyT <= 0 && trees.filter(t => t.lucky > 0 && standing(t)).length < 2) {
+        frenzyLuckyT = Arcade.rand(7, 11);
+        const pool = trees.filter(t => zoneOpen(t.zone) && standing(t) && !t.lucky && dist(t, truck) > 140 && dist(t, truck) < 520);
+        if (pool.length) Arcade.pick(pool).lucky = 20;
       }
     }
     luckyT -= dt;
@@ -1203,6 +1238,15 @@
       Gfx.bar(ctx, 24, 46, 246, 12, o.have / o.need, '#4cc26a');
       Gfx.text(ctx, `${o.have}/${o.need}`, 147, 52, { size: 10, stroke: 'rgba(0,0,0,0.6)', width: 3 });
     }
+    // Frenzy pill: multiplier, stacks and time left.
+    if (frenzy > 0) {
+      const fy = o ? 76 : 12;
+      Gfx.card(ctx, 12, fy, 270, 34, { fill: 'rgba(70,30,10,0.82)', edge: 'rgba(255,157,61,0.6)' });
+      const pips = '●'.repeat(stacks) + '○'.repeat(FRENZY_MAX - stacks);
+      Gfx.text(ctx, `🔥 FRENZY ×${frenzyMult().toFixed(1)} ${pips}`, 24, fy + 13, { size: 12, align: 'left', color: '#ffb35c', stroke: null });
+      Gfx.text(ctx, `${Math.ceil(frenzy)}s`, 270, fy + 13, { size: 12, align: 'right', color: '#ffd9a8', stroke: null });
+      Gfx.bar(ctx, 24, fy + 24, 246, 5, frenzy / FRENZY_CAP, '#ff9d3d');
+    }
     // Load meter.
     const cap = capOf(s.lv.cap), n = s.load.length;
     Gfx.card(ctx, 12, H - 52, 200, 40);
@@ -1301,6 +1345,7 @@
       <li>Park on <b>💰 SELL</b> at the sawmill to cash in your load.</li>
       <li>Drive onto <b>🔧 UPGRADE</b> to improve your truck and hire a crew.</li>
       <li>Stand on a <b>🔓 sign</b> to pay for a new forest with better trees.</li>
+      <li>Cut a <b>✨ lucky gold tree</b> to start a <b>Timber Frenzy</b>: logs sell ×${FRENZY_BASE}. More gold trees sprout nearby while it lasts; cut them to <b>stack</b> it.</li>
     </ul>`;
   if (!s.intro) {
     ui.show({ title: '🌲 Timber Haul', html: `<p>Clear the forests, fill the mill, build a logging empire.</p>${tips}`, button: 'Start hauling', onAction: () => { s.intro = true; persist(); ui.hide(); } });

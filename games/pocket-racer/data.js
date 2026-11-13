@@ -99,6 +99,9 @@ const RacerData = (() => {
     { id: 'storm', name: 'Storm', model: 'muscle', paint: '#5b6cff', trim: '#e9ecff', pattern: 'bolt', num: 77, smoke: '#d6dcff', unlock: { cup: 'expert' } },
     { id: 'aurora', name: 'Aurora', model: 'formula', paint: '#12b886', trim: '#c77dff', pattern: 'flames', num: 0, smoke: '#d3fff1', unlock: { cup: 'legend' } },
     { id: 'gold', name: 'Gold Rush', model: 'formula', paint: '#e8b923', trim: '#5a3d00', pattern: 'racing', num: 1, smoke: '#fff1b8', unlock: { cup: 'ace' } },
+    { id: 'volt', name: 'Volt', model: 'kart', paint: '#00d2ff', trim: '#0b1d2a', pattern: 'bolt', num: 10, smoke: '#c9f6ff', unlock: { coins: 900 } },
+    { id: 'royal', name: 'Royal', model: 'muscle', paint: '#6a1b9a', trim: '#ffd54f', pattern: 'stripes', num: 2, smoke: '#e6cff2', unlock: { coins: 1200 } },
+    { id: 'sakura', name: 'Sakura', model: 'buggy', paint: '#ffc6da', trim: '#d81b60', pattern: 'split', num: 11, smoke: '#ffe3ee', unlock: { stars: 90 } },
   ];
 
   // Rival drivers (names are made up). Each race draws three, with skins that aren't yours.

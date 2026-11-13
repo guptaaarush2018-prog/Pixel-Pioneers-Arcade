@@ -18,8 +18,8 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | Light Trail | Arcade (trail duel, shrinking arena) | Live 1v1, two on one keyboard |
 | Quick Draw | Arcade (reaction standoff, outlaw ladder) | Live 1v1, two on one keyboard |
 | Buzz Bout | Trivia (700+ questions plus generated math, category draft, final wager, Streak and Daily 10; some questions from the [Open Trivia Database](https://opentdb.com), CC BY-SA 4.0) | Live 1v1, two on one device |
-| Beat Lane | Rhythm (four lanes, four synthesized songs, three difficulties) | Online duel |
-| Pocket Racer | Racing | Its own mini-site: six-cup career with stars, 38 tracks, garage of 17 unlockable cars, time trials with per-track world leaderboards, track builder, synthesized engine sound and music, follow camera on phones, live 1v1 races, world-record ghost |
+| Beat Lane | Rhythm (four lanes, twelve synthesized songs in different styles, three difficulties) | Online duel |
+| Pocket Racer | Racing | Its own mini-site: six-cup career with stars, 38 tracks, garage of 20 unlockable cars, time trials with per-track world leaderboards and friend ghosts, track builder, synthesized engine sound and music, follow camera on phones, live 1v1 races, world-record ghost |
 | Rune Rumble | Strategy (lane battler: 42 cards, rune wells, decks, caches, ladder) | Live 1v1 |
 | Realm Rivals | Strategy (kingdom builder) | Live 1v1 kingdom wars, plus the long-term Kingdom mode |
 | Rampart | Strategy (tower defense where you build the maze) | Online duel |
@@ -32,17 +32,17 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | Taco Truck Tycoon | Tycoon (five spots, weekday crowds, four-item menu, rivals and critics, endless mode) | Online duel |
 | Timber Haul | Tycoon (drive-and-saw logging truck, stacking loads, garage upgrades, crew trucks, five forests, lucky trees, mill orders) | Leaderboard |
 | Sweet Works | Idle (merge matching candy machines, conveyor shipping, 20 sweets to discover, upgrades, auto-merger, franchises) | Leaderboard |
-| Gem Mine | Idle (six layers to breach, ore refinery, Lab research, abilities, drill bits, expeditions, relics, Core tree, challenge dives) | Leaderboard |
+| Gem Mine | Idle (nine layers to breach, ore refinery, Lab research, abilities, stacking rush and Overdrive combos, drill bits, expeditions, relics, Core tree, challenge dives, core collapse with echoes and legacy perks) | Leaderboard |
 | Pocket Pet | Idle (virtual pet, earns treats from other games) | Leaderboard |
-| Crowd Rush | Arcade (gate runner) | Online duel |
+| Crowd Rush | Arcade (gate runner with smart-pick streaks, recruits and shields) | Online duel |
 | Lane Rush | Racing | Online duel |
-| Neon Noodle | Arcade (snake) | Online duel |
+| Neon Noodle | Arcade (snake with x8 fever combos and magnet, frenzy and shatter power-ups) | Online duel |
 | Block Bloom | Puzzle (block placement: clear rows and columns, combos, gem blocks that earn shuffles) | Online duel |
-| Crystal Swap | Puzzle (match-3) | Online duel |
+| Crystal Swap | Puzzle (match-3 with blast and prism crystals and flow chains) | Online duel |
 | Sudoku Siege | Puzzle (sudoku, races with fog) | Live 1v1 race |
 | Pixel Reveal | Puzzle (picture logic, gallery) | Online duel |
 | Lantern Maze | Maze chase | Online duel |
-| Brick Burst | Arcade (brick breaker) | Online duel |
+| Brick Burst | Arcade (brick breaker with rally combos, fireball and laser power-ups, bomb bricks) | Online duel |
 | Comet Pinball | Arcade (pinball) | Online duel |
 | Type Storm | Typing | Online duel |
 | Letter Lock | Word (chained five-letter guessing) | Online duel |
@@ -53,7 +53,7 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | Blackjack | Cards | Leaderboard |
 | Video Poker | Cards | Leaderboard |
 | High-Low | Cards | Leaderboard |
-| Peak Run | Cards (tri-peaks solitaire with combos) | Leaderboard |
+| Peak Run | Cards (tri-peaks solitaire with combos, hot streaks, chain bonuses and golden power cards) | Leaderboard |
 
 Every game also feeds the shared **profile**: playtime, games finished, days played, and achievements (arcade-wide, plus Bronze/Silver/Gold medals and specials for each game). All of that lives in the player's browser and works without any setup.
 
@@ -67,6 +67,8 @@ The four card tables share one wallet of pretend chips (`ppa:chips` in localStor
 - **Daily challenges.** Three a day (one score, one win, one general), the same for everyone, picked from the date. +5 tickets each, +5 for all three. Shown on the hub and Profile.
 - **Chat** ([`chat.js`](assets/js/chat.js)). One arcade-wide room. Messages go through [`filter.js`](assets/js/filter.js) before sending and again when shown; links, emails and phone numbers are blocked. It only streams while open, and anyone may delete messages over a day old.
 - **Friends and nicknames** ([`friends.js`](assets/js/friends.js)). Kept in the browser, keyed by player id. Add friends by friend code (on Profile), from chat, or from Recent players (anyone you met in a live match). Nicknames are private and replace names in chat, the lobby, leaderboards and match screens.
+- **Head-to-head records.** Every online match and duel adds a win, loss or draw to your record against that player (`Relay.result('w' | 'l' | 'd')`, stored by `Friends.result`). It shows as a toast after the match and in full on Profile. Like friends, it's kept in the browser, so each player keeps their own count.
+- **Friends leaderboards.** The Leaderboards page has an Everyone / Friends switch, the game-over panel shows where you stand among your friends, and the hub lists friends who beat one of your best scores in the last week.
 - **Challenges** ([`invites.js`](assets/js/invites.js)). Pick an online friend and a game; both of you land in the same 4-letter room. Only invites from your friends are shown, and they last two minutes.
 - **Quick chat.** During any live match, a row of preset messages (GG!, Nice one!, …). Built into [`relay.js`](assets/js/relay.js), so every live game gets it.
 
@@ -89,6 +91,8 @@ GitHub Pages only serves static files, so online features talk directly from the
 5. Paste it into [`assets/js/config.js`](assets/js/config.js) as `firebaseUrl`.
 6. **Build → Authentication → Get started**, then on **Sign-in method** turn on **Anonymous** and **Email/Password**.
 7. **Project settings → General → Your apps → Add app → Web**. From the config it shows, copy only `apiKey` into `config.js` as `firebaseApiKey` (the rest is for Firebase's SDK, which this site doesn't use). Commit and push.
+
+Scores are posted when a game ends. Games with no game-over screen (the idle and tycoon ones) post a new best as they go, at most once a minute.
 
 That turns on player accounts, global leaderboards, the "playing now" counters (site-wide and per game), the **Lobby** page, chat, friend status and challenges, Pocket Racer ghosts, and real players in Realm Rivals' Kingdom mode. Leave `firebaseUrl` empty and everything else keeps working, including every live match and duel below.
 

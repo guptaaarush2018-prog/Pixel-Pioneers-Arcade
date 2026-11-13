@@ -5,7 +5,9 @@
      Friends.setNick(id, nick)     returns an error message, or '' when saved
      Friends.short(id, name)       the nickname if there is one, else the name (for match screens)
      Friends.display(id, name)     "★ Nick (RealName12)" for friends, else the name
-     Friends.met(id, name)         records an online opponent under "Recent players" */
+     Friends.met(id, name)         records an online opponent under "Recent players"
+     Friends.result(id, name, 'w' | 'l' | 'd')  adds an online result to your head-to-head record
+     Friends.record(id) / records()             { name, w, l, d, games: { <game>: { w, l, d } }, t } */
 const Friends = (() => {
   const KEY = 'friends', RECENT_KEY = 'friends:recent';
   const NICK_MAX = 20, RECENT_MAX = 12;
@@ -87,7 +89,38 @@ const Friends = (() => {
       save();
     }
     if (recent().some(r => r.id === from)) Arcade.save(RECENT_KEY, recent().map(r => (r.id === from ? { ...r, id: to } : r)));
+    const all = rivals();
+    if (all[from]) {
+      if (!all[to]) all[to] = all[from];
+      delete all[from];
+      Arcade.save(RIVAL_KEY, all);
+    }
   }
 
-  return { get, all, add, remove, touch, rekey, setNick, askNick, short, display, recent, met, NICK_MAX, ID_RE };
+  // ---------- Head-to-head records ----------
+
+  // Every online match and duel adds to your record against that player. Like friends, it's kept
+  // in this browser (and backed up with a saved account), so each player keeps their own count.
+  const RIVAL_KEY = 'rivals';
+  const rivals = () => Arcade.load(RIVAL_KEY, {});
+  const record = id => rivals()[id] || null;
+  const records = () => Object.entries(rivals()).map(([id, r]) => ({ id, ...r })).sort((a, b) => b.t - a.t);
+  function result(id, name, outcome, game = Arcade.gameId) {
+    if (!ID_RE.test(id || '') || id === Arcade.profile().id || !['w', 'l', 'd'].includes(outcome)) return null;
+    const all = rivals();
+    const r = all[id] || { name: '', w: 0, l: 0, d: 0, games: {} };
+    const g = r.games[game] || { w: 0, l: 0, d: 0 };
+    r.name = name || r.name;
+    r[outcome]++;
+    g[outcome]++;
+    r.games[game] = g;
+    r.t = Date.now();
+    all[id] = r;
+    Arcade.save(RIVAL_KEY, all);
+    return r;
+  }
+  // "3–2", from your side.
+  const tally = r => `${r.w}–${r.l}${r.d ? ` (${r.d} drawn)` : ''}`;
+
+  return { get, all, add, remove, touch, rekey, setNick, askNick, short, display, recent, met, result, record, records, tally, NICK_MAX, ID_RE };
 })();

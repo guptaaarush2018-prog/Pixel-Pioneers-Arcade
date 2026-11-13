@@ -351,6 +351,10 @@ const Arcade = (() => {
         .then(({ list, rank }) => {
           if (rank && rank <= 10) flag('top-ten');
           slot.innerHTML = Online.renderBoard(list.slice(0, 5), rank);
+          // Then how you stand among your friends, if any of them have played this one.
+          return Online.friendsBoard(gameId).then(friends => {
+            if (friends.length && slot.isConnected) slot.insertAdjacentHTML('beforeend', Online.renderFriends(friends));
+          }).catch(() => {});
         })
         .catch(() => { slot.innerHTML = '<p class="board-note">Couldn\'t reach the leaderboard.</p>'; });
     }

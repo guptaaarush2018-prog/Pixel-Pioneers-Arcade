@@ -43,7 +43,7 @@ const Online = (() => {
     const on = enabled && !!apiKey;
     const ID = 'https://identitytoolkit.googleapis.com/v1/accounts:';
     const KEY = 'auth', ACCOUNT = 'account', SYNC = 'sync';
-    const PRIVATE = k => k === KEY || k === ACCOUNT || k === SYNC || k.startsWith('ghost:');
+    const PRIVATE = k => k === KEY || k === ACCOUNT || k === SYNC || k === 'board-sync' || k.startsWith('ghost:');
     let state = on ? Arcade.load(KEY, null) : null; // { uid, token, refresh, exp, email }
     let pending = null, started = false, chain = Promise.resolve();
 
@@ -153,6 +153,7 @@ const Online = (() => {
       await publishName();
       await claimCode();
       window.dispatchEvent(new Event('arcade:account'));
+      await moveOld();
     }
 
     // Names are unique (names/<name> points at its owner), so nobody can take on someone else's.
@@ -193,17 +194,32 @@ const Online = (() => {
       }
       if (owner !== p.id) await raw('PUT', `codes/${code}`, p.id);
       if (code !== p.code) Arcade.save('profile', { ...Arcade.profile(), code });
-      else if (!owner && hasData()) await moveFrom(code, p.id, Arcade.profile().name);
       note({ code: true });
     }
 
+    // Brings over what this browser posted under its old id. Kept apart from claiming the code so
+    // it runs again on a later visit if it was cut short.
+    async function moveOld() {
+      const p = Arcade.profile();
+      const tries = account().moveTries || 0;
+      if (account().moved || !account().code || tries >= 3) return;
+      note({ moveTries: tries + 1 });
+      if (p.code !== p.id && hasData() && (await raw('GET', `codes/${p.code}`)) === p.id) await moveFrom(p.code, p.id, p.name);
+      note({ moved: true });
+    }
+
     async function moveFrom(old, uid, name) {
-      const boards = Object.keys(await raw('GET', 'scores', undefined, '?shallow=true') || {});
+      // Every board the arcade knows about, plus any others the database lists.
+      const listed = await raw('GET', 'scores', undefined, '?shallow=true').catch(() => null);
+      const boards = [...new Set([...(window.CATALOG || []).filter(g => !g.url).map(g => g.id), ...Object.keys(listed || {})])];
       await Promise.all(boards.map(async board => {
         const e = await raw('GET', `scores/${board}/${old}`).catch(() => null);
         if (!e || typeof e.score !== 'number') return;
+        // The rules turn this down when the account already has a higher score, which is fine.
         await raw('PUT', `scores/${board}/${uid}`, { name, score: e.score, t: e.t }).catch(() => {});
-        await raw('DELETE', `scores/${board}/${old}`).catch(() => {});
+        // Only drop the old entry once the account really holds that score, or it would be lost.
+        const now = await raw('GET', `scores/${board}/${uid}`).catch(() => null);
+        if (now && now.score >= e.score) await raw('DELETE', `scores/${board}/${old}`);
       }));
       const k = await raw('GET', `kingdoms/${old}`).catch(() => null);
       if (k) {
@@ -340,21 +356,147 @@ const Online = (() => {
   async function top(game, n = 10) {
     const data = await get(`scores/${game}`, q({ orderBy: '"score"', limitToLast: n }));
     return Object.entries(data || {})
-      .map(([id, v]) => ({ id, name: v.name, score: v.score }))
+      .map(([id, v]) => ({ id, name: v.name, score: v.score, t: v.t }))
       .sort((a, b) => b.score - a.score);
   }
 
-  // Posts the score if it's the player's best, then returns the top 100 and the player's rank in it.
-  async function reportScore(game, score) {
-    const me = Arcade.profile();
-    if (score >= Arcade.getBest(game)) {
-      // The database rules reject anything that isn't an improvement, so a failure here is fine.
-      await put(`scores/${game}/${me.id}`, { name: me.name, score, t: TIMESTAMP }).catch(() => {});
+  // Keep in step with the cap in database.rules.json (scores/$game/$player).
+  const MAX_SCORE = 1e15;
+  const boardScore = s => Math.min(MAX_SCORE - 1, Math.max(0, Math.floor(Number(s) || 0)));
+
+  // game -> the score the board is known to hold for this account. Only filled in once the server
+  // has said so, so a post that fails (offline, still signing in, turned down) is tried again later.
+  let book = null;
+  function known(id) {
+    if (!book || book.id !== id) {
+      const b = Arcade.load('board-sync', null);
+      book = b && b.id === id ? b : { id, games: {} };
     }
+    return book.games;
+  }
+  function remember(id, game, score) {
+    known(id)[game] = score;
+    Arcade.save('board-sync', book);
+  }
+
+  // Makes sure the board has this account's best score for `game`. Resolves true once it does.
+  // One request at a time per game, so a game-over report and a timed post can't race.
+  const syncing = {};
+  function syncBest(game, options = {}) {
+    if (!enabled) return Promise.resolve(false);
+    const run = () => syncNow(game, options).catch(() => false);
+    return (syncing[game] = (syncing[game] || Promise.resolve()).then(run, run));
+  }
+  async function syncNow(game, options) {
+    await Auth.ready();
+    const me = Arcade.profile(); // read after sign-in, so it's the account id and current name
+    const best = boardScore(Arcade.getBest(game));
+    const games = known(me.id);
+    if (best <= 0 || games[game] >= best) return true;
+    const there = async () => {
+      const v = await get(`scores/${game}/${me.id}`);
+      return v && typeof v.score === 'number' ? v.score : 0;
+    };
+    // First time this browser checks a game for this account: look before writing.
+    if (!(game in games)) {
+      const now = await there();
+      if (now >= best) { remember(me.id, game, now); return true; }
+    }
+    try {
+      await request('PUT', `scores/${game}/${me.id}`, { name: me.name, score: best, t: TIMESTAMP }, '', options);
+    } catch {
+      // The rules only take improvements, so a refusal can mean the board already has this score
+      // (say, from another device). Anything else is retried on a later visit.
+      const now = await there().catch(() => 0);
+      if (now < best) return false;
+    }
+    remember(me.id, game, best);
+    return true;
+  }
+
+  // Posts the player's best, then returns the top 100 and the player's rank in it.
+  async function reportScore(game) {
+    await syncBest(game);
+    const me = Arcade.profile();
     const list = await top(game, 100);
     const i = list.findIndex(r => r.id === me.id);
     if (i >= 0) nudge();
     return { list, rank: i >= 0 ? i + 1 : null };
+  }
+
+  // Games that never reach a game-over screen (the idle and tycoon ones) only save a new best as
+  // they go. Those are posted too: at most once a minute, and when the page is left.
+  const due = new Set();
+  let postTimer = null;
+  const isBoard = game => (window.CATALOG || []).some(g => g.id === game && !g.url);
+  function postBests(options = {}) {
+    clearTimeout(postTimer);
+    postTimer = null;
+    for (const game of due) syncBest(game, options);
+    due.clear();
+  }
+  function postSoon(game) {
+    if (!isBoard(game)) return;
+    due.add(game);
+    postTimer ||= setTimeout(postBests, 60000);
+  }
+  // Any best the board is missing (a post that failed before, or one lost when guest ids became
+  // accounts) goes up on the next visit to any page, one game at a time.
+  async function healBoards() {
+    await Auth.ready();
+    const games = known(Arcade.profile().id);
+    for (const g of (window.CATALOG || []).filter(g => !g.url)) {
+      const best = boardScore(Arcade.getBest(g.id));
+      if (best > 0 && !(games[g.id] >= best)) await syncBest(g.id);
+    }
+  }
+  if (enabled) {
+    Arcade.onSave(key => { if (key.startsWith('best:')) postSoon(key.slice(5)); });
+    window.addEventListener('pagehide', () => postBests({ keepalive: true }));
+    setTimeout(() => healBoards().catch(() => {}), 3000);
+  }
+
+  // You and your friends on one board, best first. Empty when none of your friends have a score.
+  async function friendsBoard(game) {
+    if (typeof Friends === 'undefined') return [];
+    const me = Arcade.profile().id;
+    const ids = [me, ...Friends.all().map(f => f.id)];
+    const rows = await Promise.all(ids.map(id => get(`scores/${game}/${id}`).then(v => (v && typeof v.score === 'number' ? { id, name: v.name, score: v.score, t: v.t } : null)).catch(() => null)));
+    const list = rows.filter(Boolean).sort((a, b) => b.score - a.score);
+    return list.some(r => r.id !== me) ? list : [];
+  }
+
+  function renderFriends(list) {
+    if (!list.length) return '';
+    const me = Arcade.profile().id;
+    return `<p class="board-title">Friends</p><ol class="board-list">${list.slice(0, 5).map((r, i) => `
+      <li class="${r.id === me ? 'me' : ''}">
+        <span class="rank">${i + 1}</span><span class="name">${escape(r.id === me ? r.name : Friends.display(r.id, r.name))}</span><b>${Number(r.score).toLocaleString()}</b>
+      </li>`).join('')}</ol>`;
+  }
+
+  // Friends who went past one of your best scores in the last week, newest first. Looks at the
+  // games you've played most, and is remembered for ten minutes so the hub doesn't keep asking.
+  async function passedBy() {
+    if (typeof Friends === 'undefined' || !Friends.all().length) return [];
+    try {
+      const c = JSON.parse(sessionStorage.getItem('ppa:passed') || 'null');
+      if (c && Date.now() - c.t < 600000) return c.items.filter(i => Friends.get(i.id) && i.score > Arcade.getBest(i.game));
+    } catch {}
+    const time = Arcade.stats().time || {};
+    const games = (window.CATALOG || []).filter(g => !g.url && Arcade.getBest(g.id) > 0)
+      .sort((a, b) => (time[b.id] || 0) - (time[a.id] || 0)).slice(0, 8);
+    const since = Date.now() - 7 * 86400000;
+    const items = [];
+    await Promise.all(games.map(async g => {
+      const mine = Arcade.getBest(g.id);
+      for (const r of await top(g.id, 100).catch(() => [])) {
+        if (Friends.get(r.id) && r.score > mine && r.t > since) items.push({ game: g.id, title: g.title, id: r.id, name: r.name, score: r.score, mine, t: r.t });
+      }
+    }));
+    items.sort((a, b) => b.t - a.t);
+    try { sessionStorage.setItem('ppa:passed', JSON.stringify({ t: Date.now(), items })); } catch {}
+    return items;
   }
 
   // On a leaderboard but still a guest? Every few days, suggest saving the account.
@@ -428,9 +570,15 @@ const Online = (() => {
 
   // relay.js lists a player here while they wait in a public queue room, so others can join
   // them straight from the Lobby page. Private rooms are never listed.
-  const listWaiting = (game, room, label) =>
-    put(`lobby/${Arcade.profile().id}`, { game, room, label, name: Arcade.profile().name, t: TIMESTAMP });
-  const unlistWaiting = options => remove(`lobby/${Arcade.profile().id}`, options);
+  // These read the profile after sign-in, so they go out under the account id and current name.
+  const listWaiting = async (game, room, label) => {
+    await Auth.ready();
+    return put(`lobby/${Arcade.profile().id}`, { game, room, label, name: Arcade.profile().name, t: TIMESTAMP });
+  };
+  const unlistWaiting = async options => {
+    await Auth.ready();
+    return remove(`lobby/${Arcade.profile().id}`, options);
+  };
 
   // Entries refresh every 20 seconds, so anything older than 45 seconds has gone stale.
   async function waiting(game = null) {
@@ -445,8 +593,10 @@ const Online = (() => {
   // ---------- Ghosts (racing) ----------
 
   const getGhost = track => get(`ghosts/${track}`);
-  const saveGhost = (track, time, frames) =>
-    put(`ghosts/${track}`, { name: Arcade.profile().name, time, frames, t: TIMESTAMP });
+  const saveGhost = async (track, time, frames) => {
+    await Auth.ready();
+    return put(`ghosts/${track}`, { name: Arcade.profile().name, time, frames, t: TIMESTAMP });
+  };
 
   async function updateFriendCodes() {
     if (typeof Friends === 'undefined' || Date.now() - Arcade.load('friends:checked', 0) < 3600000) return;
@@ -462,7 +612,7 @@ const Online = (() => {
   if (Auth.on) Auth.ready().then(updateFriendCodes);
 
   return {
-    enabled, Auth, TIMESTAMP, get, put, patch, post, remove, escape, top, reportScore, renderBoard,
+    enabled, Auth, TIMESTAMP, get, put, patch, post, remove, escape, top, reportScore, renderBoard, friendsBoard, renderFriends, passedBy,
     whoIsOnline, subscribe, listWaiting, unlistWaiting, waiting, getGhost, saveGhost,
   };
 })();

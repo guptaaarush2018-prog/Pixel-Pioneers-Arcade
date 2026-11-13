@@ -19,6 +19,7 @@ const Invites = (() => {
     if (!g) return;
     const code = Array.from({ length: 4 }, () => LETTERS[Math.floor(Math.random() * LETTERS.length)]).join('');
     const room = `pp-${tagOf(g)}-${code}`;
+    await Online.Auth.ready();
     const me = Arcade.profile();
     await Online.put(`invites/${friendId}/${me.id}`, { name: me.name, game: g.id, room, t: Online.TIMESTAMP });
     go(g.id, room);

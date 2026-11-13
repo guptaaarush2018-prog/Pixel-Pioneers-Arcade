@@ -11,14 +11,39 @@
   const BEST_KEY = 'beat:best', OFFSET_KEY = 'beat:offset', CHOICE_KEY = 'beat:choice';
 
   // Every song is written by a small composer below from these settings, so the music and the
-  // notes come from the same data and always line up.
+  // notes come from the same data and always line up. Optional style settings (defaults in brackets):
+  //   drums [rock] rock | four | half | break | shuffle      bass [eighths] eighths | offbeat | octave | pulse | walk
+  //   swing [0] pushes off-beats late (0.16 is a triplet feel)   arp [false] adds a chord arpeggio
+  //   chordBars [1] bars per chord   form [FORM] the song's sections   tag: shown in the song list
   const SONGS = [
     { id: 'neon', name: 'Neon Drive', bpm: 108, root: 45, scale: 'minor', prog: [0, 5, 3, 4], seed: 11, lead: 'square', color: '#3ef0ff' },
     { id: 'parade', name: 'Pixel Parade', bpm: 124, root: 48, scale: 'major', prog: [0, 4, 5, 3], seed: 23, lead: 'triangle', color: '#ffd23f' },
     { id: 'starlight', name: 'Starlight Sprint', bpm: 142, root: 50, scale: 'dorian', prog: [0, 3, 6, 4], seed: 37, lead: 'sawtooth', color: '#c39bff' },
     { id: 'overclock', name: 'Overclock', bpm: 165, root: 43, scale: 'minor', prog: [0, 6, 5, 4], seed: 59, lead: 'square', color: '#ff4d6d' },
+    { id: 'recess', name: 'Rainy Recess', tag: 'Lo-fi', bpm: 92, root: 50, scale: 'dorian', prog: [0, 3, 1, 4], seed: 71, lead: 'triangle', color: '#8fb8ff',
+      drums: 'half', bass: 'pulse', swing: 0.14, chordBars: 2 },
+    { id: 'tide', name: 'Tidal Glow', tag: 'Chill', bpm: 100, root: 52, scale: 'lydian', prog: [0, 1, 5, 4], seed: 83, lead: 'triangle', color: '#5ce0d0',
+      drums: 'half', bass: 'octave', arp: true, chordBars: 2 },
+    { id: 'mirage', name: 'Mirage Market', tag: 'Desert', bpm: 116, root: 45, scale: 'phrygian', prog: [0, 1, 0, 6], seed: 97, lead: 'sawtooth', color: '#ffa94d',
+      drums: 'break', bass: 'walk' },
+    { id: 'hopscotch', name: 'Hop Scotch', tag: 'Swing', bpm: 128, root: 48, scale: 'mixolydian', prog: [0, 3, 0, 4], seed: 109, lead: 'square', color: '#ff7eb6',
+      drums: 'shuffle', bass: 'walk', swing: 0.16 },
+    { id: 'coinop', name: 'Coin-Op Hero', tag: 'Chiptune', bpm: 134, root: 47, scale: 'mixolydian', prog: [0, 6, 3, 4], seed: 127, lead: 'square', color: '#9be37a',
+      drums: 'four', bass: 'octave', arp: true },
+    { id: 'frostbyte', name: 'Frostbyte', tag: 'Breakbeat', bpm: 146, root: 46, scale: 'harmonic', prog: [0, 5, 3, 4], seed: 139, lead: 'sawtooth', color: '#b3e5fc',
+      drums: 'break', bass: 'offbeat', arp: true },
+    { id: 'turbo', name: 'Turbo Lane', tag: 'Racing', bpm: 156, root: 44, scale: 'minor', prog: [0, 5, 6, 4], seed: 151, lead: 'square', color: '#ffe066',
+      drums: 'four', bass: 'offbeat' },
+    { id: 'boss', name: 'Final Boss', tag: 'Boss', bpm: 180, root: 42, scale: 'harmonic', prog: [0, 5, 1, 4], seed: 173, lead: 'sawtooth', color: '#ff3b3b', arp: true,
+      drums: 'four', bass: 'octave',
+      form: [['intro', 4, 0.25], ['A', 8, 0.6], ['B', 8, 0.8], ['C', 8, 0.5], ['A', 8, 0.7], ['B', 8, 0.9], ['B', 8, 0.95], ['outro', 4, 0.35]] },
   ];
-  const SCALES = { minor: [0, 2, 3, 5, 7, 8, 10], major: [0, 2, 4, 5, 7, 9, 11], dorian: [0, 2, 3, 5, 7, 9, 10] };
+  const SCALES = {
+    minor: [0, 2, 3, 5, 7, 8, 10], major: [0, 2, 4, 5, 7, 9, 11], dorian: [0, 2, 3, 5, 7, 9, 10],
+    mixolydian: [0, 2, 4, 5, 7, 9, 10], lydian: [0, 2, 4, 6, 7, 9, 11], phrygian: [0, 1, 3, 5, 7, 8, 10], harmonic: [0, 2, 3, 5, 7, 8, 11],
+  };
+  // Clearing every song on any difficulty, and the boss on Hard, are achievements.
+  const BOSS = 'boss';
   const DIFFS = { easy: { name: 'Easy', gap: 1, holds: false, kicks: false }, normal: { name: 'Normal', gap: 0.5, holds: true, kicks: false }, hard: { name: 'Hard', gap: 0.25, holds: true, kicks: true } };
   // Sections in bars, with how busy each one is.
   const FORM = [['intro', 4, 0.2], ['A', 8, 0.55], ['B', 8, 0.75], ['A', 8, 0.6], ['C', 8, 0.5], ['B', 8, 0.85], ['outro', 4, 0.3]];
@@ -32,6 +57,7 @@
   let song, diff, events, notes, evIdx, startAt, audio, master, noise;
   let score, combo, maxCombo, health, counts, judgement, flashes, held, lastBeat, failed, mutedCheck = 0;
   let choice = Arcade.load(CHOICE_KEY, { song: 'neon', diff: 'normal' });
+  if (!SONGS.some(s => s.id === choice.song) || !DIFFS[choice.diff]) choice = { song: 'neon', diff: 'normal' };
   let offsetMs = Arcade.load(OFFSET_KEY, 0);
 
   // ---------- Composer ----------
@@ -47,6 +73,60 @@
     };
   }
 
+  // One bar of drums in the song's style.
+  function drumBar(out, style, name, energy, b, t0) {
+    const kick = t => out.push({ t: t0 + t, type: 'kick' });
+    const snare = t => out.push({ t: t0 + t, type: 'snare' });
+    const hat = (t, soft) => out.push({ t: t0 + t, type: 'hat', soft });
+    const hats = name !== 'intro';
+    const busy = energy > 0.7;
+    if (style === 'four') {
+      for (let beat = 0; beat < 4; beat++) {
+        if (name !== 'C' || beat % 2 === 0) kick(beat);
+        if (beat % 2) snare(beat);
+        if (hats) { hat(beat + 0.5); if (busy) hat(beat + 0.25, true), hat(beat + 0.75, true); }
+      }
+      if (name === 'B' && b % 4 === 3) snare(3.25), snare(3.5), snare(3.75);
+    } else if (style === 'half') {
+      kick(0);
+      if (name !== 'C') kick(2.5);
+      snare(2);
+      if (hats) for (let e = 0; e < 8; e++) hat(e * 0.5, e % 2 === 1);
+      if (busy && b % 2) kick(3.5);
+    } else if (style === 'break') {
+      kick(0);
+      kick(1.75);
+      if (name !== 'C') kick(2.5);
+      snare(1);
+      snare(3);
+      if (hats) for (let e = 0; e < 8; e++) hat(e * 0.5, e % 2 === 1);
+      if (busy) out.push({ t: t0 + 3.75, type: 'snare' });
+    } else if (style === 'shuffle') {
+      for (let beat = 0; beat < 4; beat++) {
+        if (beat % 2 === 0 && (name !== 'C' || beat === 0)) kick(beat);
+        if (beat % 2) snare(beat);
+        if (hats) hat(beat, true), hat(beat + 0.5);
+      }
+      if (name === 'B' && b % 4 === 3) snare(3.5);
+    } else {
+      for (let beat = 0; beat < 4; beat++) {
+        if (name !== 'C' || beat % 2 === 0) out.push({ t: t0 + beat, type: beat % 2 === 0 ? 'kick' : 'snare' });
+        if (hats) {
+          hat(beat + 0.5);
+          if (busy) hat(beat + 0.25, true), hat(beat + 0.75, true);
+        }
+      }
+      if (name === 'B' && b % 4 === 3) snare(3.5), snare(3.75);
+    }
+  }
+
+  // Swing: within each beat, the off-beat lands late (at 0.5 + swing) and the rest stretches to fit.
+  function swung(t, sw) {
+    if (!sw) return t;
+    const beat = Math.floor(t + 1e-9), p = t - beat;
+    return beat + (p < 0.5 ? p * (0.5 + sw) / 0.5 : 0.5 + sw + (p - 0.5) * (0.5 - sw) / 0.5);
+  }
+
   // Returns timed events (in beats): drums, bass, pads and a lead melody.
   function compose(S) {
     const sc = SCALES[S.scale];
@@ -54,7 +134,8 @@
     const out = [];
     const motifs = {};
     let bar = 0;
-    for (const [name, bars, energy] of FORM) {
+    const drums = S.drums || 'rock', bassStyle = S.bass || 'eighths', chordBars = S.chordBars || 1;
+    for (const [name, bars, energy] of S.form || FORM) {
       // One two-bar motif per section type, reused with each chord so it sounds like a tune.
       if (!motifs[name]) {
         const r = seeded(S.seed * 97 + name.charCodeAt(0));
@@ -71,19 +152,20 @@
         motifs[name] = m;
       }
       for (let b = 0; b < bars; b++, bar++) {
-        const chord = S.prog[Math.floor(bar / 1) % S.prog.length];
+        const chord = S.prog[Math.floor(bar / chordBars) % S.prog.length];
         const t0 = bar * 4;
-        // Drums.
-        for (let beat = 0; beat < 4; beat++) {
-          if (name !== 'C' || beat % 2 === 0) out.push({ t: t0 + beat, type: beat % 2 === 0 ? 'kick' : 'snare' });
-          if (name !== 'intro') {
-            out.push({ t: t0 + beat + 0.5, type: 'hat' });
-            if (energy > 0.7) out.push({ t: t0 + beat + 0.25, type: 'hat', soft: true }, { t: t0 + beat + 0.75, type: 'hat', soft: true });
-          }
+        drumBar(out, drums, name, energy, b, t0);
+        // Bass.
+        if (bassStyle === 'eighths') for (let e = 0; e < 8; e++) out.push({ t: t0 + e * 0.5, type: 'bass', midi: deg(chord + (e % 4 === 3 ? 4 : 0), -1), dur: 0.45 });
+        else if (bassStyle === 'offbeat') for (let e = 1; e < 8; e += 2) out.push({ t: t0 + e * 0.5, type: 'bass', midi: deg(chord + (e === 7 ? 4 : 0), -1), dur: 0.4 });
+        else if (bassStyle === 'octave') for (let e = 0; e < 8; e++) out.push({ t: t0 + e * 0.5, type: 'bass', midi: deg(chord, e % 2 ? 0 : -1), dur: 0.4 });
+        else if (bassStyle === 'pulse') for (let q = 0; q < 4; q++) out.push({ t: t0 + q, type: 'bass', midi: deg(chord + (q === 3 ? 4 : 0), -1), dur: 0.9 });
+        else if (bassStyle === 'walk') [0, 2, 4, 5].forEach((d, q) => out.push({ t: t0 + q, type: 'bass', midi: deg(chord + d, -1), dur: 0.85 }));
+        // Arpeggio up and down the chord on eighths, in the busier sections.
+        if (S.arp && name !== 'intro' && energy >= 0.5) {
+          const shape = [0, 2, 4, 7, 4, 2, 0, 2];
+          for (let e = 0; e < 8; e++) out.push({ t: t0 + e * 0.5, type: 'arp', midi: deg(chord + shape[e], 1), dur: 0.4 });
         }
-        if (name === 'B' && b % 4 === 3) out.push({ t: t0 + 3.5, type: 'snare' }, { t: t0 + 3.75, type: 'snare' });
-        // Bass on eighths, root and fifth.
-        for (let e = 0; e < 8; e++) out.push({ t: t0 + e * 0.5, type: 'bass', midi: deg(chord + (e % 4 === 3 ? 4 : 0), -1), dur: 0.45 });
         // Pad chord.
         if (name !== 'intro') out.push({ t: t0, type: 'pad', midi: [deg(chord, 1), deg(chord + 2, 1), deg(chord + 4, 1)], dur: 4 });
         // Lead from the motif, which spans two bars.
@@ -101,7 +183,8 @@
 
   // Notes to hit, taken from the lead line. Lanes follow the melody's shape: up moves right,
   // down moves left, a big leap skips a lane.
-  function chart(comp, D) {
+  function chart(comp, D, S) {
+    const hatFill = S.bass === 'pulse' || S.bass === 'walk';
     const leads = comp.events.filter(e => e.type === 'lead');
     const out = [];
     let lastT = -9, lane = 1, prev = null;
@@ -132,6 +215,8 @@
       if (!D.kicks || edge) continue;
       // Hard: the bass fills the off-beats, and the first beat of each bar is a two-note chord.
       if (e.type === 'bass' && e.t % 1 === 0.5 && !busy(e.t, 0.3) && !extra.some(x => Math.abs(x.beat - e.t) < 0.3)) extra.push({ beat: e.t, lane: e.midi % 4, len: 0 });
+      // Songs whose bass sits on the beat get their off-beat notes from the hi-hat instead.
+      if (hatFill && e.type === 'hat' && e.t % 1 === 0.5 && !busy(e.t, 0.3) && !extra.some(x => Math.abs(x.beat - e.t) < 0.3)) extra.push({ beat: e.t, lane: Math.floor(e.t * 2 + e.t / 4) % 4, len: 0 });
       if (e.type === 'kick' && e.t % 4 === 0) {
         const n = out.find(x => x.beat === e.t && !x.len);
         if (n) extra.push({ beat: e.t, lane: (n.lane + 2) % 4, len: 0 });
@@ -209,6 +294,7 @@
     if (ev.type === 'kick' || ev.type === 'snare' || ev.type === 'hat') hit(at, ev.type, ev.soft);
     else if (ev.type === 'bass') voice('sawtooth', freq(ev.midi), at, ev.dur * spb, 0.16, 600);
     else if (ev.type === 'lead') voice(song.lead, freq(ev.midi), at, ev.dur * spb, 0.09, 3200);
+    else if (ev.type === 'arp') voice('square', freq(ev.midi), at, ev.dur * spb, 0.025, 2200);
     else if (ev.type === 'pad') for (const m of ev.midi) voice('triangle', freq(m), at, ev.dur * spb, 0.035, 1800);
   }
 
@@ -227,8 +313,9 @@
     choice = { song: song.id, diff };
     Arcade.save(CHOICE_KEY, choice);
     const comp = compose(song);
-    events = comp.events.map(e => ({ ...e, time: e.t * spb() }));
-    notes = chart(comp, DIFFS[diff]).map(n => ({ ...n, time: n.beat * spb(), end: (n.beat + n.len) * spb(), done: false }));
+    const at = t => swung(t, song.swing) * spb();
+    events = comp.events.map(e => ({ ...e, time: at(e.t) }));
+    notes = chart(comp, DIFFS[diff], song).map(n => ({ ...n, time: at(n.beat), end: at(n.beat + n.len), done: false }));
     song.length = comp.beats * spb();
     evIdx = 0;
     startAt = audio.currentTime + LEAD_IN;
@@ -328,14 +415,18 @@
       if (diff === 'hard') Arcade.flag('beat-lane-hard');
       if (counts.miss === 0) Arcade.flag('beat-lane-fc');
       if (g === 'S') Arcade.flag('beat-lane-s');
+      if (song.id === BOSS && diff === 'hard') Arcade.flag('beat-lane-boss');
     }
     const bests = Arcade.load(BEST_KEY, {});
     const key = `${song.id}:${diff}`;
     const prev = bests[key];
-    if (!prev || score > prev.score) {
-      bests[key] = { score, grade: g };
+    // A failed run still keeps its score, but a clear always beats a fail for the grade shown.
+    if (!prev || score > prev.score || (prev.grade === 'F' && !failed)) {
+      bests[key] = { score: Math.max(score, prev?.score || 0), grade: g };
       Arcade.save(BEST_KEY, bests);
     }
+    const cleared = id => Object.keys(DIFFS).some(d => bests[`${id}:${d}`] && bests[`${id}:${d}`].grade !== 'F');
+    if (SONGS.every(s => cleared(s.id))) Arcade.flag('beat-lane-setlist');
     Arcade.finish(ui, {
       score,
       title: failed ? 'Song failed' : `${g} rank!`,
@@ -442,19 +533,38 @@
 
   // ---------- Menu ----------
 
+  // 1-5 stars from how hard the Hard chart is (notes a second, weighted by tempo), relative to the
+  // easiest and hardest songs in the list.
+  let rating = null;
+  function stars(S) {
+    if (!rating) {
+      const load = SONGS.map(x => {
+        const comp = compose(x);
+        return chart(comp, DIFFS.hard, x).length / (comp.beats * 60 / x.bpm) * Math.sqrt(x.bpm / 120);
+      });
+      const lo = Math.min(...load), hi = Math.max(...load);
+      rating = Object.fromEntries(SONGS.map((x, i) => [x.id, 1 + Math.round(4 * (load[i] - lo) / (hi - lo || 1))]));
+    }
+    return '★'.repeat(rating[S.id]) + '☆'.repeat(5 - rating[S.id]);
+  }
+
   function menuHtml() {
     const bests = Arcade.load(BEST_KEY, {});
     const rows = SONGS.map(s => {
       const cells = Object.keys(DIFFS).map(d => {
         const b = bests[`${s.id}:${d}`];
         const on = choice.song === s.id && choice.diff === d;
-        return `<button class="btn ${on ? '' : 'secondary'}" type="button" data-song="${s.id}" data-diff="${d}" style="flex:1;flex-direction:column;padding:6px 4px;line-height:1.2">
+        return `<button class="btn ${on ? '' : 'secondary'}" type="button" data-song="${s.id}" data-diff="${d}" style="flex:1;flex-direction:column;padding:5px 4px;line-height:1.15;min-width:0">
           <span>${DIFFS[d].name}</span><small style="font-weight:400;opacity:.8">${b ? `${b.grade} · ${b.score.toLocaleString()}` : '—'}</small></button>`;
       }).join('');
-      return `<div style="text-align:left;margin:6px 0 2px;font-weight:700;color:${s.color}">${s.name} <span style="font-weight:400;color:var(--muted);font-size:12px">${s.bpm} BPM</span></div><div class="row">${cells}</div>`;
+      return `<div style="text-align:left;margin:8px 0 2px;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap">
+          <b style="color:${s.color}">${s.name}</b>
+          <span style="color:var(--muted);font-size:12px">${s.tag ? s.tag + ' · ' : ''}${s.bpm} BPM · <span title="Hard difficulty" style="color:#ffd23f">${stars(s)}</span></span>
+        </div><div class="row">${cells}</div>`;
     }).join('');
     return `<p>Hit <b>D F J K</b> (or the arrow keys, or tap the lanes) as notes cross the line. Hold long notes until they end.</p>
-      <div class="menu">${rows}
+      <div class="menu">
+        <div style="max-height:min(46vh,340px);overflow-y:auto;padding-right:4px">${rows}</div>
         <div class="row" style="align-items:center;margin-top:6px"><button class="btn secondary" type="button" data-off="-10">−10</button>
         <span style="flex:1;font-size:12px;color:var(--muted)">Timing offset: <b data-offv>${offsetMs}</b> ms</span>
         <button class="btn secondary" type="button" data-off="10">+10</button></div>
@@ -463,6 +573,7 @@
   }
 
   function wireMenu(panel) {
+    panel.querySelector(`[data-song="${choice.song}"][data-diff="${choice.diff}"]`)?.scrollIntoView({ block: 'nearest' });
     panel.querySelectorAll('[data-song]').forEach(b => b.addEventListener('click', () => begin(b.dataset.song, b.dataset.diff)));
     panel.querySelectorAll('[data-off]').forEach(b => b.addEventListener('click', () => {
       offsetMs = Math.max(-200, Math.min(200, offsetMs + +b.dataset.off));

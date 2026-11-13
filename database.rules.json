@@ -42,7 +42,7 @@
         ],
         "$player": {
           ".write": "auth != null && ((auth.uid === $player && (!data.exists() || newData.child('score').val() > data.child('score').val())) || (!newData.exists() && root.child('codes').child($player).val() === auth.uid))",
-          ".validate": "newData.hasChildren(['name', 'score', 't']) && newData.child('score').isNumber() && newData.child('score').val() >= 0 && newData.child('score').val() < 100000000 && newData.child('name').isString() && newData.child('name').val() === root.child('profiles').child(auth.uid).child('name').val() && newData.child('t').val() <= now",
+          ".validate": "newData.hasChildren(['name', 'score', 't']) && newData.child('score').isNumber() && newData.child('score').val() >= 0 && newData.child('score').val() < 1000000000000000 && newData.child('name').isString() && newData.child('name').val() === root.child('profiles').child(auth.uid).child('name').val() && newData.child('t').val() <= now",
           "$other": {
             ".validate": "$other === 'name' || $other === 'score' || $other === 't'"
           }
@@ -64,6 +64,21 @@
         ".read": true,
         ".write": "auth != null && (!data.exists() || newData.child('time').val() < data.child('time').val())",
         ".validate": "newData.hasChildren(['name', 'time', 'frames', 't']) && newData.child('time').isNumber() && newData.child('time').val() > 10 && newData.child('frames').isString() && newData.child('frames').val().length < 60000 && newData.child('name').val() === root.child('profiles').child(auth.uid).child('name').val()"
+      }
+    },
+    "pghosts": {
+      "$track": {
+        ".read": true,
+        "$player": {
+          ".write": "auth != null && auth.uid === $player && (!data.exists() || newData.child('time').val() < data.child('time').val())",
+          ".validate": "newData.hasChildren(['name', 'time', 'frames', 't']) && newData.child('time').isNumber() && newData.child('time').val() > 10 && newData.child('frames').isString() && newData.child('frames').val().length < 60000 && newData.child('name').val() === root.child('profiles').child(auth.uid).child('name').val() && newData.child('t').val() <= now",
+          "skin": {
+            ".validate": "newData.isString() && newData.val().length < 24"
+          },
+          "$other": {
+            ".validate": "$other === 'name' || $other === 'time' || $other === 'frames' || $other === 't' || $other === 'skin'"
+          }
+        }
       }
     },
     "kingdoms": {

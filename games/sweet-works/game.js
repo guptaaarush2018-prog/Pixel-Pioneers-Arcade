@@ -56,7 +56,15 @@
   const machineCost = () => Math.round(4 * Math.pow(1.08, s.bought) * Math.pow(2, s.supply));
   const slotCost = () => Math.round(30 * Math.pow(2.6, s.slots - 8));
   const starsFor = run => Math.floor(Math.sqrt(run / FRANCHISE_AT));
-  const income = () => s.grid.reduce((t, L) => t + (L ? value(L) / interval(L) : 0), 0) * 1.04; // golden crates add ~4%
+  // Sugar Rush, the stacking boost: catch a Sugar Star to sell everything ×RUSH_BASE. During a rush
+  // stars come much more often, and each one caught adds a stack (+RUSH_STACK of the base each)
+  // and more time. Merges and golden crates during a rush add a little time too.
+  const RUSH_TIME = 20, RUSH_ADD = 10, RUSH_CAP = 60, RUSH_MAX = 5, RUSH_BASE = 3, RUSH_STACK = 0.5;
+  const STAR_LIFE = 7;
+  let rush = 0, rushStacks = 0, star = null, starT = 40;
+  const rushMult = () => (rush > 0 ? RUSH_BASE * (1 + RUSH_STACK * (rushStacks - 1)) : 1);
+  const baseIncome = () => s.grid.reduce((t, L) => t + (L ? value(L) / interval(L) : 0), 0) * 1.04; // golden crates add ~4%
+  const income = () => baseIncome() * rushMult();
 
   // ---------- Save ----------
 
@@ -156,6 +164,7 @@
     burst(p.x + SW / 2, p.y + SH / 2 - 10, machineColor(L), 22, 220);
     burst(p.x + SW / 2, p.y + SH / 2 - 10, '#ffffff', 8, 140);
     pops.add(`Lv ${L}!`, p.x + SW / 2, p.y + 10, { color: '#ffffff', size: 18 });
+    if (rush > 0) rush = Math.min(RUSH_CAP, rush + 1);
     sfx.merge(L);
     checkDiscovery(L);
   }
@@ -194,7 +203,8 @@
   }
 
   function sellCrate(c) {
-    const v = value(c.L) * (c.golden ? 10 : 1);
+    const v = value(c.L) * (c.golden ? 10 : 1) * rushMult();
+    if (c.golden && rush > 0) rush = Math.min(RUSH_CAP, rush + 2);
     s.cash += v;
     s.lifetime += v;
     s.run += v;
@@ -248,6 +258,81 @@
     panel.appendChild(back);
   }
 
+  // ---------- Sugar Rush ----------
+
+  function spawnStar() {
+    const i = Math.floor(Math.random() * s.slots);
+    const p = slotXY(i);
+    star = { x: p.x + SW / 2 + Arcade.rand(-30, 30), y: p.y + 20 + Arcade.rand(0, 40), t: 0 };
+  }
+
+  function catchStar() {
+    const { x, y } = star;
+    star = null;
+    if (rush > 0) {
+      rushStacks = Math.min(RUSH_MAX, rushStacks + 1);
+      rush = Math.min(RUSH_CAP, rush + RUSH_ADD);
+    } else {
+      rush = RUSH_TIME;
+      rushStacks = 1;
+    }
+    starT = Arcade.rand(4, 7);
+    pops.add(`SUGAR RUSH ×${fmt(rushMult())}!`, x, y - 20, { color: '#ffe066', size: 24, life: 1.4 });
+    burst(x, y, '#ffe066', 30, 260);
+    burst(x, y, '#ff8fc7', 16, 200);
+    shake.add(0.25);
+    sfx.golden();
+    if (rushStacks >= 3) Arcade.flag('sweet-works-rush');
+  }
+
+  function updateRush(dt) {
+    if (rush > 0) {
+      rush = Math.max(0, rush - dt);
+      if (rush <= 0) rushStacks = 0;
+    }
+    if (star) {
+      star.t += dt;
+      if (star.t > STAR_LIFE) { star = null; starT = rush > 0 ? Arcade.rand(4, 7) : Arcade.rand(50, 90); }
+    } else if ((starT -= dt) <= 0) spawnStar();
+  }
+
+  function drawStar() {
+    if (!star) return;
+    const k = star.t < 0.3 ? Gfx.ease.outBack(star.t / 0.3) : 1;
+    const fade = star.t > STAR_LIFE - 1.5 && Math.floor(star.t * 8) % 2;
+    const y = star.y + Math.sin(time * 4) * 5;
+    ctx.save();
+    ctx.globalAlpha = fade ? 0.5 : 1;
+    ctx.translate(star.x, y);
+    ctx.scale(k, k);
+    const glow = ctx.createRadialGradient(0, 0, 4, 0, 0, 34);
+    glow.addColorStop(0, 'rgba(255,230,120,0.7)');
+    glow.addColorStop(1, 'rgba(255,230,120,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(0, 0, 34, 0, TAU); ctx.fill();
+    ctx.rotate(Math.sin(time * 3) * 0.3);
+    ctx.fillStyle = '#ffd84a';
+    ctx.strokeStyle = '#fff6c2';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const r = i % 2 ? 8 : 18, a = -Math.PI / 2 + i * Math.PI / 5;
+      ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawRush() {
+    if (rush <= 0) return;
+    const pips = '●'.repeat(rushStacks) + '○'.repeat(RUSH_MAX - rushStacks);
+    Gfx.card(ctx, GX + 330, 8, 280, 30, { fill: 'rgba(90,30,60,0.85)', r: 15, edge: 'rgba(255,224,102,0.6)' });
+    Gfx.text(ctx, `🍭 SUGAR RUSH ×${fmt(rushMult())} ${pips} ${Math.ceil(rush)}s`, GX + 470, 20, { size: 13, color: '#ffe066', stroke: null });
+    Gfx.bar(ctx, GX + 350, 30, 240, 4, rush / RUSH_CAP, '#ffe066');
+  }
+
   // ---------- Input ----------
 
   let drag = null, mouse = null, buttons = [];
@@ -258,6 +343,7 @@
   canvas.addEventListener('pointerdown', e => {
     if (!overlayEl.hidden) return;
     const p = toCanvas(e);
+    if (star && Math.hypot(p.x - star.x, p.y - star.y) < 30) { catchStar(); return; }
     for (const b of buttons) {
       if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) {
         if (b.enabled) b.onClick(); else sfx.no();
@@ -354,6 +440,7 @@
     }
     for (let k = ghosts.length - 1; k >= 0; k--) { ghosts[k].t += dt / 0.25; if (ghosts[k].t >= 1) ghosts.splice(k, 1); }
     autoMerge(dt);
+    updateRush(dt);
     fx.update(dt);
     pops.update(dt);
     shake.update(dt);
@@ -669,8 +756,10 @@
     drawBelt();
     drawSlots();
     drawCrates();
+    drawStar();
     fx.draw(ctx);
     pops.draw(ctx);
+    drawRush();
     ctx.restore();
     drawPanel();
     if (drag && drag.moved && s.grid[drag.i]) drawMachine(drag.x - SW / 2, drag.y - SH / 2 - 10, s.grid[drag.i], { scale: 1.08, lifted: true, progress: -1 });
@@ -703,7 +792,7 @@
   const away = Math.min(7200, (Date.now() - s.saved) / 1000);
   let awayEarned = 0;
   if (away > 60 && s.intro) {
-    awayEarned = income() * away * 0.5;
+    awayEarned = baseIncome() * away * 0.5;
     s.cash += awayEarned;
     s.lifetime += awayEarned;
     s.run += awayEarned;
@@ -720,6 +809,7 @@
       <li><b>Drag</b> a machine onto another of the <b>same level</b> to merge them into a better one.</li>
       <li>Every new level is a <b>new sweet</b>. Can you discover all ${MAX_LV}?</li>
       <li><b>Tap</b> a machine to speed it up. Unlock more floor space by tapping the 🔒 slot.</li>
+      <li>Catch the floating <b>⭐ Sugar Star</b> for a <b>Sugar Rush</b> (sales ×${RUSH_BASE}). Stars come fast during a rush: catch them to <b>stack</b> it.</li>
       <li>Earn ${money(FRANCHISE_AT)} to open a <b>franchise</b> for permanent ★ bonuses.</li>
     </ul>`;
   if (!s.intro) {

@@ -83,7 +83,7 @@ const Versus = (() => {
   async function connect(how, code) {
     let cancelled = false;
     const cancel = () => { cancelled = true; lobby(); };
-    game.ui.show({ title: 'Connecting…', html: '<p>Waking up the game server. The first connection can take up to a minute.</p>', button: 'Cancel', onAction: cancel });
+    game.ui.show({ title: 'Connecting…', html: Relay.CONNECTING, button: 'Cancel', onAction: cancel, onRender: Relay.ticker });
     const handlers = {
       ready: () => {
         if (cancelled || !net) return;
@@ -92,7 +92,7 @@ const Versus = (() => {
       },
       event: onEvent,
       left: opponentLeft,
-      closed: () => { if (net) opponentLeft(); },
+      closed: () => { if (net) opponentLeft(true); },
     };
     try {
       const res = how === 'quick' ? await Relay.quickMatch(tag(), handlers, 'Duel')
@@ -136,7 +136,9 @@ const Versus = (() => {
       renderResult();
     } else if (name === 'rematch') {
       net.want.them = true;
-      if (net.host && net.want.me) go();
+      if (net.host && net.want.me) return go();
+      const slot = document.querySelector('[data-duel-result]');
+      if (slot && !net.want.me) slot.insertAdjacentHTML('beforeend', `<p class="muted-note">${esc(net.names[1])} wants a rematch!</p>`);
     } else if (name === 'quit') {
       opponentLeft();
     }
@@ -150,6 +152,7 @@ const Versus = (() => {
         Math.random = seeded(seed);
         net.mine = { score: 0, done: false };
         net.theirs = { score: 0, done: false };
+        net.counted = net.logged = false;
         game.start();
         showPill();
         Arcade.tone({ freq: 880, dur: 0.3, vol: 0.06 });
@@ -218,6 +221,10 @@ const Versus = (() => {
     if (!net.theirs.done) verdict = `<p>Waiting for ${esc(net.names[1])} to finish…</p>`;
     else if (me === them) verdict = '<p class="duel-verdict">It\'s a tie!</p>';
     else verdict = `<p class="duel-verdict ${me > them ? 'win' : 'lose'}">${me > them ? 'You win the duel!' : `${esc(net.names[1])} wins the duel`}</p>`;
+    if (net.theirs.done && !net.logged) {
+      net.logged = true;
+      Relay.result(me > them ? 'w' : me < them ? 'l' : 'd');
+    }
     if (net.theirs.done && me > them && !net.counted) {
       net.counted = true;
       Arcade.toast('Duel won', `${me.toLocaleString()} to ${them.toLocaleString()}`);
@@ -238,17 +245,19 @@ const Versus = (() => {
     if (net.host && net.want.them) go();
   }
 
-  function opponentLeft() {
+  // lost: our own connection dropped, rather than the other player leaving.
+  function opponentLeft(lost = false) {
     if (!net) return;
     const name = net.names[1];
     const inRun = !!net.mine;
     const waiting = net.mine?.done && !net.theirs?.done;
+    if (waiting && !lost && !net.logged) Relay.result('w');
     leave(false);
     // Mid-run the game carries on solo; before the start there's nothing left to wait for.
-    if (!inRun) return lobby(`${name} left the duel.`);
-    Arcade.toast('Duel over', `${name} left`);
+    if (!inRun) return lobby(lost ? 'Lost the connection to the game server.' : `${name} left the duel.`);
+    Arcade.toast('Duel over', lost ? 'Connection lost' : `${name} left`);
     const slot = document.querySelector('[data-duel-result]');
-    if (slot) slot.innerHTML = `<p>${esc(name)} left${waiting ? ' before finishing. You win!' : '.'}</p>`;
+    if (slot) slot.innerHTML = lost ? '<p>Lost the connection to the game server.</p>' : `<p>${esc(name)} left${waiting ? ' before finishing. You win!' : '.'}</p>`;
   }
 
   function leave(tell = true) {

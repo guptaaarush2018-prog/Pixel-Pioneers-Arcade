@@ -156,6 +156,7 @@
     else title = `${names[a > b ? 0 : 1]} wins!`;
     if (mode === 'online') {
       Arcade.flag('online-match');
+      Relay.result(a === b ? 'd' : (a > b) === (mine === 0) ? 'w' : 'l');
       if (a !== b && (a > b) === (mine === 0)) Arcade.flag('box-battle-online-win');
     }
     ui.show({
@@ -207,7 +208,7 @@
   async function goOnline(how, code) {
     let cancelled = false;
     const cancel = () => { cancelled = true; showMenu(); };
-    ui.show({ title: 'Connecting…', html: '<p>Waking up the game server. The first connection can take up to a minute.</p>', button: 'Cancel', onAction: cancel });
+    ui.show({ title: 'Connecting…', html: Relay.CONNECTING, button: 'Cancel', onAction: cancel, onRender: Relay.ticker });
     const handlers = {
       ready: () => {
         if (cancelled || !room) return;

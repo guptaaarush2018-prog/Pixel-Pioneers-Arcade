@@ -81,7 +81,7 @@ const Match = (() => {
   async function connect(how, code) {
     let cancelled = false;
     const cancel = () => { cancelled = true; menu(); };
-    opts.ui.show({ title: 'Connecting…', html: '<p>Waking up the game server. The first connection can take up to a minute.</p>', button: 'Cancel', onAction: cancel });
+    opts.ui.show({ title: 'Connecting…', html: Relay.CONNECTING, button: 'Cancel', onAction: cancel, onRender: Relay.ticker });
     const handlers = {
       ready: () => {
         if (cancelled || !room) return;
@@ -90,7 +90,7 @@ const Match = (() => {
       },
       event: onNet,
       left: opponentLeft,
-      closed: () => { if (room) opponentLeft(); },
+      closed: () => { if (room) opponentLeft(true); },
     };
     try {
       const res = how === 'quick' ? await Relay.quickMatch(opts.quickTag?.() || opts.tag, handlers, opts.quickLabel?.() || 'Match')
@@ -140,18 +140,26 @@ const Match = (() => {
     else if (name === 'move' && room.playing) opts.onMove(data || {});
     else if (name === 'rematch') {
       room.theirWant = true;
-      if (m.me === 0 && room.want) newRound(m.round + 1);
+      if (m.me === 0 && room.want) return newRound(m.round + 1);
+      const w = document.querySelector('[data-wait]');
+      if (w && !room.want) w.textContent = `${m.names[1 - m.me]} wants a rematch! Press Rematch to start.`;
     } else if (name === 'quit') opponentLeft();
   }
 
-  function opponentLeft() {
+  // lost: our own connection dropped, rather than the other player leaving. That isn't a win.
+  function opponentLeft(lost = false) {
     if (!room) return;
     const name = m.names[1 - m.me];
     const wasPlaying = room.playing;
     leave(false);
+    if (lost) {
+      opts.onStop?.();
+      return menu('Lost the connection to the game server.');
+    }
     if (wasPlaying) {
       Arcade.countPlay();
       Arcade.flag('online-match');
+      Relay.result('w');
       opts.onStop?.();
       opts.ui.show({ title: `${esc(name)} left`, html: '<p>You win by forfeit.</p>', button: 'Back to menu', onAction: () => menu() });
     } else if (m.mode === 'online' && !document.getElementById('overlay').hidden && document.querySelector('[data-wait]')) {
@@ -193,6 +201,7 @@ const Match = (() => {
     if (m.mode === 'online') {
       room.playing = false;
       Arcade.flag('online-match');
+      Relay.result(draw ? 'd' : winner === m.me ? 'w' : 'l');
       if (winner === m.me && opts.onlineWinFlag) Arcade.flag(opts.onlineWinFlag);
     }
     opts.ui.show({

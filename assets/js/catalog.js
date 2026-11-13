@@ -66,11 +66,14 @@ window.CATALOG = [
     id: 'pocket-racer',
     title: 'Pocket Racer',
     genre: 'Racing',
-    desc: 'A full racing game: a six-cup career, 38 tracks, 17 cars to unlock, time trials with world-record ghosts and per-track leaderboards, a track builder, and live online races.',
+    desc: "A full racing game: a six-cup career, 38 tracks, 20 cars to unlock, time trials against world-record and friends' ghosts with per-track leaderboards, a track builder, and live online races.",
     goals: [1200, 1800, 2300],
     online: 'live',
     relay: 'racer',
-    extras: [{ id: 'pocket-racer-win', title: 'Pocket Racer: Podium Top', desc: 'Finish a race in 1st place.' }],
+    extras: [
+      { id: 'pocket-racer-win', title: 'Pocket Racer: Podium Top', desc: 'Finish a race in 1st place.' },
+      { id: 'pocket-racer-ghostbuster', title: 'Pocket Racer: Ghostbuster', desc: "Beat a friend's ghost in a time trial." },
+    ],
   },
   {
     id: 'blitz-bowl',
@@ -189,7 +192,7 @@ window.CATALOG = [
     id: 'beat-lane',
     title: 'Beat Lane',
     genre: 'Rhythm',
-    desc: 'Four-lane rhythm game with four original songs made right in your browser. Hit the notes on the beat, hold the long ones, and chase an S rank on Easy, Normal or Hard.',
+    desc: 'Four-lane rhythm game with twelve original songs made right in your browser, from lo-fi to chiptune to a Final Boss. Hit the notes on the beat, hold the long ones, and chase an S rank on Easy, Normal or Hard.',
     goals: [40000, 120000, 220000],
     online: 'duel',
     extras: [
@@ -197,6 +200,8 @@ window.CATALOG = [
       { id: 'beat-lane-hard', title: 'Beat Lane: Hard Mode', desc: 'Clear a song on Hard.' },
       { id: 'beat-lane-fc', title: 'Beat Lane: Full Combo', desc: 'Clear a song without a single miss.' },
       { id: 'beat-lane-s', title: 'Beat Lane: S Rank', desc: 'Get an S rank.' },
+      { id: 'beat-lane-setlist', title: 'Beat Lane: Full Setlist', desc: 'Clear every song.' },
+      { id: 'beat-lane-boss', title: 'Beat Lane: Boss Fight', desc: 'Clear Final Boss on Hard.' },
     ],
   },
   {
@@ -284,6 +289,7 @@ window.CATALOG = [
       { id: 'timber-haul-crew', title: 'Timber Haul: Foreman', desc: 'Hire a crew of three trucks.' },
       { id: 'timber-haul-redwood', title: 'Timber Haul: Giants', desc: 'Open Redwood Valley.' },
       { id: 'timber-haul-maple', title: 'Timber Haul: Timber Baron', desc: 'Open Maple Ridge, the last forest.' },
+      { id: 'timber-haul-frenzy', title: 'Timber Haul: Chain Saw', desc: 'Stack a Timber Frenzy three times.' },
     ],
   },
   {
@@ -299,13 +305,14 @@ window.CATALOG = [
       { id: 'sweet-works-golden', title: 'Sweet Works: Golden Ticket', desc: 'Ship a golden crate.' },
       { id: 'sweet-works-full', title: 'Sweet Works: Full House', desc: 'Fill all 20 floor slots with machines.' },
       { id: 'sweet-works-franchise', title: 'Sweet Works: Franchise', desc: 'Open a franchise.' },
+      { id: 'sweet-works-rush', title: 'Sweet Works: Sugar High', desc: 'Stack a Sugar Rush three times.' },
     ],
   },
   {
     id: 'gem-mine',
     title: 'Gem Mine',
     genre: 'Idle',
-    desc: 'Hire diggers, refine ore, breach the bedrock into six deeper layers, and send crews on expeditions for relics. Dive deeper for core shards and build your Core tree.',
+    desc: 'Hire diggers, refine ore, breach the bedrock through nine layers, and send crews on expeditions for relics. Dive deeper for core shards, then collapse the core for echoes and legacy perks.',
     goals: [500, 1000, 1500],
     extras: [
       { id: 'gem-mine-nugget', title: 'Gem Mine: Golden Touch', desc: 'Catch a golden nugget.' },
@@ -314,6 +321,11 @@ window.CATALOG = [
       { id: 'gem-mine-relic', title: 'Gem Mine: Treasure Hunter', desc: 'Find a relic.' },
       { id: 'gem-mine-challenge', title: 'Gem Mine: Trial by Stone', desc: 'Win a challenge dive.' },
       { id: 'gem-mine-starfall', title: 'Gem Mine: Rock Bottom', desc: 'Breach into Starfall Deep.' },
+      { id: 'gem-mine-overdrive', title: 'Gem Mine: Overdrive', desc: 'Run Overclock during a gem rush.' },
+      { id: 'gem-mine-stack', title: 'Gem Mine: Gold Fever', desc: 'Stack a gem rush three times.' },
+      { id: 'gem-mine-collapse', title: 'Gem Mine: Core Collapse', desc: 'Collapse the core for echoes.' },
+      { id: 'gem-mine-heart', title: 'Gem Mine: Heart of the World', desc: 'Breach into the World Heart.' },
+      { id: 'gem-mine-fever', title: 'Gem Mine: Seven Stacks', desc: 'Stack a gem rush seven times.' },
     ],
   },
   {
@@ -335,7 +347,10 @@ window.CATALOG = [
     desc: 'Pick the right gates to grow your crowd, beat the red crowds, dodge the saws, and climb the stairs for a big multiplier.',
     goals: [500, 2000, 6000],
     online: 'duel',
-    extras: [{ id: 'crowd-rush-top', title: 'Crowd Rush: Sky High', desc: 'Reach the ×3.0 step.' }],
+    extras: [
+      { id: 'crowd-rush-top', title: 'Crowd Rush: Sky High', desc: 'Reach the ×3.0 step.' },
+      { id: 'crowd-rush-streak', title: 'Crowd Rush: Big Brain', desc: 'Reach a ×6 smart streak.' },
+    ],
   },
   {
     id: 'lane-rush',
@@ -434,6 +449,8 @@ window.CATALOG = [
     extras: [
       { id: 'neon-noodle-combo', title: 'Neon Noodle: Hungry', desc: 'Reach a x5 combo.' },
       { id: 'neon-noodle-long', title: 'Neon Noodle: Long Noodle', desc: 'Grow to length 40.' },
+      { id: 'neon-noodle-fever', title: 'Neon Noodle: Fever Pitch', desc: 'Reach a x8 combo.' },
+      { id: 'neon-noodle-shatter', title: 'Neon Noodle: Rock Breaker', desc: 'Smash a rock with a shatter star.' },
     ],
   },
   {
@@ -460,6 +477,9 @@ window.CATALOG = [
     extras: [
       { id: 'crystal-swap-five', title: 'Crystal Swap: Five Alive', desc: 'Match five in a row.' },
       { id: 'crystal-swap-cascade', title: 'Crystal Swap: Avalanche', desc: 'Set off a x4 cascade.' },
+      { id: 'crystal-swap-blast', title: 'Crystal Swap: Kaboom', desc: 'Set off a blast crystal.' },
+      { id: 'crystal-swap-prism', title: 'Crystal Swap: Rainbow', desc: 'Fire a prism.' },
+      { id: 'crystal-swap-flow', title: 'Crystal Swap: In the Flow', desc: 'Reach a ×2 flow chain.' },
     ],
   },
   {
@@ -513,6 +533,8 @@ window.CATALOG = [
       { id: 'brick-burst-flawless', title: 'Brick Burst: Flawless', desc: 'Clear a level without losing a life.' },
       { id: 'brick-burst-swarm', title: 'Brick Burst: Ball Swarm', desc: 'Split into five or more balls.' },
       { id: 'brick-burst-level5', title: 'Brick Burst: Wall Breaker', desc: 'Reach level 5.' },
+      { id: 'brick-burst-combo', title: 'Brick Burst: Rally Master', desc: 'Break 12 bricks between paddle hits.' },
+      { id: 'brick-burst-bomb', title: 'Brick Burst: Demolition', desc: 'Set off a bomb brick.' },
     ],
   },
   {
@@ -647,6 +669,8 @@ window.CATALOG = [
     extras: [
       { id: 'peak-run-combo', title: 'Peak Run: Avalanche', desc: 'Build a 10-card combo.' },
       { id: 'peak-run-clear', title: 'Peak Run: Summit', desc: 'Clear all three peaks.' },
+      { id: 'peak-run-gold', title: 'Peak Run: Gold Digger', desc: 'Clear a golden card for a power.' },
+      { id: 'peak-run-chain', title: 'Peak Run: Chain Reaction', desc: 'Hit a ×15 chain.' },
     ],
   },
 ];

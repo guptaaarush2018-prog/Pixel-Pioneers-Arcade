@@ -698,14 +698,21 @@
     hostStart();
   }
 
-  function opponentGone() {
+  // lost: our own connection dropped. Nobody wins that, so it isn't counted.
+  function opponentGone(lost = false) {
     if (!net) return;
     const wasPlaying = state === 'playing';
     leaveNet();
+    if (lost) {
+      if (wasPlaying) state = 'over';
+      ui.show({ title: 'Connection lost', html: '<p>Lost the connection to the game server, so this match doesn\'t count.</p>', button: 'Back to menu', onAction: () => toMenu() });
+      return;
+    }
     state = 'over';
     if (wasPlaying) {
       Arcade.countPlay();
       Arcade.flag('online-match');
+      Relay.result('w');
     }
     ui.show({
       title: wasPlaying ? 'Your opponent left' : 'Disconnected',
@@ -723,7 +730,7 @@
   async function goOnline(how, code) {
     let cancelled = false;
     const cancel = () => { cancelled = true; toMenu(); };
-    ui.show({ title: 'Connecting…', html: '<p>Waking up the game server. The first connection can take up to a minute.</p>', button: 'Cancel', onAction: cancel });
+    ui.show({ title: 'Connecting…', html: Relay.CONNECTING, button: 'Cancel', onAction: cancel, onRender: Relay.ticker });
     const handlers = {
       ready: () => {
         if (cancelled || !net) return;
@@ -742,7 +749,7 @@
       },
       state: s => { if (mode === 'guest') applySnapshot(s); },
       left: opponentGone,
-      closed: () => { if (net) opponentGone(); },
+      closed: () => { if (net) opponentGone(true); },
     };
     try {
       const res = how === 'quick' ? await Relay.quickMatch('rune', handlers, 'Match')
@@ -875,6 +882,7 @@
 
     Arcade.countPlay();
     Arcade.flag('online-match');
+    Relay.result(won ? 'w' : 'l');
     chargeCaches();
     if (won) {
       Arcade.flag('rune-rumble-online-win');

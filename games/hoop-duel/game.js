@@ -518,7 +518,7 @@
   async function goOnline(how, code) {
     let cancelled = false;
     const cancel = () => { cancelled = true; showMenu(); };
-    ui.show({ title: 'Connecting…', html: '<p>Waking up the game server. The first connection can take up to a minute.</p>', button: 'Cancel', onAction: cancel });
+    ui.show({ title: 'Connecting…', html: Relay.CONNECTING, button: 'Cancel', onAction: cancel, onRender: Relay.ticker });
     const handlers = {
       ready: () => {
         if (cancelled || !net) return;
@@ -528,7 +528,7 @@
       event: onNet,
       state: s => { if (mode === 'guest' && g) applySnapshot(s); },
       left: opponentGone,
-      closed: () => { if (net) opponentGone(); },
+      closed: () => { if (net) opponentGone(true); },
     };
     try {
       const res = how === 'quick' ? await Relay.quickMatch('hoops', handlers, 'Match')
@@ -596,6 +596,7 @@
     const mine = g.score[me], theirs = g.score[1 - me];
     Arcade.countPlay();
     Arcade.flag('online-match');
+    Relay.result(mine > theirs ? 'w' : mine < theirs ? 'l' : 'd');
     if (mine > theirs) Arcade.flag('hoop-duel-online-win');
     ui.show({
       title: mine > theirs ? 'You win!' : mine === theirs ? "It's a tie" : 'You lost',
@@ -614,15 +615,22 @@
     });
   }
 
-  function opponentGone() {
+  // lost: our own connection dropped. Nobody wins that, so it isn't counted.
+  function opponentGone(lost = false) {
     if (!net) return;
     const name = net.names[1];
     const wasPlaying = state === 'playing';
     leaveNet(false);
+    if (lost) {
+      if (wasPlaying) state = 'over';
+      ui.show({ title: 'Connection lost', html: '<p>Lost the connection to the game server, so this match doesn\'t count.</p>', button: 'Back to menu', onAction: () => showMenu() });
+      return;
+    }
     if (wasPlaying) {
       state = 'over';
       Arcade.countPlay();
       Arcade.flag('online-match');
+      Relay.result('w');
       ui.show({ title: `${esc(name)} left`, html: '<p>You win by forfeit.</p>', button: 'Back to menu', onAction: () => showMenu() });
     } else if (state === 'over') {
       const w = document.querySelector('[data-wait]');
