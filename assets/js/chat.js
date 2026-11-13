@@ -63,18 +63,21 @@ const Chat = (() => {
       if (friend) Friends.touch(m.id, m.name);
       const sub = [friend?.nick ? m.name : '', where].filter(Boolean).join(' · ');
       return `<li class="${m.id === me ? 'me' : ''}${friend ? ' friend' : ''}">
-        <button class="chat-name" type="button" data-id="${esc(m.id || '')}" data-name="${esc(m.name)}" title="Friend, nickname or hide">${friend ? '★ ' : ''}${esc(friend?.nick || m.name)}</button>
+        <button class="chat-name" type="button" data-id="${esc(m.id || '')}" data-name="${esc(m.name)}" data-key="${esc(m.key)}" title="Friend, nickname, hide or report">${friend ? '★ ' : ''}${esc(friend?.nick || m.name)}</button>
         ${sub ? `<span class="chat-where">${esc(sub)}</span>` : ''}
         <p>${text === null ? '<i>message hidden</i>' : esc(text)}</p></li>`;
     }).join('') : '<li class="chat-note">No messages yet. Say hi!</li>';
     if (atBottom || list.at(-1)?.id === me) log.scrollTop = log.scrollHeight;
     if (list.length) Arcade.save(SEEN_KEY, list.at(-1).t);
-    log.querySelectorAll('[data-name]').forEach(b => b.addEventListener('click', () => showMenu(b.dataset.id, b.dataset.name)));
+    log.querySelectorAll('[data-name]').forEach(b => b.addEventListener('click', () => showMenu(b.dataset.id, b.dataset.name, b.dataset.key)));
   }
 
-  // Clicking a name: add them as a friend, give them a nickname only you see, or hide them.
-  function showMenu(id, name) {
+  // Clicking a name: add them as a friend, give them a nickname only you see, hide them, or report
+  // that message to the moderators. Moderators also get Delete and Mute (the rules check who's asking).
+  const reported = new Set();
+  function showMenu(id, name, key) {
     if (!id || id === Arcade.profile().id) return hideMenu();
+    const mod = !!Arcade.isAdmin?.();
     const friend = Friends.get(id);
     menu.hidden = false;
     menu.innerHTML = `<b>${esc(friend?.nick || name)}</b>
@@ -82,6 +85,8 @@ const Chat = (() => {
       <button class="btn secondary" type="button" data-act="friend">${friend ? 'Unfriend' : 'Add friend'}</button>
       <button class="btn secondary" type="button" data-act="nick">Nickname</button>
       <button class="btn secondary" type="button" data-act="hide">Hide</button>
+      ${key && !reported.has(key) ? '<button class="btn secondary" type="button" data-act="report">Report</button>' : ''}
+      ${mod && key ? '<button class="btn secondary" type="button" data-act="delete">Delete</button><button class="btn secondary" type="button" data-act="ban">Mute 1 day</button>' : ''}
       <button class="chat-close" type="button" data-act="close" aria-label="Close">×</button>`;
     menu.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => {
       const act = b.dataset.act;
@@ -96,6 +101,20 @@ const Chat = (() => {
         if (!confirm(`Hide messages from ${name}? You can undo this on the Profile page.`)) return;
         muted.add(name);
         Arcade.save(MUTED_KEY, [...muted]);
+      } else if (act === 'report') {
+        if (!confirm(`Report this message from ${name} to the moderators?`)) return;
+        reported.add(key);
+        const m = messages[key] || {};
+        Online.put(`reports/${key}/${Arcade.profile().id}`, { id, name, text: String(m.text || '').slice(0, MAX_LEN), t: Online.TIMESTAMP })
+          .then(() => { errorEl.textContent = 'Thanks. A moderator will take a look.'; })
+          .catch(() => { errorEl.textContent = 'Couldn\'t send the report. Try again later.'; reported.delete(key); });
+      } else if (act === 'delete') {
+        Promise.all([Online.remove(`chat/${key}`), Online.remove(`reports/${key}`)])
+          .catch(() => { errorEl.textContent = 'Couldn\'t delete that message.'; });
+      } else if (act === 'ban') {
+        Online.put(`chatban/${id}`, Date.now() + DAY)
+          .then(() => { errorEl.textContent = `${name} can't chat for a day.`; })
+          .catch(() => { errorEl.textContent = 'Couldn\'t mute them.'; });
       }
       hideMenu();
       render();
@@ -142,7 +161,11 @@ const Chat = (() => {
     try {
       await Online.post('chat', { id: me.id, name: me.name, text: res.text, at: here, t: Online.TIMESTAMP });
     } catch {
-      errorEl.textContent = 'Couldn\'t send. Check your connection.';
+      // A moderator may have muted this player for a while.
+      const until = await Online.get(`chatban/${Arcade.profile().id}`).catch(() => null);
+      errorEl.textContent = typeof until === 'number' && until > Date.now()
+        ? (until > Date.now() + 365 * DAY ? 'A moderator turned off chat for you.' : `A moderator muted you until ${new Date(until).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' })}.`)
+        : 'Couldn\'t send. Check your connection.';
     }
   });
 

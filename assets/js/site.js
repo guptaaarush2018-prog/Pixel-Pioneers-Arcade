@@ -14,7 +14,7 @@
         Pixel Pioneers Arcade
       </a>
       <nav class="site-nav">
-        ${links.map(([id, href, label]) =>
+        ${(Arcade.isAdmin?.() ? [...links, ['mod', 'mod.html', 'Mod']] : links).map(([id, href, label]) =>
           `<a href="${href}"${id === header.dataset.page ? ' aria-current="page"' : ''}>${label}</a>`).join('')}
         <a class="ticket-pill" href="profile.html#shop" title="Tickets: spend them in the prize shop">🎟 ${Arcade.tickets().toLocaleString()}</a>
         <span class="online-pill" id="online-pill"></span>

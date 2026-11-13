@@ -22,8 +22,10 @@ const Arcade = (() => {
 
   const getBest = id => load('best:' + id, 0);
 
-  // Returns true when the score is a new personal best.
+  // Returns true when the score is a new personal best. A run where a command was used (see
+  // Commands below) saves nothing, so it can never reach a leaderboard.
   function submitScore(id, score) {
+    if (tainted) return false;
     if (score > getBest(id)) {
       save('best:' + id, score);
       return true;
@@ -136,6 +138,7 @@ const Arcade = (() => {
   // Start / pause / game-over panel laid over the canvas. Enter or Space presses its main button.
   // Pass button: null for a menu with only custom buttons, wired up in onRender(panel).
   // While the overlay is hidden the game counts as being played, which drives playtime stats.
+  let lastUi = null; // the page's game panel, which /win uses
   function overlay(el) {
     let action = null, readyAt = 0;
     window.addEventListener('keydown', e => {
@@ -147,7 +150,7 @@ const Arcade = (() => {
       if (performance.now() >= readyAt) action();
     }, true);
 
-    return {
+    return lastUi = {
       show({ title, html = '', button = 'Play', onAction = null, delay = 0, onRender }) {
         const main = button ? `<button class="btn" type="button" data-main>${button}</button>` : '';
         el.innerHTML = `<div class="panel"><h2>${title}</h2>${html}${main}</div>`;
@@ -322,13 +325,20 @@ const Arcade = (() => {
   }
 
   function finish(ui, { score, title = 'Game Over', lines = [], button = 'Play again', onAction, delay = 600, html = '' }) {
+    // A command used during this run: show the result, but keep it off every leaderboard and
+    // personal best. The next run counts again.
+    const usedCommand = tainted;
+    if (usedCommand && scoreOverride !== null) score = scoreOverride;
     const isBest = submitScore(gameId, score);
+    tainted = false;
+    scoreOverride = null;
+    commandBadge();
     countPlay();
     // A ticket for finishing, plus one for each medal score this run reached.
     const goals = (window.CATALOG || []).find(g => g.id === gameId)?.goals || [];
-    const medals = goals.filter(goal => score >= goal).length;
+    const medals = usedCommand ? 0 : goals.filter(goal => score >= goal).length;
     addTickets(medals);
-    dailyEvent({ score });
+    if (!usedCommand) dailyEvent({ score });
     // During an online duel (versus.js) the panel also shows the duel result and a rematch button.
     const duel = (typeof Versus !== 'undefined' && Versus.finished(score)) || {};
     ui.show({
@@ -336,6 +346,7 @@ const Arcade = (() => {
       html: `<p class="big">${score.toLocaleString()}</p>
         ${isBest && score > 0 ? '<p class="new-best">New personal best</p>' : ''}
         <p class="ticket-note">+${1 + medals} ticket${medals ? 's' : ''} · ${tickets().toLocaleString()} total</p>
+        ${usedCommand ? '<p class="board-note">A command was used, so this run doesn\'t count for leaderboards or your best.</p>' : ''}
         ${duel.html || ''}
         ${lines.map(l => `<p>${l}</p>`).join('')}${html}
         <div class="board" data-board></div>`,
@@ -344,7 +355,7 @@ const Arcade = (() => {
       delay,
       onRender: duel.onRender,
     });
-    if (typeof Online !== 'undefined' && Online.enabled && score > 0) {
+    if (typeof Online !== 'undefined' && Online.enabled && score > 0 && !usedCommand) {
       const slot = document.querySelector('[data-board]');
       slot.innerHTML = '<p class="board-note">Checking the global leaderboard…</p>';
       Online.reportScore(gameId, score)
@@ -528,6 +539,104 @@ const Arcade = (() => {
   }
   document.addEventListener('DOMContentLoaded', splitTouchpad);
 
+  // ---------- Commands (moderator accounts only) ----------
+  // The ` key (or the Cmd button) opens a command box on game pages. Using any command marks the
+  // current run: it isn't saved as a best or posted anywhere, until the run ends with Arcade.finish.
+  // Only local things change here; the database rules don't trust any of it.
+
+  let tainted = false, scoreOverride = null, scoreSource = null;
+  const isAdmin = () => (window.ARCADE_CONFIG?.admins || []).includes(profile().id);
+  // versus.js hands over the game's live score so /win can end the run with it.
+  const setScoreSource = fn => { scoreSource = fn; };
+  const inOnlineMatch = () => (typeof Versus !== 'undefined' && Versus.active()) || (typeof Match !== 'undefined' && Match.mode === 'online');
+
+  const COMMANDS = {
+    help: { args: '', desc: 'List the commands.', run: () => Object.entries(COMMANDS).map(([k, c]) => `/${k}${c.args ? ' ' + c.args : ''}: ${c.desc}`).join('\n') },
+    tickets: { args: '<n>', desc: 'Add (or with a minus, remove) tickets.', run: ([n]) => {
+      const k = Math.trunc(Number(n));
+      if (!k) return 'Give a number, e.g. /tickets 50';
+      save('tickets', Math.max(0, tickets() + k));
+      return `Tickets: ${tickets().toLocaleString()}`;
+    } },
+    achievements: { args: '', desc: 'List this game\'s achievement ids.', run: () => achievementList().filter(a => a.game === gameId).map(a => `${a.id}${unlocked()[a.id] ? ' ✓' : ''}`).join('\n') || 'No achievements here.' },
+    unlock: { args: '<id|all>', desc: 'Unlock an achievement, or all of this game\'s.', run: ([id]) => {
+      const got = unlocked();
+      const list = achievementList().filter(a => (id === 'all' ? a.game === gameId : a.id === id));
+      if (!list.length) return 'No such achievement. Try /achievements';
+      for (const a of list) got[a.id] ||= Date.now();
+      save('achievements', got);
+      return `Unlocked ${list.length}.`;
+    } },
+    score: { args: '<n>', desc: 'Set the score this run ends with.', run: ([n]) => {
+      const k = Math.max(0, Math.floor(Number(n)));
+      if (!Number.isFinite(k)) return 'Give a number, e.g. /score 5000';
+      scoreOverride = k;
+      return `This run will end with ${k.toLocaleString()}.`;
+    } },
+    win: { args: '', desc: 'End the run now (with /score, or the current score).', run: () => {
+      if (!lastUi) return 'Nothing to end here.';
+      const score = scoreOverride ?? Math.max(0, Math.round(scoreSource?.() || 0));
+      finish(lastUi, { score, title: 'You win!', lines: ['Ended with /win.'], button: 'Restart', onAction: () => location.reload(), delay: 0 });
+      return 'Run ended.';
+    } },
+  };
+
+  function runCommand(line) {
+    const [name, ...args] = line.trim().replace(/^\//, '').split(/\s+/);
+    const cmd = COMMANDS[(name || '').toLowerCase()];
+    if (!cmd) return `Unknown command. Try /help`;
+    if (name !== 'help' && name !== 'achievements') {
+      if (inOnlineMatch()) return 'Commands are off during online matches.';
+      tainted = true;
+      commandBadge();
+    }
+    return cmd.run(args);
+  }
+
+  let box = null, cmdBtn = null;
+  function commandBadge() {
+    cmdBtn?.classList.toggle('tainted', tainted);
+    if (cmdBtn) cmdBtn.title = tainted ? 'A command was used: this run won\'t count' : 'Commands';
+  }
+  function toggleCommands() {
+    if (!box) {
+      box = document.createElement('div');
+      box.className = 'cmd-box';
+      box.innerHTML = `<pre class="cmd-out">Type /help. Any command keeps this run off the leaderboards.</pre>
+        <input class="field" placeholder="/command" autocomplete="off" spellcheck="false" aria-label="Command">`;
+      document.body.appendChild(box);
+      const input = box.querySelector('input'), out = box.querySelector('.cmd-out');
+      for (const type of ['keydown', 'keyup', 'keypress']) input.addEventListener(type, e => e.stopPropagation());
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Escape' || e.key === '`') { e.preventDefault(); return toggleCommands(); }
+        if (e.key !== 'Enter' || !input.value.trim()) return;
+        out.textContent = String(runCommand(input.value));
+        input.value = '';
+      });
+      box.hidden = true;
+    }
+    box.hidden = !box.hidden;
+    if (!box.hidden) box.querySelector('input').focus();
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    if (!gameId || !isAdmin()) return;
+    const bar = document.getElementById('mute');
+    if (bar) {
+      cmdBtn = document.createElement('button');
+      cmdBtn.type = 'button';
+      cmdBtn.className = 'btn secondary cmd-btn';
+      cmdBtn.textContent = 'Cmd';
+      cmdBtn.addEventListener('click', () => { toggleCommands(); cmdBtn.blur(); });
+      bar.parentElement.insertBefore(cmdBtn, bar);
+      commandBadge();
+    }
+    window.addEventListener('keydown', e => {
+      if (e.key !== '`' || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      e.preventDefault();
+      toggleCommands();
+    });
+  });
+
   const rand = (a, b) => a + Math.random() * (b - a);
   const randInt = (a, b) => Math.floor(rand(a, b + 1));
   const pick = arr => arr[Math.floor(Math.random() * arr.length)];
@@ -538,5 +647,6 @@ const Arcade = (() => {
     load, save, getBest, submitScore, setupCanvas, makeLayer, DIRS, VEC, onSwipe, onBlur, overlay, tone, rand, randInt, pick,
     gameId, profile, setName, randomName, randomId, onSave, stats, flag, achievementList, unlocked, finish, countPlay, toast,
     SHOP, tickets, addTickets, equipped, equip, owned, daily, DAILY_REWARD, DAILY_BONUS,
+    isAdmin, setScoreSource, commandUsed: () => tainted,
   };
 })();

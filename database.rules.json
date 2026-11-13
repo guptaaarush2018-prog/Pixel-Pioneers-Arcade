@@ -111,7 +111,7 @@
         "t"
       ],
       "$msg": {
-        ".write": "auth != null && ((!data.exists() && newData.exists()) || (!newData.exists() && data.child('t').val() < now - 86400000))",
+        ".write": "auth != null && ((!data.exists() && newData.exists() && (!root.child('chatban').child(auth.uid).exists() || root.child('chatban').child(auth.uid).val() < now)) || (!newData.exists() && (data.child('t').val() < now - 86400000 || (auth.uid === '752wPcnuvebo8gQ1Er5NSSwzeV62' || auth.uid === 'Ig8ni8i35yaOBvEBg47GJComeqF2'))))",
         ".validate": "newData.hasChildren(['id', 'name', 'text', 'at', 't']) && newData.child('id').val() === auth.uid && newData.child('name').val() === root.child('profiles').child(auth.uid).child('name').val() && newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 140 && newData.child('at').isString() && newData.child('at').val().length <= 32 && newData.child('t').val() === now",
         "$other": {
           ".validate": "$other === 'id' || $other === 'name' || $other === 'text' || $other === 'at' || $other === 't'"
@@ -135,6 +135,26 @@
       "$player": {
         ".write": "auth != null && auth.uid === $player",
         ".validate": "newData.hasChildren(['game', 'room', 'name', 't']) && newData.child('game').isString() && newData.child('game').val().length <= 32 && newData.child('room').isString() && newData.child('room').val().matches(/^pp-[a-z0-9]+-q[0-9]+$/) && newData.child('name').val() === root.child('profiles').child(auth.uid).child('name').val() && (!newData.child('label').exists() || (newData.child('label').isString() && newData.child('label').val().length <= 40)) && newData.child('t').val() <= now"
+      }
+    },
+    "chatban": {
+      ".read": true,
+      "$player": {
+        ".write": "(auth.uid === '752wPcnuvebo8gQ1Er5NSSwzeV62' || auth.uid === 'Ig8ni8i35yaOBvEBg47GJComeqF2')",
+        ".validate": "newData.isNumber()"
+      }
+    },
+    "reports": {
+      ".read": "(auth.uid === '752wPcnuvebo8gQ1Er5NSSwzeV62' || auth.uid === 'Ig8ni8i35yaOBvEBg47GJComeqF2')",
+      "$msg": {
+        ".write": "(auth.uid === '752wPcnuvebo8gQ1Er5NSSwzeV62' || auth.uid === 'Ig8ni8i35yaOBvEBg47GJComeqF2') && !newData.exists()",
+        "$reporter": {
+          ".write": "auth != null && auth.uid === $reporter && !data.exists() && newData.exists() && (!root.child('chatban').child(auth.uid).exists() || root.child('chatban').child(auth.uid).val() < now)",
+          ".validate": "newData.hasChildren(['id', 'name', 'text', 't']) && newData.child('id').isString() && newData.child('id').val().length <= 40 && newData.child('name').isString() && newData.child('name').val().length <= 24 && newData.child('text').isString() && newData.child('text').val().length <= 140 && newData.child('t').val() === now",
+          "$other": {
+            ".validate": "$other === 'id' || $other === 'name' || $other === 'text' || $other === 't'"
+          }
+        }
       }
     }
   }

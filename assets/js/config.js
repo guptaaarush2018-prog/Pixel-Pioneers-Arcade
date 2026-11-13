@@ -8,8 +8,11 @@
 //
 // Real-time matches (Rune Rumble) go through the Stickman Battles Socket.io relay instead,
 // which already allows this site's GitHub Pages origin. Leave relayUrl empty to hide them.
+// admins: account ids (not names, which can change) that get the Mod page and the in-game command
+// box. database.rules.json lists the same ids, and the rules are what actually grant the powers.
 window.ARCADE_CONFIG = {
   firebaseUrl: 'https://pixel-pioneers-arcade-default-rtdb.firebaseio.com',
   firebaseApiKey: 'AIzaSyBDVaouXVVv34QNxDNt7vdd4SZC5Ipd9Wk',
   relayUrl: 'https://stickman-battles.onrender.com',
+  admins: ['752wPcnuvebo8gQ1Er5NSSwzeV62', 'Ig8ni8i35yaOBvEBg47GJComeqF2'],
 };

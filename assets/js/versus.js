@@ -31,6 +31,7 @@ const Versus = (() => {
 
   function attach(opts) {
     game = opts;
+    Arcade.setScoreSource?.(opts.score);
     const invite = typeof Relay !== 'undefined' && Relay.takeInvite();
     if (invite) connect('public', invite);
     else showIntro();
