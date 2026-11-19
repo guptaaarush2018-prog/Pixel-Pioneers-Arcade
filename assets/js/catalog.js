@@ -733,4 +733,41 @@ window.CATALOG = [
       { id: 'peak-run-chain', title: 'Peak Run: Chain Reaction', desc: 'Hit a ×15 chain.' },
     ],
   },
+  {
+    id: 'orbit-weaver',
+    title: 'Orbit Weaver',
+    genre: 'Arcade',
+    desc: 'Circle a planet, then let go at the right moment to slingshot to the next one. Clean, quick captures build an orbit chain, the planets shrink, and one miss ends the run.',
+    goals: [1000, 2000, 3500],
+    online: 'duel',
+    extras: [
+      { id: 'orbit-weaver-chain', title: 'Orbit Weaver: Comet Chain', desc: 'Capture five planets cleanly in a row.' },
+      { id: 'orbit-weaver-20', title: 'Orbit Weaver: Deep Space', desc: 'Orbit 20 planets in one run.' },
+    ],
+  },
+  {
+    id: 'deep-salvage',
+    title: 'Deep Salvage',
+    genre: 'Adventure',
+    desc: 'Pilot a one-person sub through a sunken trench. Manage oxygen across three tanks, dodge mines and jellyfish, chain treasure pickups for a multiplier, and surface before the air runs out.',
+    goals: [1500, 4000, 8000],
+    online: 'duel',
+    extras: [
+      { id: 'deep-salvage-combo', title: 'Deep Salvage: Full Hold', desc: 'Reach a ×4 treasure chain.' },
+      { id: 'deep-salvage-deep', title: 'Deep Salvage: Trench Diver', desc: 'Dive below 35 m.' },
+      { id: 'deep-salvage-chest', title: 'Deep Salvage: Big Score', desc: 'Recover a 600-value chest.' },
+    ],
+  },
+  {
+    id: 'market-mayhem',
+    title: 'Market Mayhem',
+    genre: 'Strategy',
+    desc: 'Ninety seconds on the trading floor. Read five pretend tickers, buy the dips, sell the spikes, trade through news shocks, and build a winning streak. Your score is the closing net worth.',
+    goals: [2200, 3000, 4200],
+    online: 'duel',
+    extras: [
+      { id: 'market-mayhem-streak', title: 'Market Mayhem: Hot Hand', desc: 'Make five profitable trades in a row.' },
+      { id: 'market-mayhem-double', title: 'Market Mayhem: Double Up', desc: 'Finish with double your starting cash.' },
+    ],
+  },
 ];

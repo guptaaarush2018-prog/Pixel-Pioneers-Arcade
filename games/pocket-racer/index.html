@@ -41,6 +41,7 @@
       <div class="lights" id="lights" hidden><i></i><i></i><i></i></div>
       <div class="banner" id="banner"></div>
       <div class="gap" id="gap"></div>
+      <div class="boost" id="boost"><b>BOOST</b><i><s id="boost-fill"></s></i></div>
       <div class="speedo" id="speedo"><b id="speed">0</b><small>km/h</small></div>
     </div>
 
@@ -51,6 +52,7 @@
         <button type="button" data-key="right" aria-label="Steer right">▶</button>
       </div>
       <div class="pad-side">
+        <button type="button" class="boost-btn" data-key="boost" aria-label="Boost">⚡</button>
         <button type="button" class="brake" data-key="down" aria-label="Brake">BRAKE</button>
       </div>
     </div>
@@ -70,7 +72,7 @@
     <button class="btn" id="ed-save" type="button">Save</button>
     <button class="btn secondary" id="ed-exit" type="button">Exit</button>
   </div>
-  <p class="help kbd-only" id="help" hidden><kbd>↑</kbd> gas · <kbd>↓</kbd> brake · <kbd>←</kbd><kbd>→</kbd> steer · <kbd>P</kbd> pause · <kbd>R</kbd> restart · <kbd>C</kbd> camera</p>
+  <p class="help kbd-only" id="help" hidden><kbd>↑</kbd> gas · <kbd>↓</kbd> brake · <kbd>←</kbd><kbd>→</kbd> steer · <kbd>Shift</kbd> boost · <kbd>P</kbd> pause · <kbd>R</kbd> restart · <kbd>C</kbd> camera</p>
 
   <script src="../../assets/js/config.js"></script>
   <script src="../../assets/js/catalog.js"></script>

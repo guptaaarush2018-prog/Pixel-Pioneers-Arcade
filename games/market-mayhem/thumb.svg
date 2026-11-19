@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0a1220"/><stop offset="1" stop-color="#070b10"/></linearGradient>
+<linearGradient id="up" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3ddc84" stop-opacity=".55"/><stop offset="1" stop-color="#3ddc84" stop-opacity="0"/></linearGradient>
+<linearGradient id="dn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff5d5e" stop-opacity=".5"/><stop offset="1" stop-color="#ff5d5e" stop-opacity="0"/></linearGradient>
+</defs>
+<rect width="320" height="200" fill="url(#bg)"/>
+<g stroke="#ffffff" stroke-opacity=".05"><path d="M0 50h320M0 90h320M0 130h320M0 170h320"/><path d="M40 0v200M110 0v200M180 0v200M250 0v200"/></g>
+<path d="M18 156L48 142L78 150L108 118L138 128L168 92L198 104L228 74L258 82L292 46V182H18Z" fill="url(#up)"/>
+<path d="M18 156L48 142L78 150L108 118L138 128L168 92L198 104L228 74L258 82L292 46" fill="none" stroke="#3ddc84" stroke-width="3" stroke-linecap="round"/>
+<path d="M18 176L52 168L86 172L120 158L154 164L188 150L222 156L256 140L292 146" fill="none" stroke="#ff5d5e" stroke-width="2" opacity=".7"/>
+<circle cx="292" cy="46" r="4" fill="#3ddc84"/><circle cx="292" cy="46" r="10" fill="none" stroke="#3ddc84" stroke-opacity=".35" stroke-width="2"/>
+<g font-family="system-ui,sans-serif">
+<text x="18" y="30" font-size="13" fill="#ffd25e" font-weight="900">MARKET</text>
+<text x="18" y="46" font-size="13" fill="#ffffff" opacity=".8" font-weight="800">MAYHEM</text>
+<text x="292" y="30" font-size="16" fill="#ffffff" font-weight="900" text-anchor="end">90s</text>
+<text x="292" y="44" font-size="8" fill="#8d94a1" text-anchor="end" font-weight="700">TO CLOSE</text>
+</g>
+<g transform="translate(20 60)">
+<rect width="92" height="22" rx="6" fill="#ffffff" fill-opacity=".06"/>
+<text x="8" y="15" font-size="9" fill="#3ddc84" font-weight="900">PXL +8.4%</text>
+</g>
+<g transform="translate(214 58)">
+<rect width="88" height="22" rx="6" fill="#3ddc84" fill-opacity=".18"/>
+<text x="8" y="15" font-size="9" fill="#b9ffd8" font-weight="800">BUY</text>
+<rect x="46" width="36" height="22" rx="6" fill="#ff5d5e" fill-opacity=".7"/>
+<text x="54" y="15" font-size="9" fill="#2a0808" font-weight="900">SELL</text>
+</g>
+<g transform="translate(20 182)" font-family="system-ui,sans-serif">
+<text font-size="9" fill="#ffd25e" font-weight="800">$2,860 NET WORTH</text>
+</g>
+</svg>

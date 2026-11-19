@@ -5,8 +5,9 @@
 (() => {
   const ID = 'getaway-city';
   const W = 960, H = 540;
-  const B = 360, R = 90, P = B + R, N = 9;           // block size, road width, pitch, blocks per side
+  const B = 360, R = 90, P = B + R, N = 16;          // block size, road width, pitch, blocks per side
   const WORLD = N * P + R;
+  const MAX_STARS = 8;                               // the wanted scale runs all the way to eight
   const SAVE_KEY = 'getaway:save';
   const TAU = Math.PI * 2;
   const LANE = 23;
@@ -34,24 +35,28 @@
 
   // Landmarks by block: each has a marker on the sidewalk on the block's south edge.
   const LANDMARKS = {
-    '2,6': { kind: 'hideout', name: 'Hideout', color: '#7c4dff', icon: '🏠' },
-    '6,1': { kind: 'police', name: 'Police HQ', color: '#1e88e5', icon: '🚓' },
-    '7,6': { kind: 'paint', name: 'Spray Shop', color: '#26c6da', icon: '🎨' },
-    '1,2': { kind: 'paint', name: 'Spray Shop', color: '#26c6da', icon: '🎨' },
-    '5,7': { kind: 'dealer', name: 'Car Dealer', color: '#ffb300', icon: '🚗' },
-    '3,1': { kind: 'pizza', name: 'Pizza Pronto', color: '#ff7043', icon: '🍕' },
-    '4,6': { kind: 'taxi', name: 'Taxi Stand', color: '#fdd835', icon: '🚕' },
-    '0,4': { kind: 'race', name: 'Street Race', color: '#eeeeee', icon: '🏁' },
-    '6,4': { kind: 'heist', heist: 0, name: 'Corner Store', color: '#ef5350', icon: '💼' },
-    '5,5': { kind: 'heist', heist: 1, name: 'Jewel Box', color: '#ef5350', icon: '💎' },
-    '7,2': { kind: 'heist', heist: 2, name: 'Gold Depot', color: '#ef5350', icon: '🥇' },
-    '4,3': { kind: 'heist', heist: 3, name: 'City Bank', color: '#ef5350', icon: '🏦' },
+    '4,11': { kind: 'hideout', name: 'Hideout', color: '#7c4dff', icon: '🏠' },
+    '11,2': { kind: 'police', name: 'Police HQ', color: '#1e88e5', icon: '🚓' },
+    '12,11': { kind: 'paint', name: 'Spray Shop', color: '#26c6da', icon: '🎨' },
+    '2,4': { kind: 'paint', name: 'Spray Shop', color: '#26c6da', icon: '🎨' },
+    '9,12': { kind: 'dealer', name: 'Car Dealer', color: '#ffb300', icon: '🚗' },
+    '5,2': { kind: 'pizza', name: 'Pizza Pronto', color: '#ff7043', icon: '🍕' },
+    '7,11': { kind: 'taxi', name: 'Taxi Stand', color: '#fdd835', icon: '🚕' },
+    '1,7': { kind: 'race', name: 'Street Race', color: '#eeeeee', icon: '🏁' },
+    '11,7': { kind: 'heist', heist: 0, name: 'Corner Store', color: '#ef5350', icon: '💼' },
+    '9,9': { kind: 'heist', heist: 1, name: 'Jewel Box', color: '#ef5350', icon: '💎' },
+    '13,4': { kind: 'heist', heist: 2, name: 'Gold Depot', color: '#ef5350', icon: '🥇' },
+    '8,5': { kind: 'heist', heist: 3, name: 'City Bank', color: '#ef5350', icon: '🏦' },
+    '13,12': { kind: 'heist', heist: 4, name: 'Golden Mile Casino', color: '#ef5350', icon: '🎰' },
+    '1,1': { kind: 'heist', heist: 5, name: 'Airport Hangar', color: '#ef5350', icon: '✈️' },
   };
   const HEISTS = [
     { name: 'Corner Store Safe', reward: 900, stars: 2, crack: 3, need: 0 },
     { name: 'Jewel Box Display', reward: 2500, stars: 3, crack: 4, need: 1 },
     { name: 'Gold Depot', reward: 6000, stars: 4, crack: 5, need: 2 },
     { name: 'City Bank Vault', reward: 15000, stars: 5, crack: 7, need: 3 },
+    { name: 'Casino High Roller Cage', reward: 30000, stars: 6, crack: 9, need: 4 },
+    { name: 'Airport Bullion Run', reward: 50000, stars: 7, crack: 11, need: 5 },
   ];
 
   const PALETTES = {
@@ -63,9 +68,9 @@
 
   function district(bx, by) {
     const d = Math.max(Math.abs(bx - CENTER), Math.abs(by - CENTER));
-    if (bx >= 6 && by <= 2) return 'industrial';
-    if (d <= 1) return 'downtown';
-    if (d <= 2.5) return 'midtown';
+    if (bx >= 11 && by <= 3) return 'industrial';
+    if (d <= 2) return 'downtown';
+    if (d <= 4.5) return 'midtown';
     return 'suburb';
   }
 
@@ -91,9 +96,9 @@
         blk.buildings.push(makeBuilding(x1 + IN, y1 + IN, x2 - IN, y1 + 120, 22, '#9e9e9e', 'shed'));
       } else if (land) {
         // Landmark: one big building at the back, open forecourt in front where the marker sits.
-        const h = land.kind === 'police' ? 90 : land.kind === 'heist' && land.heist === 3 ? 160 : 60;
+        const h = land.kind === 'police' ? 90 : land.kind === 'heist' && land.heist >= 3 ? 160 : 60;
         const col = { hideout: '#5e548e', police: '#37474f', paint: '#00838f', dealer: '#f9a825', pizza: '#d84315', taxi: '#f9a825', race: '#424242', heist: '#8e5a5a' }[land.kind];
-        blk.buildings.push(makeBuilding(x1 + IN, y1 + IN, x2 - IN, y2 - 150, h, col, land.kind === 'heist' && land.heist === 3 ? 'bank' : 'flat'));
+        blk.buildings.push(makeBuilding(x1 + IN, y1 + IN, x2 - IN, y2 - 150, h, col, land.kind === 'heist' && land.heist >= 3 ? 'bank' : 'flat'));
         blk.forecourt = true;
       } else {
         // Split the block into 1-4 lots with a building each.
@@ -228,24 +233,24 @@
     return !!blk && (blk.buildings.some(b => x > b.x1 - pad && x < b.x2 + pad && y > b.y1 - pad && y < b.y2 + pad) || blk.trees.some(t => Math.hypot(t.x - x, t.y - y) < t.r + pad) || (blk.pond && Math.hypot(blk.pond.x - x, blk.pond.y - y) < blk.pond.r + pad));
   };
   const packages = [];
-  for (let tries = 0; packages.length < 40 && tries < 2000; tries++) {
+  for (let tries = 0; packages.length < 120 && tries < 9000; tries++) {
     const blk = allBlocks[Math.floor(rng() * allBlocks.length)];
     const x = rr(blk.x1 + 12, blk.x2 - 12), y = rr(blk.y1 + 12, blk.y2 - 12);
     if (inBuilding(x, y, 16) || packages.some(p => Math.hypot(p.x - x, p.y - y) < 300) || markers.some(m => Math.hypot(m.x - x, m.y - y) < 80)) continue;
     packages.push({ id: packages.length, x, y });
   }
   const ramps = [];
-  for (let tries = 0; ramps.length < 12 && tries < 500; tries++) {
+  for (let tries = 0; ramps.length < 30 && tries < 2000; tries++) {
     const horiz = rng() < 0.5, i = Math.floor(rng() * (N + 1)), seg = Math.floor(rng() * N);
     const along = seg * P + R + B / 2 + rr(-80, 80);
     const x = horiz ? along : roadC(i), y = horiz ? roadC(i) : along;
-    if (ramps.some(r => Math.hypot(r.x - x, r.y - y) < 600)) continue;
+    if (ramps.some(r => Math.hypot(r.x - x, r.y - y) < 480)) continue;
     const dir = horiz ? (rng() < 0.5 ? 0 : Math.PI) : (rng() < 0.5 ? Math.PI / 2 : -Math.PI / 2);
     ramps.push({ id: ramps.length, x, y, a: dir });
   }
 
   // Race route: a loop through these intersections.
-  const RACE = [[0, 4], [0, 1], [3, 1], [3, 3], [6, 3], [6, 0], [9, 0], [9, 5], [7, 5], [7, 8], [3, 8], [3, 6], [0, 6]].map(([i, j]) => ({ x: roadC(i), y: roadC(j) }));
+  const RACE = [[1, 11], [1, 4], [4, 4], [4, 1], [9, 1], [9, 4], [13, 4], [13, 9], [13, 14], [9, 14], [9, 11], [5, 11], [5, 14], [1, 14]].map(([i, j]) => ({ x: roadC(i), y: roadC(j) }));
   const raceLen = RACE.reduce((t, p, k) => t + dist(p, RACE[(k + 1) % RACE.length]), 0);
   const RACE_MEDALS = [raceLen / 360, raceLen / 300, raceLen / 240];      // gold, silver, bronze seconds
 
@@ -262,6 +267,7 @@
     beast: { name: 'Bulldog 4x4', price: 15000, accel: 420, max: 420, grip: 9, turn: 2.4, hp: 320, mass: 2.6, len: 50, wid: 28, colors: ['#33691e', '#4e342e', '#263238'] },
     super: { name: 'Zenith Hyper', price: 30000, accel: 680, max: 590, grip: 9, turn: 3.1, hp: 120, mass: 1.1, len: 46, wid: 23, colors: ['#76ff03', '#ffffff', '#ff1744', '#651fff'] },
     police: { name: 'Interceptor', price: 0, accel: 480, max: 460, grip: 8.5, turn: 2.9, hp: 180, mass: 1.5, len: 46, wid: 23, colors: ['#eceff1'], hidden: true },
+    riot: { name: 'Riot Van', price: 0, accel: 380, max: 410, grip: 8, turn: 2.2, hp: 400, mass: 2.8, len: 52, wid: 26, colors: ['#263238'], hidden: true },
   };
   const TRAFFIC = ['compact', 'compact', 'sedan', 'sedan', 'van', 'taxi', 'muscle', 'sports'];
 
@@ -309,6 +315,13 @@
         c.fillStyle = '#eceff1';
         c.fillRect(cabX + cabW / 2 - 3, 2, 6, Wd - 4);
       }
+      if (type === 'riot') {
+        c.fillStyle = '#eceff1';
+        c.fillRect(3, 3, L - 6, 4);
+        c.fillRect(3, Wd - 7, L - 6, 4);
+        c.fillStyle = '#ffca28';
+        for (let k = 0; k < 4; k++) c.fillRect(cabX + cabW + 3 + k * 5, Wd / 2 - 2, 3, 4);
+      }
       if (type === 'muscle' || type === 'super') {
         c.fillStyle = 'rgba(255,255,255,0.8)';
         c.fillRect(2, Wd / 2 - 3, cabX - 2, 2); c.fillRect(2, Wd / 2 + 1, cabX - 2, 2);
@@ -340,11 +353,13 @@
 
   let s;
   function fresh() {
-    return { cash: 200, lifetime: 0, owned: ['compact'], perks: { engine: 0, armor: 0, nitro: 0, scanner: 0 }, heists: 0, heistDone: [0, 0, 0, 0],
-      fares: 0, bestFares: 0, deliveries: 0, raceBest: 0, medal: 0, pkgs: [], stunts: [], intro: false, maxStars: 0 };
+    return { cash: 200, lifetime: 0, owned: ['compact'], perks: { engine: 0, armor: 0, nitro: 0, scanner: 0 }, heists: 0, heistDone: [0, 0, 0, 0, 0, 0],
+      fares: 0, bestFares: 0, deliveries: 0, raceBest: 0, medal: 0, pkgs: [], stunts: [], intro: false, maxStars: 0, map: N };
   }
   function loadSave() {
     const raw = Arcade.load(SAVE_KEY, null);
+    // The city grew: packages and ramps moved, so an old save starts those collections again.
+    if (raw && raw.map !== N) { raw.pkgs = []; raw.stunts = []; }
     s = raw ? { ...fresh(), ...raw, perks: { ...fresh().perks, ...(raw.perks || {}) } } : fresh();
   }
   const score = () => Math.floor(s.lifetime);
@@ -413,7 +428,7 @@
 
   function addStars(n, reason) {
     const before = stars;
-    stars = clamp(Math.max(stars, n), 0, 5);
+    stars = clamp(Math.max(stars, n), 0, MAX_STARS);
     evadeT = 0;
     if (stars > before) {
       sfx.star();
@@ -421,8 +436,9 @@
     }
     if (stars > s.maxStars) s.maxStars = stars;
     if (stars >= 5) Arcade.flag('getaway-five-stars');
+    if (stars >= MAX_STARS) Arcade.flag('getaway-eight-stars');
   }
-  function bumpStars(reason) { addStars(Math.min(5, stars + 1), reason); }
+  function bumpStars(reason) { addStars(Math.min(MAX_STARS, stars + 1), reason); }
   function clearStars(msg) {
     if (stars >= 4 && msg) Arcade.flag('getaway-escape');
     stars = 0;
@@ -476,11 +492,13 @@
   }
 
   function spawnCop() {
-    for (let tries = 0; tries < 20; tries++) {
+    const near = stars >= 6 ? 520 : 650;
+    const type = stars >= 6 && Math.random() < Math.min(0.45, (stars - 5) * 0.15) ? 'riot' : 'police';
+    for (let tries = 0; tries < 24; tries++) {
       const i = Arcade.randInt(0, N), j = Arcade.randInt(0, N);
       const p = iPos(i, j), d = Math.hypot(p.x - player.x, p.y - player.y);
-      if (d < 650 || d > 1300) continue;
-      const car = makeCar('police', p.x, p.y, Math.atan2(player.y - p.y, player.x - p.x), 'cop');
+      if (d < near || d > 1300) continue;
+      const car = makeCar(type, p.x, p.y, Math.atan2(player.y - p.y, player.x - p.x), 'cop');
       car.nav = null;
       return;
     }
@@ -1254,13 +1272,13 @@
       if ((d > 1500 && !keepOwned) || (c.role === 'leaving' && d > 700) || (c.role === 'wreck' && d > 1000)) cars.splice(i, 1);
     }
     const traffic = cars.filter(c => c.role === 'traffic').length;
-    if (traffic < 26) spawnTraffic();
+    if (traffic < 44) spawnTraffic();
     const cops = cars.filter(c => c.role === 'cop').length;
-    if (cops < [0, 1, 2, 4, 6, 8][stars] && Math.random() < dt * 1.5) spawnCop();
+    if (cops < [0, 1, 2, 3, 4, 6, 8, 10, 12][stars] && Math.random() < dt * 1.5) spawnCop();
   }
 
   function updatePeds(dt) {
-    while (peds.length < 45) { const n = peds.length; spawnPed(); if (peds.length === n) break; }
+    while (peds.length < 70) { const n = peds.length; spawnPed(); if (peds.length === n) break; }
     for (let i = peds.length - 1; i >= 0; i--) {
       const p = peds[i];
       p.step += dt * 8;
@@ -1565,7 +1583,7 @@
     const lift = c.z * 0.06;
     Gfx.shadow(ctx, c.x + 3 + c.z * 0.3, c.y + 4 + c.z * 0.3, c.T.len * 0.6, c.T.wid * 0.7, 0.35);
     sp.draw(ctx, c.x, c.y - c.z * 0.4, 1 + lift, c.a);
-    if (c.type === 'police' && (c.role === 'cop' || c.siren > 0)) {
+    if ((c.type === 'police' || c.type === 'riot') && (c.role === 'cop' || c.siren > 0)) {
       const on = Math.floor(time * 8) % 2;
       ctx.fillStyle = on ? '#ff1744' : '#2979ff';
       ctx.beginPath(); ctx.arc(c.x, c.y - c.z * 0.4, 4, 0, TAU); ctx.fill();
@@ -1791,14 +1809,15 @@
   }
 
   function drawHud() {
-    // Wanted stars.
-    for (let i = 0; i < 5; i++) {
+    // Wanted stars: eight slots now, so the scale keeps climbing past the old five.
+    const starL = W - 36 - (MAX_STARS - 1) * 22;
+    for (let i = 0; i < MAX_STARS; i++) {
       const on = i < stars, flash = on && !seen && Math.floor(time * 3) % 2;
-      Gfx.text(ctx, '★', W - 132 + i * 26, 26, { size: 26, color: on ? (flash ? '#90a4ae' : '#ffd54f') : 'rgba(255,255,255,0.18)', stroke: 'rgba(0,0,0,0.6)', width: 3 });
+      Gfx.text(ctx, '★', starL + i * 22, 24, { size: 22, color: on ? (flash ? '#90a4ae' : i >= 5 ? '#ff7043' : '#ffd54f') : 'rgba(255,255,255,0.18)', stroke: 'rgba(0,0,0,0.6)', width: 3 });
     }
     if (stars > 0) {
       const busy = bustT > 0.2;
-      Gfx.text(ctx, busy ? `BUSTED IN ${Math.max(0, 2.2 - bustT).toFixed(1)}` : seen ? 'SPOTTED' : 'HIDING…', W - 80, 52, { size: 12, color: busy ? '#ff5252' : seen ? '#ff8a80' : '#80deea' });
+      Gfx.text(ctx, busy ? `BUSTED IN ${Math.max(0, 2.2 - bustT).toFixed(1)}` : seen ? 'SPOTTED' : 'HIDING…', W - 88, 54, { size: 12, color: busy ? '#ff5252' : seen ? '#ff8a80' : '#80deea' });
     }
     // Cash.
     Gfx.card(ctx, 12, 12, 190, 40);
@@ -1876,15 +1895,15 @@
   // Your starter car waits outside the hideout.
   makeCar(s.owned[s.owned.length - 1], hideout.x + 70, hideout.y + 75, 0, 'parked');
   cam.x = player.x - W / 2; cam.y = player.y - H / 2;
-  for (let i = 0; i < 18; i++) spawnTraffic();
+  for (let i = 0; i < 32; i++) spawnTraffic();
   setInterval(() => { if (overlayEl.hidden) persist(); }, 15000);
   addEventListener('pagehide', persist);
 
   const tips = `<ul>
       <li><b>WASD</b> or arrows to walk or drive. <b>E</b> gets in or out of any car. <b>Space</b> is the handbrake for drifting.</li>
       <li>Walk into a marker to start a job: <b>💼 heists</b>, <b>🚕 taxi</b> shifts, <b>🍕 pizza</b> runs and the <b>🏁 street race</b>.</li>
-      <li>Heists and reckless driving bring the police. Get out of sight to lose them, lie low at the <b>🏠 Hideout</b>, or get a respray at a <b>🎨 Spray Shop</b>. Stop next to a cop for too long and you're <b>busted</b>.</li>
-      <li>Hit the yellow <b>ramps</b> fast for stunt cash, and hunt for 40 hidden <b>📦 packages</b>. <b>M</b> shows the map.</li>
+      <li>Heists and reckless driving bring the police. The wanted scale runs to <b>8 stars</b>: past five, riot vans join the chase. Get out of sight to lose them, lie low at the <b>🏠 Hideout</b>, or get a respray at a <b>🎨 Spray Shop</b>. Stop next to a cop for too long and you're <b>busted</b>.</li>
+      <li>Hit the yellow <b>ramps</b> fast for stunt cash, and hunt for 120 hidden <b>📦 packages</b> across the bigger city. <b>M</b> shows the map.</li>
       <li>Spend your cash on cars at the <b>🚗 Dealer</b> and perks at the Hideout.</li>
     </ul>`;
   if (!s.intro) ui.show({ title: '🌆 Getaway City', html: `<p>A whole city to drive around, and plenty of ways to make money in it.</p>${tips}`, button: 'Hit the streets', onAction: () => { s.intro = true; persist(); ui.hide(); } });

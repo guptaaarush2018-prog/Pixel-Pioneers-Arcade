@@ -8,7 +8,7 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | --- | --- | --- |
 | Stickman Evolution: The 95th | Fighting | Linked from the hub; hosted at [pixel-pioneers-studios.github.io/Stickman-Battles](https://pixel-pioneers-studios.github.io/Stickman-Battles/) |
 | Paintball Arena | Fighting (platform shooter) | Linked from the hub; hosted at [plzgimmeaname.github.io/paintball-web](https://plzgimmeaname.github.io/paintball-web/) |
-| Getaway City | Open world (top-down city on foot or in any car: heists with up to five-star police chases and a helicopter, taxi shifts, pizza runs, a street race, stunt ramps, 40 hidden packages, a car dealer, perks, day and night; progress saves, the score is lifetime earnings) | Leaderboard |
+| Getaway City | Open world (a big top-down city on foot or in any car: six heists with wanted chases up to eight stars, riot vans and a helicopter, taxi shifts, pizza runs, a street race, 30 stunt ramps, 120 hidden packages, a car dealer, perks, day and night; progress saves, the score is lifetime earnings) | Leaderboard |
 | Block Frontier | Sandbox (first-person block world in WebGL on a generated island: caves and ore veins, mining tiers, 22 crafting recipes, glooms at night, a saved world; Survival scores expedition points, Creative lets you fly) | Leaderboard |
 | Zap Arena | Shooter (first-person laser tag in WebGL against five bots: bunny hops, air strafing, slides and jump pads, three blasters, two arenas, three bot levels) | Online duel |
 | Pixel Pitch | Sports (4-a-side football, knockout Cup with golden goal) | Live 1v1 |
@@ -22,7 +22,7 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | Quick Draw | Arcade (reaction standoff, outlaw ladder) | Live 1v1, two on one keyboard |
 | Buzz Bout | Trivia (700+ questions plus generated math, category draft, final wager, Streak and Daily 10; some questions from the [Open Trivia Database](https://opentdb.com), CC BY-SA 4.0) | Live 1v1, two on one device |
 | Beat Lane | Rhythm (four lanes, seventeen synthesized songs including a 174-240 BPM Extreme set, five difficulties up to Expert and Insane with 16th-note runs and chords, a level for every chart, ghost taps punish mashing) | Online duel |
-| Pocket Racer | Racing | Its own mini-site: six-cup career with stars, 38 tracks, garage of 20 unlockable cars, time trials with per-track world leaderboards and friend ghosts, track builder, synthesized engine sound and music, follow camera on phones, live 1v1 races, world-record ghost |
+| Pocket Racer | Racing | Its own mini-site: six-cup career with stars, 38 tracks, garage of 20 unlockable cars, slipstream boost and overtake bonuses, rival head-to-head records, time trials with per-track world leaderboards and friend ghosts, track builder, synthesized engine sound and music, follow camera on phones, live 1v1 races, world-record ghost |
 | Rune Rumble | Strategy (lane battler: 42 cards, rune wells, decks, caches, ladder) | Live 1v1 |
 | Realm Rivals | Strategy (kingdom builder) | Live 1v1 kingdom wars, plus the long-term Kingdom mode |
 | Rampart | Strategy (tower defense where you build the maze) | Online duel |
@@ -57,6 +57,9 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | Video Poker | Cards | Leaderboard |
 | High-Low | Cards | Leaderboard |
 | Peak Run | Cards (tri-peaks solitaire with combos, hot streaks, chain bonuses and golden power cards) | Leaderboard |
+| Orbit Weaver | Arcade (one-button gravity slingshot: time your release, chain clean captures, endless shrinking planets) | Online duel |
+| Deep Salvage | Adventure (side-view submarine run: three oxygen tanks, treasure chains, mines, jellyfish and a bottomless trench) | Online duel |
+| Market Mayhem | Strategy (90-second trading floor: five tickers, news shocks, win streaks and a closing net worth) | Online duel |
 
 Every game also feeds the shared **profile**: playtime, games finished, days played, and achievements (arcade-wide, plus Bronze/Silver/Gold medals and specials for each game). All of that lives in the player's browser and works without any setup.
 

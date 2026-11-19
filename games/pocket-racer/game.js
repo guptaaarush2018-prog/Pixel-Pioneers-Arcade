@@ -9,6 +9,10 @@
   const GHOST_STEP = 0.1;    // seconds between recorded ghost frames
   const SEND_EVERY = 1 / 15; // seconds between position updates in an online race
   const PAR_SPEED = 150;     // px/s; averaging faster than this earns an arcade time bonus
+  const DRAFT_RANGE = 110;   // following this close behind a rival charges the boost
+  const DRAFT_ANGLE = 0.6;   // ...and within this much of dead ahead
+  const BOOST_DRAIN = 2.2;   // seconds of boost in a full tank
+  const BOOST_CHARGE = 0.35; // a full tank per ~3 seconds in the slipstream
   const PLACE_POINTS = [1000, 600, 400, 200];
   const MARGIN = 160;        // world drawn around the field, for the follow camera
   const LAYER_SCALE = 2;     // resolution of the pre-drawn track layer
@@ -262,12 +266,13 @@
   let setup = null;    // what the current race was started with, for restarts
   let track, path, N, trackLen, rad, racing, laps, level, event;
   let cars = [], player, raceTime, countdown, lapStart, bestLap, recorded, recordAcc, ghost, finishT, lastPos;
+  let boost = 0.4, boosting = false, drafting = false, overtakes = 0;
   let particles = [];
   let edit = null;
   let net = null;   // online race: { conn, host, names, skin, want, sendT, target, targetAt, lag, wins, mine, theirs }
   let raceOnline = false; // stays set if the opponent leaves mid-race, so it never scores as solo
   const online = () => raceOnline;
-  const keys = { up: false, down: false, left: false, right: false };
+  const keys = { up: false, down: false, left: false, right: false, boost: false };
   let touchGas = false, lastTouch = false;
   let demoT = 0;
 
@@ -328,6 +333,10 @@
     ghost = null;
     finishT = null;
     lastPos = cars.length;
+    boost = 0.4;
+    boosting = false;
+    drafting = false;
+    overtakes = 0;
     particles = [];
     snapCamera = true;
     if (!opts.vs && mode !== 'demo') loadGhost();
@@ -431,9 +440,9 @@
 
   // Cars drive straight through each other, so rivals never get in the way of a good lap.
   // The handling is the same as it always was, so old ghosts and records stay fair.
-  function drive(car, dt, gas, brake, steer) {
-    const top = car.offTrack ? 120 : TOP_SPEED;
-    if (gas) car.v += 420 * dt;
+  function drive(car, dt, gas, brake, steer, useBoost) {
+    const top = car.offTrack ? 120 : TOP_SPEED * (useBoost ? 1.18 : 1);
+    if (gas) car.v += (useBoost ? 760 : 420) * dt;
     if (brake) car.v -= (car.v > 0 ? 700 : 300) * dt;
     car.v -= car.v * (car.offTrack ? 2.2 : 0.5) * dt;
     car.v = Math.max(-90, Math.min(top, car.v));
@@ -478,6 +487,37 @@
     return { gas: car.v < target, brake: car.v > target + 10, steer };
   }
 
+  // Slipstream: sit in a rival's wake to fill the boost tank. Away from traffic it refills slowly.
+  function updateDraft(dt) {
+    drafting = false;
+    if (mode === 'demo' || player.finished !== null || countdown > 0) return;
+    for (const c of cars) {
+      if (c === player) continue;
+      const dx = c.x - player.x, dy = c.y - player.y, d = Math.hypot(dx, dy);
+      if (d > DRAFT_RANGE || d < 14) continue;
+      if (Math.abs(angleDiff(Math.atan2(dy, dx), player.a)) > DRAFT_ANGLE) continue;
+      drafting = true;
+      break;
+    }
+    boost = Math.min(1, boost + dt * (drafting ? BOOST_CHARGE : 0.06));
+  }
+
+  function boostFlame() {
+    if (particles.length > 300) return;
+    const m = A.MODELS[player.skin.model] || A.MODELS.coupe;
+    const bx = m.wheels[0][0];
+    const c = Math.cos(player.a), s = Math.sin(player.a);
+    for (let i = 0; i < 2; i++) {
+      const off = (i ? 1 : -1) * 5;
+      particles.push({
+        x: player.x + c * bx - s * off, y: player.y + s * bx + c * off,
+        vx: -c * 90 + Arcade.rand(-30, 30), vy: -s * 90 + Arcade.rand(-30, 30),
+        life: 0, max: Arcade.rand(0.15, 0.35), size: Arcade.rand(2, 4), grow: 18,
+        color: Arcade.pick(['#ffd25e', '#ff8a1f', '#fff2b3']), kind: 'smoke',
+      });
+    }
+  }
+
   function update(dt) {
     if (countdown > 0) {
       const before = Math.ceil(countdown);
@@ -494,20 +534,29 @@
       return;
     }
     raceTime += dt;
+    boosting = false;
+    updateDraft(dt);
     updateLights();
 
     for (const car of cars) {
       if (car.remote) { followRemote(car, dt); effects(car, dt); continue; }
       let input;
       if (car === player && !car.ai && car.finished === null) {
-        input = { gas: keys.up || touchGas, brake: keys.down, steer: (keys.right ? 1 : 0) - (keys.left ? 1 : 0) };
+        input = { gas: keys.up || touchGas, brake: keys.down, steer: (keys.right ? 1 : 0) - (keys.left ? 1 : 0), boost: keys.boost };
       } else if (car.finished !== null && car !== player) {
         input = { gas: false, brake: true, steer: aiInput(car, dt).steer };
       } else {
         input = aiInput(car, dt); // rivals, the demo, and your car on autopilot after the flag
       }
-      drive(car, dt, input.gas, input.brake, input.steer);
+      let useBoost = false;
+      if (car === player && input.boost && boost > 0.01 && car.v > 40) {
+        useBoost = true;
+        boosting = true;
+        boost = Math.max(0, boost - dt / BOOST_DRAIN);
+      }
+      drive(car, dt, input.gas, input.brake, input.steer, useBoost);
       effects(car, dt);
+      if (useBoost) boostFlame();
       const lap = Math.floor(car.dist / N);
       if (lap > car.lap) {
         car.lap = lap;
@@ -542,7 +591,12 @@
     }
 
     const pos = position(player);
-    if (pos < lastPos && player.finished === null && raceTime > 2) S.sfx.overtake();
+    if (pos < lastPos && player.finished === null && raceTime > 2) {
+      overtakes += lastPos - pos;
+      S.sfx.overtake();
+      banner('OVERTAKE!');
+      if (overtakes >= 5) Arcade.flag('pocket-racer-overtake');
+    }
     lastPos = pos;
 
     if (player.finished !== null && finishT === null) {
@@ -842,6 +896,13 @@
     setText('speed', String(kmh));
     $('speedo').style.setProperty('--v', (Math.abs(player.v) / TOP_SPEED).toFixed(3));
     setText('gap', gapText());
+    const boostEl = $('boost');
+    if (boostEl) {
+      $('boost-fill').style.width = `${Math.round(boost * 100)}%`;
+      boostEl.classList.toggle('on', boosting);
+      boostEl.classList.toggle('full', boost > 0.995);
+      boostEl.firstElementChild.textContent = boosting ? 'BOOSTING' : drafting ? 'SLIPSTREAM' : boost > 0.995 ? 'BOOST READY' : 'BOOST';
+    }
     towerT -= 1 / 60;
     if (towerT <= 0) {
       towerT = 0.25;
@@ -1017,8 +1078,17 @@
         }
       }
     }
+    // The margin at the line, and a running head-to-head record against each rival.
+    const order2 = [...cars].sort((a, b) => position(a) - position(b));
+    const ahead = order2[1];
+    const margin = ahead && ahead.finished !== null ? ahead.finished - time : null;
+    const rivalry = recordRivalry();
+    const topRival = Object.entries(rivalry).sort((a, b) => (b[1].w + b[1].l) - (a[1].w + a[1].l))[0];
+    // Every overtake on track pays a little pocket money, so aggressive racing is rewarded.
+    const overtakeCoins = track.custom ? 0 : Math.min(40, overtakes * 4);
+    if (place === 1 && margin !== null && Math.abs(margin) < 0.15) Arcade.flag('pocket-racer-photo');
     const mult = event ? event.cup.reward : level.points;
-    const earned = track.custom ? 0 : Math.round(D.PLACE_COINS[place - 1] * mult) + rec.coins;
+    const earned = track.custom ? 0 : Math.round(D.PLACE_COINS[place - 1] * mult) + rec.coins + overtakeCoins;
     addCoins(earned);
     const fresh = unlockedIds().filter(id => !before.includes(id)).map(id => D.SKINS.find(s => s.id === id));
     if (fresh.length) setTimeout(() => S.sfx.unlock(), 900);
@@ -1029,6 +1099,9 @@
     const starHtml = event ? `<div class="big-stars">${[0, 1, 2].map(i => `<span class="${i < stars ? 'on' : ''}">★</span>`).join('')}</div><p class="muted-note">Target ${fmt(par)} · ${stars ? 'best ' + starsOf(event.id) + '★' : 'finish on the podium to unlock the next race'}</p>` : '';
     const extras = `${starHtml}${table}
       ${earned ? `<div class="reward"><span><span class="coin">●</span> +${earned}</span></div>` : ''}
+      ${overtakes ? `<p class="muted-note">Overtakes: ${overtakes}${overtakeCoins ? ` · +${overtakeCoins} bonus coins` : ''}</p>` : ''}
+      ${margin !== null && Math.abs(margin) < 2 ? `<p class="new-best">${place === 1 ? 'Won by' : 'Beaten by'} ${Math.abs(margin).toFixed(2)}s</p>` : ''}
+      ${topRival ? `<p class="muted-note">Rivalry · ${esc(topRival[0])} ${topRival[1].w}–${topRival[1].l}</p>` : ''}
       ${rec.notes.map(n => `<p class="new-best">${esc(n)}</p>`).join('')}
       ${fresh.map(s => `<p class="unlock-note">New car unlocked: ${esc(s.name)}</p>`).join('')}`;
     const summary = `${esc(track.name)} · ${fmt(time)} · best lap ${fmt(bestLap)}`;
@@ -1065,6 +1138,21 @@
       onAction: action,
     });
     addExtraActions($('overlay').querySelector('.panel'), true);
+  }
+
+  // Keeps a win/loss tally against each named rival, so the next race has something on the line.
+  function recordRivalry() {
+    if (mode === 'demo' || mode === 'trial' || online()) return {};
+    const rec = Arcade.load('racer:rivals', {});
+    const mine = position(player);
+    for (const c of cars) {
+      if (c === player || c.remote || !c.name) continue;
+      const r = rec[c.name] || { w: 0, l: 0 };
+      if (position(c) > mine) r.w++; else r.l++;
+      rec[c.name] = r;
+    }
+    Arcade.save('racer:rivals', rec);
+    return rec;
   }
 
   function addExtraActions(panel, retry) {
@@ -1716,8 +1804,10 @@
           const t = D.trackById(recordsPick);
           const title = recordsTab === 'track' ? esc(t.name) : recordsTab === 'stars' ? 'Career stars' : 'Arcade score';
           const mine = recordsTab === 'track' ? `Your best lap: ${fmt(Arcade.load(lapKey(t.id), null))}` : recordsTab === 'stars' ? `You have ${totalStars()} stars` : `Your best: ${Arcade.getBest('pocket-racer').toLocaleString()}`;
+          const rivals = Object.entries(Arcade.load('racer:rivals', {})).sort((a, b) => (b[1].w + b[1].l) - (a[1].w + a[1].l)).slice(0, 4);
           board.innerHTML = `<h3>${title}</h3><p class="muted-note">${mine}</p><div data-list>${Online.enabled ? '<p class="board-note">Loading…</p>' : '<p class="board-note">World leaderboards aren\'t set up on this copy of the arcade.</p>'}</div>
-            ${recordsTab === 'track' ? `<div class="menu" style="margin-top:12px"><button class="btn" type="button" data-trial>Time trial on this track</button></div>` : ''}`;
+            ${recordsTab === 'track' ? `<div class="menu" style="margin-top:12px"><button class="btn" type="button" data-trial>Time trial on this track</button></div>` : ''}
+            ${rivals.length ? `<p class="muted-note" style="margin-top:14px">Rivalries · ${rivals.map(([n, r]) => `${esc(n)} ${r.w}–${r.l}`).join(' · ')}</p>` : ''}`;
           board.querySelector('[data-trial]')?.addEventListener('click', () => startRace({ mode: 'trial', track: t, laps: 3, level: menuLevel }));
           if (!Online.enabled) return;
           const want = recordsTab + recordsPick;
@@ -2101,8 +2191,12 @@
       if (KEYMAP[e.code] === 'up') touchGas = false;
       if (state === 'playing') e.preventDefault();
     }
+    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.code === 'KeyX') keys.boost = true;
   });
-  window.addEventListener('keyup', e => { if (KEYMAP[e.code]) keys[KEYMAP[e.code]] = false; });
+  window.addEventListener('keyup', e => {
+    if (KEYMAP[e.code]) keys[KEYMAP[e.code]] = false;
+    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.code === 'KeyX') keys.boost = false;
+  });
 
   // On touch screens the car accelerates on its own; you steer and brake.
   document.querySelectorAll('#pad [data-key]').forEach(el => {

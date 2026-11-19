@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+<defs>
+<linearGradient id="sea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1f7fa3"/><stop offset=".55" stop-color="#0b4a63"/><stop offset="1" stop-color="#04121a"/></linearGradient>
+<linearGradient id="sand" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8f7a52"/><stop offset="1" stop-color="#5f4d30"/></linearGradient>
+<radialGradient id="light"><stop offset="0" stop-color="#bff4ff" stop-opacity=".35"/><stop offset="1" stop-color="#bff4ff" stop-opacity="0"/></radialGradient>
+<radialGradient id="gold"><stop offset="0" stop-color="#ffe066" stop-opacity=".55"/><stop offset="1" stop-color="#ffe066" stop-opacity="0"/></radialGradient>
+</defs>
+<rect width="320" height="200" fill="url(#sea)"/>
+<g opacity=".5"><path d="M30 0l30 0 40 200-46 0z" fill="#9fe8ff" opacity=".12"/><path d="M150 0l26 0 40 200-36 0z" fill="#9fe8ff" opacity=".1"/><path d="M255 0l20 0 30 200-28 0z" fill="#9fe8ff" opacity=".08"/></g>
+<path d="M0 172q40 -12 70 2t80 -4t90 6t80 -2v26H0z" fill="url(#sand)"/>
+<g fill="none" stroke="#0b2f3a" stroke-width="5" stroke-linecap="round" opacity=".8">
+<path d="M14 172q-12 -40 6 -68q14 -22 4 -52"/><path d="M50 173q10 -42 -6 -70q-10 -20 0 -44"/>
+<path d="M288 172q14 -46 -4 -78q-10 -22 2 -50"/>
+</g>
+<path d="M70 166q-6 -14 4 -20t16 0t-2 20z" fill="#2f3f45"/>
+<path d="M246 170q-8 -18 6 -26t22 2t-4 24z" fill="#33454b"/>
+<circle cx="212" cy="120" r="34" fill="url(#gold)"/>
+<g transform="translate(198 107)">
+<rect x="0" y="6" width="28" height="18" rx="2" fill="#7a4e20"/>
+<rect x="0" y="13" width="28" height="5" fill="#ffc53d"/>
+<rect x="10" y="6" width="7" height="18" fill="#ffd25e"/>
+<rect x="2" y="8" width="7" height="2" fill="#ffffff" opacity=".4"/>
+</g>
+<g transform="translate(104 84)">
+<circle cx="0" cy="0" r="13" fill="#3b2410"/>
+<g stroke="#2a3238" stroke-width="4"><path d="M-22 0h6M16 0h6M0 -22v6M0 16v6M-16 -16l4 4M12 12l4 4M16 -16l-4 4M-12 12l-4 4"/></g>
+<circle cx="0" cy="0" r="13" fill="#333d44"/>
+<circle cx="0" cy="0" r="4" fill="#ff5252"/>
+</g>
+<g transform="translate(262 68)">
+<ellipse cx="0" cy="0" rx="16" ry="12" fill="#c88cff" opacity=".5"/>
+<g stroke="#d9b0ff" stroke-width="2" fill="none" opacity=".6"><path d="M-8 8q2 12 -4 22M0 9q0 12 0 24M8 8q-2 12 4 22"/></g>
+<g transform="translate(-92 66)">
+<ellipse cx="0" cy="0" rx="11" ry="8" fill="#8ad7ff" opacity=".35"/><circle cx="4" cy="-1" r="2" fill="#02141c"/>
+</g>
+</g>
+<g transform="translate(146 148) rotate(-6)">
+<path d="M-44 0q0 -18 22 -18h22q18 0 18 18q0 16 -18 16h-22q-22 0 -22 -16z" fill="#ffc53d"/>
+<path d="M-34 -12q4 -8 14 -8h16" stroke="#ffe9a0" stroke-width="4" fill="none" opacity=".7"/>
+<circle cx="14" cy="-1" r="10" fill="#0d3346"/>
+<circle cx="16" cy="-2" r="6" fill="#7fe4ff"/>
+<path d="M-42 0h-8" stroke="#9aa3b5" stroke-width="3"/>
+<circle cx="6" cy="16" r="4" fill="#8a5a0a"/>
+</g>
+<g fill="#bfe9ff" opacity=".5"><circle cx="60" cy="130" r="2"/><circle cx="74" cy="112" r="1.4"/><circle cx="90" cy="122" r="1.8"/><circle cx="240" cy="40" r="1.6"/><circle cx="228" cy="24" r="1.2"/><circle cx="290" cy="96" r="2"/><circle cx="186" cy="52" r="1.5"/></g>
+<rect x="0" y="0" width="320" height="20" fill="#bff4ff" opacity=".14"/>
+<text x="14" y="30" font-size="11" fill="#9fe8ff" font-family="system-ui,sans-serif" font-weight="800">DEEP</text>
+<text x="14" y="43" font-size="11" fill="#ffffff" opacity=".8" font-family="system-ui,sans-serif" font-weight="700">SALVAGE</text>
+</svg>
