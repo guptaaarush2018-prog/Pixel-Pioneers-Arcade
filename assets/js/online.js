@@ -59,7 +59,11 @@ const Online = (() => {
       USER_DISABLED: 'This account has been switched off.',
       OPERATION_NOT_ALLOWED: 'Accounts aren\'t switched on for this arcade yet.',
     };
-    const message = e => MESSAGES[e?.code] || 'Couldn\'t reach the server. Check your connection.';
+    // Firebase refuses to attach an email to a guest while the project's email enumeration
+    // protection is on. Only the project owner can turn that off, so tell players what to do.
+    const message = e => /verify the new email/i.test(e?.detail || '')
+      ? 'Account saving is unavailable right now. Your progress is still saved in this browser.'
+      : MESSAGES[e?.code] || 'Couldn\'t reach the server. Check your connection.';
 
     async function call(endpoint, body, form = false) {
       let res;
@@ -75,7 +79,7 @@ const Online = (() => {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         const code = String(data.error?.message || 'NETWORK').split(/[ :]/)[0];
-        throw Object.assign(new Error(code), { code });
+        throw Object.assign(new Error(code), { code, detail: data.error?.message || '' });
       }
       return data;
     }
@@ -303,6 +307,10 @@ const Online = (() => {
         await enqueue(upload);
         return '';
       } catch (e) {
+        if (/verify the new email/i.test(e?.detail || '')) {
+          console.warn('Saving a guest account is blocked by Firebase email enumeration protection. '
+            + 'Turn it off under Authentication → Settings → User actions in the Firebase console.');
+        }
         return message(e);
       }
     }
