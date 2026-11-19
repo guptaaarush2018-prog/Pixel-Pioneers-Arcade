@@ -47,6 +47,22 @@ const RacerData = (() => {
     { id: 'tunnel', name: 'Tunnel Vision', theme: 'night', points: [[551, 489], [687, 471], [700, 355], [515, 356], [518, 93], [121, 101], [118, 469]] },
     { id: 'skyline', name: 'Skyline Spiral', theme: 'night', points: [[405, 502], [110, 458], [121, 95], [411, 98], [417, 339], [542, 334], [548, 104], [689, 102], [695, 456]] },
   ];
+  // Ten more layouts, made by mirroring or turning already-validated tracks. Reflection keeps
+  // every corner radius and gap exactly the same, so these pass the builder's checks too.
+  const mirrored = id => TRACKS.find(t => t.id === id).points.map(([x, y]) => [800 - x, y]);
+  const turned = id => TRACKS.find(t => t.id === id).points.map(([x, y]) => [800 - x, 560 - y]);
+  TRACKS.push(
+    { id: 'sunsetstretch', name: 'Sunset Stretch', theme: 'desert', points: mirrored('canyon') },
+    { id: 'goldengulch', name: 'Golden Gulch', theme: 'canyon', points: turned('dunes') },
+    { id: 'pinecrest', name: 'Pine Crest', theme: 'pines', points: mirrored('pines') },
+    { id: 'meadowlark', name: 'Meadow Lark', theme: 'meadow', points: turned('orchard') },
+    { id: 'snowdrift', name: 'Snowdrift', theme: 'snow', points: mirrored('frost') },
+    { id: 'neonbay', name: 'Neon Bay', theme: 'night', points: turned('midnight') },
+    { id: 'dustdevil', name: 'Dust Devil', theme: 'desert', points: mirrored('sandstorm') },
+    { id: 'birchwood', name: 'Birchwood', theme: 'pines', points: turned('fern') },
+    { id: 'glaciergate', name: 'Glacier Gate', theme: 'snow', points: mirrored('blizzard') },
+    { id: 'afterglow', name: 'Afterglow', theme: 'night', points: turned('neon') },
+  );
   // The six original tracks can also be driven the other way round (same start line).
   const reversed = t => ({ ...t, id: t.id + '-r', name: t.name + ' Reverse', points: [t.points[0], ...t.points.slice(1).reverse()], reverse: true });
   const ALL_TRACKS = [...TRACKS, ...TRACKS.slice(0, 6).map(reversed)];
@@ -72,6 +88,8 @@ const RacerData = (() => {
     { id: 'expert', name: 'Expert Cup', color: '#c77dff', level: 'expert', laps: 3, reward: 1.75, events: ['orchard', 'coyote', 'cactus', 'fern', 'polar', 'downtown'] },
     { id: 'ace', name: 'Ace Cup', color: '#ff5d5d', level: 'ace', laps: 3, reward: 2, events: ['canyon', 'frost', 'midnight', 'pines-r', 'harbor', 'dunes-r'] },
     { id: 'legend', name: 'Legend Cup', color: '#ff8a1f', level: 'legend', laps: 3, reward: 2.5, events: ['icicle', 'moonlight', 'scorpion', 'blizzard', 'mirage', 'skyline'] },
+    { id: 'sunset', name: 'Sunset Cup', color: '#ff7a3d', level: 'expert', laps: 3, reward: 1.85, events: ['sunsetstretch', 'goldengulch', 'dustdevil', 'afterglow', 'pinecrest', 'meadowlark'] },
+    { id: 'champions', name: 'Champions Cup', color: '#ffd54f', level: 'legend', laps: 4, reward: 3, events: ['snowdrift', 'neonbay', 'birchwood', 'glaciergate', 'skyline', 'moonlight'] },
   ];
   const EVENTS = CUPS.flatMap((cup, ci) => cup.events.map((track, i) => ({
     id: `${cup.id}-${i + 1}`, cup, cupIndex: ci, index: i, track, laps: cup.laps, level: cup.level,
@@ -102,6 +120,8 @@ const RacerData = (() => {
     { id: 'volt', name: 'Volt', model: 'kart', paint: '#00d2ff', trim: '#0b1d2a', pattern: 'bolt', num: 10, smoke: '#c9f6ff', unlock: { coins: 900 } },
     { id: 'royal', name: 'Royal', model: 'muscle', paint: '#6a1b9a', trim: '#ffd54f', pattern: 'stripes', num: 2, smoke: '#e6cff2', unlock: { coins: 1200 } },
     { id: 'sakura', name: 'Sakura', model: 'buggy', paint: '#ffc6da', trim: '#d81b60', pattern: 'split', num: 11, smoke: '#ffe3ee', unlock: { stars: 90 } },
+    { id: 'dusk', name: 'Dusk', model: 'muscle', paint: '#ff8a3d', trim: '#2b1b3d', pattern: 'flames', num: 18, smoke: '#ffd2a8', unlock: { cup: 'sunset' } },
+    { id: 'crown', name: 'Crown', model: 'formula', paint: '#f5d76e', trim: '#1a1a1a', pattern: 'racing', num: 1, smoke: '#fff3c4', unlock: { cup: 'champions' } },
   ];
 
   // Rival drivers (names are made up). Each race draws three, with skins that aren't yours.

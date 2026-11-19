@@ -22,7 +22,7 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | Quick Draw | Arcade (reaction standoff, outlaw ladder) | Live 1v1, two on one keyboard |
 | Buzz Bout | Trivia (700+ questions plus generated math, category draft, final wager, Streak and Daily 10; some questions from the [Open Trivia Database](https://opentdb.com), CC BY-SA 4.0) | Live 1v1, two on one device |
 | Beat Lane | Rhythm (four lanes, seventeen synthesized songs including a 174-240 BPM Extreme set, five difficulties up to Expert and Insane with 16th-note runs and chords, a level for every chart, ghost taps punish mashing) | Online duel |
-| Pocket Racer | Racing | Its own mini-site: six-cup career with stars, 38 tracks, garage of 20 unlockable cars, slipstream boost and overtake bonuses, rival head-to-head records, time trials with per-track world leaderboards and friend ghosts, track builder, synthesized engine sound and music, follow camera on phones, live 1v1 races, world-record ghost |
+| Pocket Racer | Racing | Its own mini-site: eight-cup career with stars, 48 tracks, garage of 22 unlockable cars, slipstream boost and overtake bonuses, rival head-to-head records, Knockout and Checkpoint Chase modes, championship tournaments, time trials with per-track world leaderboards and friend ghosts, track builder, synthesized engine sound and music, follow camera on phones, live 1v1 races, world-record ghost (records only count on boost-free, overtake-free runs) |
 | Rune Rumble | Strategy (lane battler: 42 cards, rune wells, decks, caches, ladder) | Live 1v1 |
 | Realm Rivals | Strategy (kingdom builder) | Live 1v1 kingdom wars, plus the long-term Kingdom mode |
 | Rampart | Strategy (tower defense where you build the maze) | Online duel |

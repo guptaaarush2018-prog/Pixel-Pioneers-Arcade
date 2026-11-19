@@ -13,6 +13,11 @@
   const DRAFT_ANGLE = 0.6;   // ...and within this much of dead ahead
   const BOOST_DRAIN = 2.2;   // seconds of boost in a full tank
   const BOOST_CHARGE = 0.35; // a full tank per ~3 seconds in the slipstream
+  const KO_INTERVAL = 15;    // seconds between eliminations in Knockout
+  const KO_CARS = 6;         // the Knockout grid
+  const CHASE_START = 20;    // seconds on the clock in Checkpoint Chase
+  const CHASE_BONUS = 2.6;   // seconds added per checkpoint
+  const PARA_POINTS = [10, 7, 5, 3]; // tournament points by finishing place
   const PLACE_POINTS = [1000, 600, 400, 200];
   const MARGIN = 160;        // world drawn around the field, for the follow camera
   const LAYER_SCALE = 2;     // resolution of the pre-drawn track layer
@@ -266,7 +271,10 @@
   let setup = null;    // what the current race was started with, for restarts
   let track, path, N, trackLen, rad, racing, laps, level, event;
   let cars = [], player, raceTime, countdown, lapStart, bestLap, recorded, recordAcc, ghost, finishT, lastPos;
-  let boost = 0.4, boosting = false, drafting = false, overtakes = 0;
+  let boost = 0.4, boosting = false, drafting = false, overtakes = 0, raceBoostUsed = false;
+  let koTimer = 0, koOut = false;
+  let chaseLeft = 0, chaseNext = 0, chaseCount = 0, chaseCps = [];
+  let tourney = null;   // { races, index, tracks, level, points, wins, field }
   let particles = [];
   let edit = null;
   let net = null;   // online race: { conn, host, names, skin, want, sendT, target, targetAt, lag, wins, mine, theirs }
@@ -312,8 +320,14 @@
       cars = [mine, theirs];
       vs.mine = new Map();   // track step -> race time each car first reached it, for the live gap
       vs.theirs = new Map();
-    } else if (mode === 'trial') {
+    } else if (mode === 'trial' || mode === 'chase') {
       cars = [makeCar(0, { skin: me, name: 'You' })];
+    } else if (mode === 'knockout') {
+      const skins = shuffle(D.SKINS.filter(s => s.id !== me.id));
+      const names = shuffle(D.RIVALS);
+      cars = [makeCar(5, { skin: me, name: 'You' }), ...Array.from({ length: KO_CARS - 1 }, (_, i) => makeCar(i, { skin: skins[i], name: names[i], ai: true, pace: 0.99 - i * 0.025 }))];
+    } else if (mode === 'tournament' && opts.field) {
+      cars = [makeCar(3, { skin: me, name: 'You' }), ...opts.field.map((f, i) => makeCar(i, { skin: f.skin, name: f.name, ai: true, pace: f.pace }))];
     } else if (mode === 'demo') {
       const skins = shuffle(D.SKINS);
       const names = shuffle(D.RIVALS);
@@ -337,9 +351,20 @@
     boosting = false;
     drafting = false;
     overtakes = 0;
+    raceBoostUsed = false;
+    koTimer = KO_INTERVAL;
+    koOut = false;
+    chaseLeft = CHASE_START;
+    chaseNext = 0;
+    chaseCount = 0;
+    chaseCps = [];
+    if (mode === 'chase') {
+      const per = Math.max(10, Math.round(N / 16));
+      for (let i = 0; i < N; i += per) chaseCps.push(i);
+    }
     particles = [];
     snapCamera = true;
-    if (!opts.vs && mode !== 'demo') loadGhost();
+    if (!opts.vs && ['quick', 'career', 'trial'].includes(mode)) loadGhost();
   }
 
   // The target time for three stars: one clean run by a rival at the cup's pace that never
@@ -409,6 +434,7 @@
   }
 
   function saveGhost(time) {
+    if (!recordsValid()) return;
     const frames = encode(recorded);
     const key = ghostKey(track.id, laps);
     const local = Arcade.load(key, null);
@@ -540,9 +566,10 @@
 
     for (const car of cars) {
       if (car.remote) { followRemote(car, dt); effects(car, dt); continue; }
+      if (car.eliminated) { drive(car, dt, false, true, 0); effects(car, dt); continue; }
       let input;
       if (car === player && !car.ai && car.finished === null) {
-        input = { gas: keys.up || touchGas, brake: keys.down, steer: (keys.right ? 1 : 0) - (keys.left ? 1 : 0), boost: keys.boost };
+        input = { gas: keys.up || touchGas, brake: keys.down, steer: (keys.right ? 1 : 0) - (keys.left ? 1 : 0), boost: keys.boost && mode !== 'trial' };
       } else if (car.finished !== null && car !== player) {
         input = { gas: false, brake: true, steer: aiInput(car, dt).steer };
       } else {
@@ -552,6 +579,7 @@
       if (car === player && input.boost && boost > 0.01 && car.v > 40) {
         useBoost = true;
         boosting = true;
+        raceBoostUsed = true;
         boost = Math.max(0, boost - dt / BOOST_DRAIN);
       }
       drive(car, dt, input.gas, input.brake, input.steer, useBoost);
@@ -565,6 +593,30 @@
       }
     }
     updateParticles(dt);
+
+    if (mode === 'knockout' && player.finished === null && finishT === null) {
+      koTimer -= dt;
+      if (koTimer <= 0) knockoutDrop();
+    }
+    if (mode === 'chase') {
+      chaseLeft -= dt;
+      const cp = chaseCps.length ? path[chaseCps[chaseNext]] : null;
+      if (cp && Math.hypot(player.x - cp.x, player.y - cp.y) < 62) {
+        chaseCount++;
+        chaseNext = (chaseNext + 1) % chaseCps.length;
+        const bonus = Math.max(1.6, CHASE_BONUS - chaseCount * 0.03);
+        chaseLeft += bonus;
+        Arcade.tone({ freq: 620 + Math.min(400, chaseCount * 15), to: 990, dur: 0.1, type: 'triangle', vol: 0.04 });
+        if (chaseCount % 5 === 0) banner(`${chaseCount} CHECKPOINTS`, `+${bonus.toFixed(1)}s`);
+        if (chaseCount >= 15) Arcade.flag('pocket-racer-chase');
+        if (chaseCount >= 30) Arcade.flag('pocket-racer-chase30');
+      }
+      if (chaseLeft <= 0) {
+        chaseLeft = 0;
+        finishChase();
+        return;
+      }
+    }
 
     if (mode === 'demo') {
       demoT -= dt;
@@ -614,6 +666,8 @@
         S.stopCar();
         if (online()) finishOnline();
         else if (mode === 'trial') finishTrial();
+        else if (mode === 'tournament') finishTournamentRace();
+        else if (mode === 'knockout' && koOut) finishKnockout();
         else finishRace();
       }
     }
@@ -621,13 +675,14 @@
   }
 
   function onPlayerLap(lap) {
+    if (mode === 'chase') return;
     const lapTime = raceTime - lapStart;
     lapStart = raceTime;
     const record = Arcade.load(lapKey(track.id), null);
     const fastest = lapTime < bestLap;
     bestLap = Math.min(bestLap, lapTime);
     if (lap >= laps) return;
-    if (!track.custom && (!record || lapTime < record) && fastest) {
+    if (recordsValid() && !track.custom && (!record || lapTime < record) && fastest) {
       banner('LAP RECORD', fmt(lapTime));
       S.sfx.bestLap();
     } else if (lap === laps - 1) {
@@ -642,6 +697,11 @@
   const position = car => 1 + cars.filter(c => c !== car && (
     (c.finished !== null && (car.finished === null || c.finished < car.finished)) ||
     (c.finished === null && car.finished === null && c.dist > car.dist))).length;
+
+  // Records only stand for runs with no boost and no overtakes, so the leaderboards stay a
+  // pure test of driving. Time trials disable boost entirely, so every trial time is eligible.
+  const recordsValid = () => !raceBoostUsed && overtakes === 0;
+  const aliveCars = () => cars.filter(c => !c.eliminated && c.finished === null);
 
   // ---------- Effects: smoke, dust, skid marks, confetti ----------
 
@@ -807,7 +867,7 @@
     const others = cars.filter(c => c !== player || mode === 'demo');
     for (const car of others) {
       const over = mode !== 'demo' && Math.hypot(car.x - player.x, car.y - player.y) < CAR_R * 2.5;
-      A.drawCar(ctx, car.skin, car.x, car.y, car.a, { steer: car.steer, brake: car.braking, alpha: over ? 0.5 : 1 });
+      A.drawCar(ctx, car.skin, car.x, car.y, car.a, { steer: car.steer, brake: car.braking, alpha: car.eliminated ? 0.2 : over ? 0.5 : 1 });
     }
     if (mode !== 'demo') A.drawCar(ctx, player.skin, player.x, player.y, player.a, { steer: player.steer, brake: player.braking });
 
@@ -820,7 +880,18 @@
     }
     for (const car of cars) {
       if (car === player || mode === 'demo' || (!car.remote && !following())) continue;
-      tag(car.name, car.x, car.y - 18, car.skin.paint);
+      tag(car.eliminated ? `${car.name} · OUT` : car.name, car.x, car.y - 18, car.eliminated ? '#8d94a1' : car.skin.paint);
+    }
+    if (mode === 'chase' && chaseCps.length) {
+      const cp = path[chaseCps[chaseNext]];
+      const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 180);
+      ctx.strokeStyle = `rgba(255,197,61,${0.5 + pulse * 0.4})`;
+      ctx.lineWidth = 3;
+      ctx.setLineDash([10, 6]);
+      ctx.beginPath();
+      ctx.arc(cp.x, cp.y, 34 + pulse * 5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
     if (racingNow && raceTime < 3 && mode !== 'demo') {
       const bob = Math.sin(performance.now() / 150) * 2;
@@ -883,12 +954,15 @@
     $(id).textContent = text;
   };
   let towerT = 0;
+  const lapLabel = document.querySelector('.hud-lap small');
 
   function updateHud() {
     const pos = position(player);
-    setText('pos', mode === 'trial' ? '–' : ordinal(pos));
-    setText('pos-of', mode === 'trial' ? '' : `/${cars.length}`);
-    setText('lap', `${Math.min(laps, Math.max(1, player.lap + 1))}/${laps}`);
+    const solo = mode === 'trial' || mode === 'chase';
+    setText('pos', solo ? '–' : ordinal(pos));
+    setText('pos-of', solo ? '' : `/${cars.length}`);
+    setText('lap', mode === 'chase' ? String(chaseCount) : `${Math.min(laps, Math.max(1, player.lap + 1))}/${laps}`);
+    if (lapLabel) lapLabel.textContent = mode === 'chase' ? 'CP' : 'Lap';
     setText('time', raceTime.toFixed(2));
     const rec = Arcade.load(lapKey(track.id), null);
     setText('best', `Best ${isFinite(bestLap) ? bestLap.toFixed(2) : '–'}${rec ? ` · Rec ${rec.toFixed(2)}` : ''}`);
@@ -898,6 +972,7 @@
     setText('gap', gapText());
     const boostEl = $('boost');
     if (boostEl) {
+      boostEl.style.display = mode === 'trial' ? 'none' : '';
       $('boost-fill').style.width = `${Math.round(boost * 100)}%`;
       boostEl.classList.toggle('on', boosting);
       boostEl.classList.toggle('full', boost > 0.995);
@@ -907,7 +982,7 @@
     if (towerT <= 0) {
       towerT = 0.25;
       const order = [...cars].sort((a, b) => position(a) - position(b));
-      $('tower').innerHTML = mode === 'trial' ? '' : order.map((c, i) => `<li class="${c === player ? 'me' : ''}"><span class="n">${i + 1}</span><i style="background:${c.skin.paint}"></i>${esc(c.name)}${c.finished !== null ? '<span class="done">✓</span>' : ''}</li>`).join('');
+      $('tower').innerHTML = solo ? '' : order.map((c, i) => `<li class="${c === player ? 'me' : ''}"><span class="n">${i + 1}</span><i style="background:${c.skin.paint}"></i>${esc(c.name)}${c.eliminated ? '<span class="done">✕</span>' : c.finished !== null ? '<span class="done">✓</span>' : ''}</li>`).join('');
     }
   }
 
@@ -936,6 +1011,8 @@
 
   // Online: how far apart you are in seconds, from when the leader passed the trailer's spot.
   function gapText() {
+    if (mode === 'knockout' && state === 'playing') return `${aliveCars().length} cars left · knockout in ${Math.ceil(koTimer)}s`;
+    if (mode === 'chase' && state === 'playing') return `${chaseLeft.toFixed(1)}s left · checkpoint ${chaseCount + 1}`;
     const rival = net && cars.find(c => c.remote);
     if (!rival || countdown > 0 || player.finished !== null || rival.finished !== null) return '';
     const [lead, trail, times] = player.dist >= rival.dist ? [player, rival, net.mine] : [rival, player, net.theirs];
@@ -1030,7 +1107,8 @@
     if (track.custom) return { notes, coins: 0, newLap: false };
     let bonus = 0;
     const lapRec = Arcade.load(lapKey(track.id), null);
-    const newLap = isFinite(bestLap) && (!lapRec || bestLap < lapRec);
+    const valid = recordsValid();
+    const newLap = valid && isFinite(bestLap) && (!lapRec || bestLap < lapRec);
     if (newLap) {
       Arcade.save(lapKey(track.id), bestLap);
       notes.push(`New lap record: ${fmt(bestLap)}`);
@@ -1040,7 +1118,7 @@
         Online.put(`scores/${lapBoard(track.id)}/${me.id}`, { name: me.name, score: toScore(bestLap), t: Online.TIMESTAMP }).catch(() => {});
       }
     }
-    if (time != null) {
+    if (time != null && valid) {
       const key = timeKey(track.id, laps);
       const prev = Arcade.load(key, null);
       if (!prev || time < prev) {
@@ -1049,7 +1127,8 @@
       }
       saveGhost(time);
     }
-    return { notes, coins: bonus, newLap };
+    if (!valid) notes.push('No records: boost or overtakes used');
+    return { notes, coins: bonus, newLap, valid };
   }
 
   const unlockedIds = () => D.SKINS.filter(skinUnlocked).map(s => s.id);
@@ -1058,7 +1137,9 @@
     state = 'over';
     const place = position(player);
     const time = player.finished;
-    const title = place === 1 ? '1st place!' : `${ordinal(place)} place`;
+    const title = mode === 'knockout'
+      ? (place === 1 ? 'Last car standing!' : 'Knocked out')
+      : place === 1 ? '1st place!' : `${ordinal(place)} place`;
     const before = unlockedIds();
     const rec = settleRecords(time);
 
@@ -1108,7 +1189,7 @@
 
     const next = event && D.EVENTS[D.EVENTS.indexOf(event) + 1];
     const nextOpen = next && eventOpen(next);
-    const actionLabel = event ? (nextOpen && next.cup === event.cup ? 'Next race' : 'Career') : 'Race again';
+    const actionLabel = event ? (nextOpen && next.cup === event.cup ? 'Next race' : 'Career') : mode === 'knockout' ? 'Knockout again' : 'Race again';
     const action = () => {
       if (event && nextOpen && next.cup === event.cup) startEvent(next);
       else if (event) toMenu('career');
@@ -1128,8 +1209,9 @@
     }
 
     const arcadePar = (trackLen * laps) / PAR_SPEED;
-    const score = AUTOPILOT ? 0 : Math.round(PLACE_POINTS[place - 1] * level.points * laps / 3) + Math.round(Math.max(0, arcadePar / time - 1) * 4000);
+    const score = AUTOPILOT ? 0 : Math.round((PLACE_POINTS[place - 1] || 0) * level.points * laps / 3) + Math.round(Math.max(0, arcadePar / time - 1) * 4000) + (mode === 'knockout' ? 600 : 0);
     if (place === 1) Arcade.flag('pocket-racer-win');
+    if (place === 1 && mode === 'knockout') Arcade.flag('pocket-racer-knockout');
     Arcade.finish(ui, {
       score, title,
       lines: [summary, `<span class="muted-note">Arcade score · ${level.name} rivals · press R to retry</span>`],
@@ -1160,6 +1242,156 @@
     panel.insertAdjacentHTML('beforeend', `<div class="extra-actions">${retry ? '<button class="btn secondary" type="button" data-retry>Retry</button>' : ''}<button class="btn secondary" type="button" data-menu>Menu</button></div>`);
     panel.querySelector('[data-retry]')?.addEventListener('click', restart);
     panel.querySelector('[data-menu]').addEventListener('click', () => toMenu());
+  }
+
+  // ---------- Special modes and tournaments ----------
+
+  function knockoutDrop() {
+    const alive = aliveCars();
+    if (alive.length <= 1) return;
+    const last = alive.reduce((a, b) => (b.dist < a.dist ? b : a));
+    if (last === player) {
+      koOut = true;
+      finishT = 1.4;
+      banner('KNOCKED OUT', '', 1.4);
+      S.sfx.lose();
+      return;
+    }
+    last.eliminated = true;
+    last.ai = false;
+    last.v = 0;
+    last.steer = 0;
+    koTimer = KO_INTERVAL;
+    Arcade.tone({ freq: 360, to: 120, dur: 0.35, type: 'sawtooth', vol: 0.05 });
+    if (alive.length - 1 <= 1) {
+      koOut = false;
+      finishT = 1.4;
+      banner('LAST CAR STANDING!', '', 1.4);
+      S.sfx.win();
+      confetti(70);
+    } else {
+      banner(`${last.name} OUT`, `${alive.length - 1} cars left`, 1.6);
+    }
+  }
+
+  function finishKnockout() {
+    state = 'over';
+    S.stopCar();
+    const left = aliveCars().length;
+    const won = !koOut;
+    const coins = track.custom ? 0 : Math.round((won ? 180 : 60) * level.points);
+    addCoins(coins);
+    settleRecords(null);
+    Arcade.countPlay();
+    if (won) {
+      Arcade.flag('pocket-racer-knockout');
+      Arcade.flag('pocket-racer-win');
+    }
+    Arcade.finish(ui, {
+      score: Math.round((KO_CARS - left) * 250 + (won ? 900 : 0)),
+      title: won ? 'Last car standing!' : 'Knocked out',
+      lines: [`${KO_CARS - left} rivals eliminated · ${left} car${left === 1 ? '' : 's'} still running`],
+      html: `${coins ? `<div class="reward"><span><span class="coin">●</span> +${coins}</span></div>` : ''}<p class="muted-note">Eliminations every ${KO_INTERVAL}s. Never be last when the bell rings.</p>`,
+      button: 'Knockout again',
+      onAction: restart,
+    });
+  }
+
+  function finishChase() {
+    if (state !== 'playing') return;
+    state = 'over';
+    S.stopCar();
+    const best = Math.max(Arcade.load('racer:chase', 0), chaseCount);
+    Arcade.save('racer:chase', best);
+    const coins = track.custom ? 0 : 20 + chaseCount * 2;
+    addCoins(coins);
+    Arcade.countPlay();
+    Arcade.finish(ui, {
+      score: chaseCount * 100,
+      title: 'Chase over',
+      lines: [`${chaseCount} checkpoint${chaseCount === 1 ? '' : 's'} · best ${best}`],
+      html: `<div class="reward"><span><span class="coin">●</span> +${coins}</span></div><p class="muted-note">Each checkpoint buys a little more time, but the bonus shrinks as the run goes on.</p>`,
+      button: 'Chase again',
+      onAction: restart,
+    });
+  }
+
+  function startTournament(races) {
+    const tracks = shuffle(D.ALL_TRACKS).slice(0, races);
+    const skins = shuffle(D.SKINS.filter(s => s.id !== mySkin().id));
+    const names = shuffle(D.RIVALS).slice(0, 3);
+    tourney = {
+      races, index: 0, tracks, level: menuLevel, points: 0, wins: 0,
+      field: names.map((name, i) => ({ name, skin: skins[i], pace: RIVAL_PACE[i], points: 0, wins: 0 })),
+    };
+    startTournamentRace();
+  }
+
+  function startTournamentRace() {
+    const t = tourney.tracks[tourney.index];
+    startRace({ mode: 'tournament', track: t, laps: 3, level: tourney.level, field: tourney.field });
+  }
+
+  function tourneyRows() {
+    const rows = [
+      { name: 'You', points: tourney.points, wins: tourney.wins, color: mySkin().paint },
+      ...tourney.field.map(f => ({ name: f.name, points: f.points, wins: f.wins, color: f.skin.paint })),
+    ];
+    return rows.sort((a, b) => b.points - a.points || b.wins - a.wins);
+  }
+
+  function tourneyTable() {
+    return `<ol class="results">${tourneyRows().map((r, i) => `<li class="${r.name === 'You' ? 'me' : ''}"><span class="n">${i + 1}</span><i style="background:${r.color}"></i><span>${esc(r.name)}</span><span class="t">${r.points} pts</span></li>`).join('')}</ol>`;
+  }
+
+  function finishTournamentRace() {
+    state = 'over';
+    const time = player.finished;
+    const place = position(player);
+    tourney.points += PARA_POINTS[place - 1] || 0;
+    if (place === 1) tourney.wins++;
+    for (const f of tourney.field) {
+      const c = cars.find(c => c !== player && c.name === f.name);
+      if (!c) continue;
+      const p = position(c);
+      f.points += PARA_POINTS[p - 1] || 0;
+      if (p === 1) f.wins++;
+    }
+    settleRecords(time);
+    const coins = track.custom ? 0 : Math.round(D.PLACE_COINS[place - 1] * level.points);
+    addCoins(coins);
+    if (coins) setTimeout(() => S.sfx.coin(), 600);
+    tourney.index++;
+    if (tourney.index >= tourney.races) return finishTournament();
+    ui.show({
+      title: `Race ${tourney.index}/${tourney.races} complete`,
+      html: `<p class="big">${ordinal(place)}</p><p>${esc(track.name)} · ${fmt(time)}</p>${tourneyTable()}
+        <p class="muted-note">Next up: ${esc(tourney.tracks[tourney.index].name)}</p>
+        <div class="menu"><button class="btn secondary" type="button" data-quit>Quit tournament</button></div>`,
+      button: 'Next race',
+      onAction: startTournamentRace,
+      onRender: panel => panel.querySelector('[data-quit]').addEventListener('click', () => { tourney = null; toMenu('modes'); }),
+    });
+  }
+
+  function finishTournament() {
+    const rows = tourneyRows();
+    const champion = rows[0].name === 'You';
+    const place = rows.findIndex(r => r.name === 'You') + 1;
+    const coins = champion ? 150 : 50;
+    addCoins(coins);
+    Arcade.countPlay();
+    Arcade.flag('pocket-racer-tournament');
+    if (champion) Arcade.flag('pocket-racer-tournament-win');
+    if (champion && tourney.wins === tourney.races) Arcade.flag('pocket-racer-sweep');
+    Arcade.finish(ui, {
+      score: tourney.points * 100,
+      title: champion ? 'Tournament champion!' : `${ordinal(place)} in the tournament`,
+      lines: [`${tourney.points} points · ${tourney.wins} race win${tourney.wins === 1 ? '' : 's'} in ${tourney.races}`],
+      html: `${tourneyTable()}<div class="reward"><span><span class="coin">●</span> +${coins}</span></div>`,
+      button: 'New tournament',
+      onAction: () => { tourney = null; toMenu('modes'); },
+    });
   }
 
   // Time trial: just you and the ghost. Your best lap goes on the track's world leaderboard.
@@ -1447,10 +1679,10 @@
 
   function go(view, arg) {
     if (state !== 'menu') return;
-    returnView = ['home', 'career', 'quick', 'trial', 'online', 'garage', 'records', 'builder'].includes(view) ? view : 'home';
+    returnView = ['home', 'career', 'quick', 'trial', 'modes', 'online', 'garage', 'records', 'builder'].includes(view) ? view : 'home';
     setView('menu');
     spinners = [];
-    const views = { home, career, quick: () => quick('race'), trial: () => quick('trial'), online: onlineView, garage, records, builder };
+    const views = { home, career, quick: () => quick('race'), trial: () => quick('trial'), modes, online: onlineView, garage, records, builder };
     const v = (views[view] || home)(arg);
     screens.innerHTML = `<section class="screen">${v.html}</section>`;
     screens.scrollTop = 0;
@@ -1531,7 +1763,7 @@
       html: `<div class="home">
         <div class="card hero">
           <h2 class="hero-logo">POCKET<span>RACER</span></h2>
-          <p class="tag">Top-down racing. Six cups, ${D.ALL_TRACKS.length} tracks, ${D.SKINS.length} cars.</p>
+          <p class="tag">Top-down racing. ${D.CUPS.length} cups, ${D.ALL_TRACKS.length} tracks, ${D.SKINS.length} cars.</p>
           <div class="hero-car"><canvas id="hero-car"></canvas><span class="plate">${esc(skin.name)} · #${skin.num}</span></div>
           <div class="hero-actions"><button class="big-btn" type="button" data-go="career" style="flex:1">${doneEvents ? 'Continue career' : 'Start career'}</button></div>
         </div>
@@ -1543,6 +1775,7 @@
             ${tile('garage', '🚗', 'Garage', `${D.SKINS.filter(skinUnlocked).length}/${D.SKINS.length} cars`, '#c77dff')}
             ${tile('records', '🏆', 'Records', 'World leaderboards', '#ffc53d')}
             ${tile('builder', '🛠️', 'Track builder', `${customTracks().length} of your own`, '#ff8a1f')}
+            ${tile('modes', '🎯', 'Special modes', 'Knockout, chase, tournaments', '#ff5d5d')}
             ${tile('career', '⭐', 'Career', `${totalStars()}/${D.EVENTS.length * 3} stars · ${doneEvents}/${D.EVENTS.length} races`, '#ffc53d', 'wide')}
           </div>
           <div class="settings">${camChips()}<button class="chip" type="button" data-music aria-pressed="${S.musicOn()}">Music: ${S.musicOn() ? 'On' : 'Off'}</button></div>
@@ -1620,6 +1853,64 @@
     </button>`;
   }
 
+  function modes() {
+    const all = [...D.ALL_TRACKS, ...customTracks()];
+    const options = sel => all.map(t => `<option value="${esc(t.id)}" ${t.id === sel ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
+    const levels = D.LEVELS.map(l => `<button class="chip" type="button" data-mode-level="${l.id}" aria-pressed="${l === menuLevel}">${l.name}</button>`).join('');
+    const chaseBest = Arcade.load('racer:chase', 0);
+    return {
+      html: `${head('Special modes', 'Two new race formats and a championship series, on any track.')}
+        <div class="online-grid">
+          <div class="card" style="padding:16px">
+            <h3 style="margin:0 0 4px">💥 Knockout</h3>
+            <p class="muted-note" style="margin-top:0">Six cars. Every ${KO_INTERVAL} seconds the last-place car is eliminated. Don't be last when the bell rings.</p>
+            <label class="section-title" for="ko-track">Track</label>
+            <select class="field" id="ko-track">${options(quickPick.trackId)}</select>
+            <div class="filters" style="margin:10px 0">${levels}</div>
+            <button class="btn" type="button" data-start-ko style="width:100%">Start knockout</button>
+          </div>
+          <div class="card" style="padding:16px">
+            <h3 style="margin:0 0 4px">⏱️ Checkpoint chase</h3>
+            <p class="muted-note" style="margin-top:0">The clock starts at ${CHASE_START}s. Every checkpoint buys a little more time, but the bonus shrinks. Best: <b>${chaseBest}</b> checkpoints.</p>
+            <label class="section-title" for="chase-track">Track</label>
+            <select class="field" id="chase-track">${options(quickPick.trackId)}</select>
+            <button class="btn" type="button" data-start-chase style="width:100%;margin-top:10px">Start chase</button>
+          </div>
+          <div class="card" style="padding:16px;grid-column:1/-1">
+            <h3 style="margin:0 0 4px">🏆 Tournament</h3>
+            <p class="muted-note" style="margin-top:0">A championship series on random tracks with the same three rivals. Points: 10 / 7 / 5 / 3. Most points at the end wins.</p>
+            <div class="filters" data-tourney-races style="margin-bottom:8px"><button class="chip" type="button" data-races="3" aria-pressed="true">3 races</button><button class="chip" type="button" data-races="5" aria-pressed="false">5 races</button></div>
+            <div class="filters" data-tourney-levels style="margin-bottom:10px">${levels}</div>
+            <button class="btn" type="button" data-start-tourney style="width:100%">Start tournament</button>
+          </div>
+        </div>`,
+      wire: el => {
+        el.querySelectorAll('[data-mode-level]').forEach(b => b.addEventListener('click', () => {
+          menuLevel = D.LEVELS.find(l => l.id === b.dataset.modeLevel);
+          Arcade.save('racer:level', menuLevel.id);
+          el.querySelectorAll('[data-mode-level]').forEach(x => x.setAttribute('aria-pressed', x.dataset.modeLevel === menuLevel.id));
+        }));
+        let races = 3;
+        el.querySelectorAll('[data-races]').forEach(b => b.addEventListener('click', () => {
+          races = +b.dataset.races;
+          el.querySelectorAll('[data-races]').forEach(x => x.setAttribute('aria-pressed', +x.dataset.races === races));
+        }));
+        const pickTrack = id => { quickPick.trackId = id; Arcade.save('racer:track', id); };
+        el.querySelector('#ko-track').addEventListener('change', e => pickTrack(e.target.value));
+        el.querySelector('#chase-track').addEventListener('change', e => pickTrack(e.target.value));
+        el.querySelector('[data-start-ko]').addEventListener('click', () => {
+          const t = findTrack(el.querySelector('#ko-track').value);
+          if (t) startRace({ mode: 'knockout', track: t, laps: 5, level: menuLevel });
+        });
+        el.querySelector('[data-start-chase]').addEventListener('click', () => {
+          const t = findTrack(el.querySelector('#chase-track').value);
+          if (t) startRace({ mode: 'chase', track: t, laps: 999, level: menuLevel });
+        });
+        el.querySelector('[data-start-tourney]').addEventListener('click', () => startTournament(races));
+      },
+    };
+  }
+
   function quick(kind) {
     const all = [...D.ALL_TRACKS, ...customTracks()];
     if (!all.some(t => t.id === quickPick.trackId)) quickPick.trackId = 'harbor';
@@ -1627,7 +1918,7 @@
     const levels = D.LEVELS.map(l => `<button class="chip" type="button" data-level="${l.id}" aria-pressed="${l === menuLevel}">${l.name}</button>`).join('');
     const lapsChips = [1, 2, 3, 5].map(n => `<button class="chip" type="button" data-laps="${n}" aria-pressed="${n === quickPick.laps}">${n} lap${n > 1 ? 's' : ''}</button>`).join('');
     return {
-      html: `${head(trial ? 'Time trial' : 'Quick race', trial ? 'Three laps against a ghost: the world record, your own best, or a friend\'s best race. Your best lap goes on the track\'s leaderboard.' : 'Pick a track and race three rivals.')}
+      html: `${head(trial ? 'Time trial' : 'Quick race', trial ? 'Three laps against a ghost: the world record, your own best, or a friend\'s best race. Your best lap goes on the track\'s leaderboard. Boost is off in time trials, and records only stand on boost-free, overtake-free runs.' : 'Pick a track and race three rivals.')}
         <div class="track-grid">${all.map(t => trackCard(t, quickPick.trackId)).join('')}</div>
         <div class="race-setup">
           ${trial ? `<div class="setup-row"><label>Ghost</label><div class="filters" data-ghosts>${ghostChips()}</div></div>` : `<div class="setup-row"><label>Rivals</label><div class="filters">${levels}</div><label>Laps</label><div class="filters">${lapsChips}</div></div>`}
