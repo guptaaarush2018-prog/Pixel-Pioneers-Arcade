@@ -59,11 +59,7 @@ const Online = (() => {
       USER_DISABLED: 'This account has been switched off.',
       OPERATION_NOT_ALLOWED: 'Accounts aren\'t switched on for this arcade yet.',
     };
-    // Firebase refuses to attach an email to a guest while the project's email enumeration
-    // protection is on. Only the project owner can turn that off, so tell players what to do.
-    const message = e => /verify the new email/i.test(e?.detail || '')
-      ? 'Account saving is unavailable right now. Your progress is still saved in this browser.'
-      : MESSAGES[e?.code] || 'Couldn\'t reach the server. Check your connection.';
+    const message = e => MESSAGES[e?.code] || 'Couldn\'t reach the server. Check your connection.';
 
     async function call(endpoint, body, form = false) {
       let res;
@@ -302,15 +298,14 @@ const Online = (() => {
     // Guest -> saved account: same id, same progress, now with an email and password.
     async function register(email, password) {
       try {
-        if (!(await token())) throw Object.assign(new Error('offline'), { code: 'NETWORK' });
-        keep(await call(ID + 'update?key=' + apiKey, { idToken: state.token, email, password, returnSecureToken: true }), email);
+        const idToken = await token();
+        if (!idToken) throw Object.assign(new Error('offline'), { code: 'NETWORK' });
+        // accounts:update can't link an email while email enumeration protection is on, but
+        // accounts:signUp with the guest's token is the supported way and keeps the same id.
+        keep(await call(ID + 'signUp?key=' + apiKey, { idToken, email, password, returnSecureToken: true }), email);
         await enqueue(upload);
         return '';
       } catch (e) {
-        if (/verify the new email/i.test(e?.detail || '')) {
-          console.warn('Saving a guest account is blocked by Firebase email enumeration protection. '
-            + 'Turn it off under Authentication → Settings → User actions in the Firebase console.');
-        }
         return message(e);
       }
     }
