@@ -648,5 +648,8 @@ const Arcade = (() => {
     gameId, profile, setName, randomName, randomId, onSave, stats, flag, achievementList, unlocked, finish, countPlay, toast,
     SHOP, tickets, addTickets, equipped, equip, owned, daily, DAILY_REWARD, DAILY_BONUS,
     isAdmin, setScoreSource, commandUsed: () => tainted,
+    // For games with no game-over screen (open worlds, sandboxes): counts a running score toward
+    // today's score challenge.
+    dailyScore: score => { if (!tainted) dailyEvent({ score }); },
   };
 })();

@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" width="320" height="200">
+  <defs>
+    <linearGradient id="road" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#3a4048"/><stop offset=".5" stop-color="#454c55"/><stop offset="1" stop-color="#3a4048"/></linearGradient>
+    <linearGradient id="car" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff8a80"/><stop offset=".5" stop-color="#e53935"/><stop offset="1" stop-color="#b71c1c"/></linearGradient>
+    <radialGradient id="siren"><stop offset="0" stop-color="#ff1744" stop-opacity=".55"/><stop offset="1" stop-color="#ff1744" stop-opacity="0"/></radialGradient>
+    <radialGradient id="siren2"><stop offset="0" stop-color="#2979ff" stop-opacity=".55"/><stop offset="1" stop-color="#2979ff" stop-opacity="0"/></radialGradient>
+    <filter id="ds" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="3" dy="4" stdDeviation="3" flood-opacity=".45"/></filter>
+  </defs>
+  <rect width="320" height="200" fill="#41474f"/>
+  <!-- blocks: sidewalk then ground -->
+  <rect x="-10" y="-10" width="120" height="80" fill="#9aa0a6"/><rect x="-10" y="-10" width="116" height="76" fill="#b9bec4"/>
+  <rect x="170" y="-10" width="160" height="80" fill="#9aa0a6"/><rect x="174" y="-10" width="156" height="76" fill="#b9bec4"/>
+  <rect x="-10" y="130" width="120" height="80" fill="#9aa0a6"/><rect x="-10" y="134" width="116" height="76" fill="#79b26a"/>
+  <rect x="170" y="130" width="160" height="80" fill="#9aa0a6"/><rect x="174" y="134" width="156" height="76" fill="#b9bec4"/>
+  <!-- road markings -->
+  <rect x="0" y="98" width="320" height="1.6" fill="#e8c547"/><rect x="0" y="101" width="320" height="1.6" fill="#e8c547"/>
+  <rect x="138" y="0" width="1.6" height="200" fill="#e8c547"/><rect x="141" y="0" width="1.6" height="200" fill="#e8c547"/>
+  <g fill="#fff" opacity=".7"><rect x="114" y="72" width="5" height="10"/><rect x="122" y="72" width="5" height="10"/><rect x="130" y="72" width="5" height="10"/><rect x="146" y="118" width="5" height="10"/><rect x="154" y="118" width="5" height="10"/><rect x="162" y="118" width="5" height="10"/></g>
+  <!-- buildings leaning toward the viewer -->
+  <polygon points="10,8 0,-4 90,-4 94,8" fill="#4f6d8a"/>
+  <polygon points="94,8 90,-4 94,56 100,62" fill="#3f5970"/>
+  <rect x="0" y="-4" width="90" height="58" fill="#6d8fb3" transform="translate(-6 -4)"/>
+  <g fill="#cfe8ff" opacity=".55"><rect x="6" y="6" width="10" height="8"/><rect x="24" y="6" width="10" height="8"/><rect x="42" y="6" width="10" height="8"/><rect x="60" y="6" width="10" height="8"/><rect x="6" y="24" width="10" height="8"/><rect x="24" y="24" width="10" height="8"/><rect x="42" y="24" width="10" height="8"/><rect x="60" y="24" width="10" height="8"/></g>
+  <circle cx="70" cy="40" r="7" fill="#455a64"/><circle cx="70" cy="40" r="5" fill="none" stroke="#ffeb3b" stroke-width="1.5"/>
+  <polygon points="186,56 180,62 312,62 316,56" fill="#9e6150"/>
+  <rect x="190" y="-8" width="132" height="62" fill="#c49a6c"/>
+  <rect x="200" y="16" width="50" height="26" fill="#66bb6a"/><circle cx="212" cy="26" r="4" fill="#43a047"/><circle cx="232" cy="32" r="4" fill="#43a047"/>
+  <rect x="270" y="6" width="12" height="12" fill="#dcc3a0"/><rect x="290" y="30" width="10" height="10" fill="#dcc3a0"/>
+  <!-- park -->
+  <circle cx="40" cy="168" r="16" fill="#2e7d32"/><circle cx="36" cy="164" r="11" fill="#43a047"/><circle cx="34" cy="161" r="5" fill="#66bb6a"/>
+  <circle cx="84" cy="182" r="13" fill="#2e7d32"/><circle cx="81" cy="179" r="9" fill="#43a047"/>
+  <rect x="196" y="140" width="86" height="56" fill="#e57373"/><rect x="196" y="166" width="86" height="30" fill="#c95f5f"/><rect x="196" y="164" width="86" height="4" fill="#f19a9a"/>
+  <!-- ramp -->
+  <rect x="246" y="86" width="20" height="30" fill="#ffca28"/><g fill="#212121"><rect x="248" y="89" width="16" height="3"/><rect x="248" y="96" width="16" height="3"/><rect x="248" y="103" width="16" height="3"/><rect x="248" y="110" width="16" height="3"/></g>
+  <!-- tyre smoke -->
+  <g fill="#ddd" opacity=".35"><circle cx="70" cy="116" r="9"/><circle cx="56" cy="120" r="11"/><circle cx="42" cy="114" r="8"/><circle cx="84" cy="122" r="6"/></g>
+  <!-- the getaway car -->
+  <g transform="translate(118 112) rotate(-14)" filter="url(#ds)">
+    <rect x="-24" y="-11" width="48" height="22" rx="6" fill="#7f1717"/><rect x="-23" y="-10" width="46" height="20" rx="5" fill="url(#car)"/>
+    <rect x="-8" y="-8" width="20" height="16" rx="3" fill="#263238"/><rect x="5" y="-7" width="6" height="14" rx="2" fill="#80cbc4"/><rect x="-6" y="-7" width="10" height="14" rx="2" fill="#e05050"/>
+    <rect x="21" y="-9" width="3" height="5" fill="#fff59d"/><rect x="21" y="4" width="3" height="5" fill="#fff59d"/>
+  </g>
+  <!-- police car in pursuit -->
+  <circle cx="38" cy="86" r="30" fill="url(#siren)"/><circle cx="20" cy="94" r="26" fill="url(#siren2)"/>
+  <g transform="translate(30 90) rotate(-6)" filter="url(#ds)">
+    <rect x="-24" y="-11" width="48" height="22" rx="6" fill="#90a4ae"/><rect x="-23" y="-10" width="46" height="20" rx="5" fill="#eceff1"/>
+    <rect x="-22" y="-10" width="12" height="20" fill="#263238"/><rect x="14" y="-10" width="8" height="20" fill="#263238"/>
+    <rect x="-8" y="-8" width="20" height="16" rx="3" fill="#263238"/><rect x="0" y="-8" width="5" height="7" fill="#ff1744"/><rect x="0" y="1" width="5" height="7" fill="#2979ff"/>
+  </g>
+  <!-- HUD -->
+  <rect x="8" y="8" width="74" height="24" rx="7" fill="#141c28" fill-opacity=".85"/>
+  <text x="16" y="25" font-family="system-ui,sans-serif" font-weight="900" font-size="14" fill="#9be37a">$6,250</text>
+  <g font-family="system-ui,sans-serif" font-size="18" font-weight="900" stroke="#000" stroke-opacity=".6" stroke-width="2" paint-order="stroke">
+    <text x="232" y="27" fill="#ffd54f">★</text><text x="248" y="27" fill="#ffd54f">★</text><text x="264" y="27" fill="#ffd54f">★</text><text x="280" y="27" fill="#ffffff" fill-opacity=".25">★</text><text x="296" y="27" fill="#ffffff" fill-opacity=".25">★</text>
+  </g>
+</svg>

@@ -16,7 +16,7 @@
   const $ = id => document.getElementById(id);
 
   let state = 'menu';         // 'playing' | 'stairs' | 'between' | 'paused' | 'over'
-  let level, total, crowd, shown, x, targetX, dist, things, finishAt, stairs;
+  let level, total, crowd, shown, x, targetX, dist, things, finishAt, stairs, levelEst;
   let keys = { left: false, right: false };
   let streak, bestStreak, shield;
   const fx = Gfx.particles(600);
@@ -90,6 +90,7 @@
     const lv = makeLevel(level);
     things = lv.list;
     finishAt = lv.finish;
+    levelEst = Math.max(10, lv.est);
     dist = 0;
     crowd = shown = 10;
     x = targetX = ROAD_MID;
@@ -121,14 +122,14 @@
   }
 
   function levelDone(mult) {
-    const gained = Math.round(stairs.start * mult);
+    const gained = Math.round(stairs.start * mult) + (stairs.extra || 0) * 2;
     total += gained;
     if (mult >= 3) Arcade.flag('crowd-rush-top');
     state = 'between';
     Arcade.tone({ freq: 523, to: 1046, dur: 0.35, type: 'triangle', vol: 0.06 });
     ui.show({
       title: `Level ${level} cleared!`,
-      html: `<p class="big">+${gained.toLocaleString()}</p><p>${stairs.start} runners × ${mult.toFixed(1)} on the stairs</p><p>Total ${total.toLocaleString()}</p>`,
+      html: `<p class="big">+${gained.toLocaleString()}</p><p>${stairs.start} runners × ${mult.toFixed(1)} on the stairs${stairs.extra ? ` + ${stairs.extra * 2} summit bonus` : ''}</p><p>Total ${total.toLocaleString()}</p>`,
       button: 'Next level',
       delay: 400,
       onAction: () => {
@@ -239,7 +240,10 @@
 
     if (PLAYER_Y + finishAt + dist >= PLAYER_Y) {
       state = 'stairs';
-      stairs = { start: crowd, step: 0, t: 0, cost: Math.max(2, Math.round(crowd / (STEPS * 0.6))) };
+      // Each step costs the same runners whatever your crowd is, priced off the crowd a good
+      // player would have here: matching that reaches ×2.6, and beating it by a quarter (streaks,
+      // recruits, shields) reaches the ×3.0 top. Runners left over past the top pay a bonus.
+      stairs = { start: crowd, step: 0, t: 0, cost: Math.max(2, Math.round(levelEst / (STEPS * 0.8))) };
     }
   }
 
@@ -254,6 +258,10 @@
       burst(ROAD_MID, PLAYER_Y - stairs.step * 40, [`hsl(${200 - stairs.step * 18}, 80%, 65%)`, '#fff'], 10);
       Arcade.tone({ freq: 400 + stairs.step * 60, dur: 0.06, type: 'triangle', vol: 0.04 });
     } else {
+      if (stairs.step >= STEPS && crowd > 0) {
+        stairs.extra = crowd;
+        popText(`Summit! +${crowd} bonus`, '#ffd54f', 40);
+      }
       levelDone(1 + stairs.step * 0.2);
     }
     shown = crowd;

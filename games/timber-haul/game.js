@@ -18,22 +18,47 @@
 
   // ---------- World data ----------
 
-  const TYPES = [
+  // Two worlds share the map's shape. World 2 (the Jungle Coast, reached by ferry once every
+  // World 1 forest is open) has its own trees, cash, upgrades and crew, and everything in it is
+  // worth K times more. Lifetime earnings (the score) count both. Switching worlds saves the one
+  // you leave and reloads the page into the other.
+  const WORLD = (Arcade.load(SAVE_KEY, null) || {}).world === 1 ? 1 : 0;
+  const K = WORLD ? 50 : 1;
+  const WORLD_NAMES = ['Timberland', 'Jungle Coast'];
+  const FERRY_COST = 500000;
+  const FERRY_PAD = { x: 1440, y: 1540, r: 42 };
+  const TYPES_1 = [
     { name: 'Pine', hp: 1, logs: 1, value: 3, regrow: 28, bark: '#8a5a34', ring: '#e9c68c', leaf: '#3f9b4a' },
     { name: 'Birch', hp: 3, logs: 1, value: 8, regrow: 32, bark: '#ece6d8', ring: '#f2deb0', leaf: '#9dcf4f' },
     { name: 'Redwood', hp: 7, logs: 2, value: 18, regrow: 38, bark: '#a2432c', ring: '#e7a072', leaf: '#2f7d43' },
     { name: 'Frost Pine', hp: 18, logs: 2, value: 45, regrow: 44, bark: '#6d5a52', ring: '#dde6ec', leaf: '#3a7d72' },
     { name: 'Maple', hp: 40, logs: 3, value: 110, regrow: 50, bark: '#5e3b25', ring: '#f0b878', leaf: '#e2652e' },
   ];
+  const TYPES_2 = [
+    { name: 'Palm', hp: 1.2, logs: 1, value: 150, regrow: 28, bark: '#a5814f', ring: '#f1dca5', leaf: '#3fae57' },
+    { name: 'Bamboo', hp: 3.6, logs: 1, value: 400, regrow: 26, bark: '#8fbf4a', ring: '#e3efb0', leaf: '#5cc24a' },
+    { name: 'Mahogany', hp: 8.5, logs: 2, value: 900, regrow: 38, bark: '#7a2e1f', ring: '#d9825c', leaf: '#1f7a3a' },
+    { name: 'Ironwood', hp: 22, logs: 2, value: 2250, regrow: 44, bark: '#3c3434', ring: '#b7a99a', leaf: '#4a6b3a' },
+    { name: 'Sunwood', hp: 48, logs: 3, value: 5500, regrow: 50, bark: '#6b4a2b', ring: '#ffd48a', leaf: '#f0a51f' },
+  ];
+  const TYPES = WORLD ? TYPES_2 : TYPES_1;
 
-  const ZONES = [
+  const ZONES_1 = [
     { name: 'Pine Grove', cost: 0, x: 0, y: 900, w: 900, h: 700, ground: '#7cc158' },
     { name: 'Birch Wood', cost: 300, x: 0, y: 0, w: 900, h: 900, ground: '#90cb60', pad: { x: 450, y: 985 } },
     { name: 'Redwood Valley', cost: 2500, x: 900, y: 0, w: 600, h: 1000, ground: '#6cae50', pad: { x: 1200, y: 1085 } },
     { name: 'Frost Pines', cost: 15000, x: 1500, y: 0, w: 900, h: 900, ground: '#e4edf2', snow: true, pad: { x: 1420, y: 470 } },
     { name: 'Maple Ridge', cost: 80000, x: 1500, y: 900, w: 900, h: 700, ground: '#bcc35c', pad: { x: 1430, y: 1150 } },
   ];
-  const YARD = { x: 900, y: 1000, w: 600, h: 600, ground: '#a8c76a' };
+  const ZONES_2 = [
+    { ...ZONES_1[0], name: 'Palm Beach', ground: '#e6d395', sand: true },
+    { ...ZONES_1[1], name: 'Bamboo Thicket', cost: 15000, ground: '#8fcf6a' },
+    { ...ZONES_1[2], name: 'Mahogany Jungle', cost: 125000, ground: '#4f9a46' },
+    { ...ZONES_1[3], name: 'Volcano Slopes', cost: 750000, ground: '#7a7270', snow: false, ash: true },
+    { ...ZONES_1[4], name: 'Golden Grove', cost: 4000000, ground: '#d6c86a' },
+  ];
+  const ZONES = WORLD ? ZONES_2 : ZONES_1;
+  const YARD = { x: 900, y: 1000, w: 600, h: 600, ground: WORLD ? '#cdbd80' : '#a8c76a' };
   const PAD_R = 42;
   const MILL_PAD = { x: 1185, y: 1385, r: 48 };
   const GARAGE_PAD = { x: 995, y: 1366, r: 42 };
@@ -61,24 +86,40 @@
     { id: 'eng', name: 'Engine', icon: '⚙️', base: 40, grow: 1.6, max: 15, show: lv => `Top speed ${Math.round(speedOf(lv))}` },
     { id: 'mill', name: 'Sawmill', icon: '🏭', base: 60, grow: 1.65, max: 25, show: lv => `Logs sell for ×${millMult(lv).toFixed(2)}` },
   ];
-  const upCost = (u, lv) => Math.round(u.base * Math.pow(u.grow, lv));
+  const upCost = (u, lv) => Math.round(u.base * K * Math.pow(u.grow, lv));
   // Timber Frenzy, the stacking boost: a lucky tree starts it (logs sell ×FRENZY_BASE, your saw
   // cuts ×FRENZY_SAW). While it runs, extra lucky trees sprout nearby; each one cut adds a stack
   // (+FRENZY_STACK of the base each) and more time.
   const FRENZY_TIME = 30, FRENZY_ADD = 15, FRENZY_CAP = 75, FRENZY_MAX = 5, FRENZY_BASE = 2, FRENZY_STACK = 0.5, FRENZY_SAW = 1.5;
-  const CREW_COST = [400, 1500, 6000, 25000, 100000, 400000];
+  const CREW_COST = [400, 1500, 6000, 25000, 100000, 400000].map(c => c * K);
   const crewCap = () => 8 + s.lv.cap * 2;
   const crewDmg = () => sawDmg(s.lv.saw) * 0.5;
   const crewSpeed = () => 140 + s.lv.eng * 5;
 
   // ---------- Save ----------
 
-  let s;
+  let s, sailing = false;
   function fresh() {
     return {
       v: VERSION, cash: 0, lifetime: 0, lv: { saw: 0, cap: 0, eng: 0, mill: 0 }, crew: 0, unlocked: 1, paid: 0,
       x: START.x, y: START.y, a: -Math.PI / 2, load: [], order: null, sold: 0, lucky: 0, saved: Date.now(), intro: false,
+      world: 0, ferry: false, worlds: {},
     };
+  }
+  // What each world keeps for itself; everything else (lifetime, sold, flags) is shared.
+  const PER_WORLD = ['cash', 'lv', 'crew', 'unlocked', 'paid', 'x', 'y', 'a', 'load', 'order'];
+  function sail(to) {
+    persist();
+    s.worlds[s.world] = Object.fromEntries(PER_WORLD.map(k => [k, s[k]]));
+    const f = fresh();
+    Object.assign(s, Object.fromEntries(PER_WORLD.map(k => [k, f[k]])), s.worlds[to] || {});
+    s.world = to;
+    sailing = true;
+    s.x = FERRY_PAD.x - 60; s.y = FERRY_PAD.y - 70; s.a = -Math.PI / 2;
+    s.saved = Date.now();
+    Arcade.save(SAVE_KEY, s);
+    ui.show({ title: `⛴ Sailing to ${WORLD_NAMES[to]}…`, html: '<p>Hold on to your hard hat.</p>', button: null });
+    setTimeout(() => location.reload(), 900);
   }
   function loadSave() {
     const raw = Arcade.load(SAVE_KEY, null);
@@ -87,6 +128,7 @@
   }
   const score = () => Math.floor(s.lifetime);
   function persist() {
+    if (sailing) return;
     s.x = truck.x; s.y = truck.y; s.a = truck.a;
     s.saved = Date.now();
     Arcade.submitScore(ID, score());
@@ -144,8 +186,75 @@
     c.fillStyle = bark;
     c.fillRect(x0, y0, (x1 - x0) * 0.55, y1 - y0);
   }
+  // Jungle Coast trees.
+  function fronds(c, cx, cy, n, len, leaf) {
+    for (let k = 0; k < n; k++) {
+      const a = Math.PI + (k / (n - 1)) * Math.PI, ex = cx + Math.cos(a) * len, ey = cy + Math.sin(a) * len * 0.55 + len * 0.35;
+      c.strokeStyle = k % 2 ? shade(leaf, -0.2) : leaf;
+      c.lineWidth = 7;
+      c.lineCap = 'round';
+      c.beginPath(); c.moveTo(cx, cy); c.quadraticCurveTo((cx + ex) / 2, cy - len * 0.35, ex, ey); c.stroke();
+    }
+    c.fillStyle = shade(leaf, 0.25);
+    c.beginPath(); c.arc(cx, cy - 2, 5, 0, TAU); c.fill();
+  }
+  function jungleSprite(i, leafOverride) {
+    const T = TYPES[i], leaf = leafOverride || T.leaf;
+    switch (i) {
+      case 0: return Gfx.sprite(80, 100, 40, 92, c => {
+        // A palm: a curved, ringed trunk and drooping fronds, with coconuts.
+        c.strokeStyle = shade(T.bark, -0.15);
+        c.lineWidth = 7;
+        c.beginPath(); c.moveTo(38, 92); c.quadraticCurveTo(30, 60, 44, 32); c.stroke();
+        c.strokeStyle = shade(T.bark, 0.2);
+        c.lineWidth = 2;
+        for (let k = 0; k < 6; k++) { const y = 86 - k * 9, x = 37 - Math.sin(k / 2) * 3 + (k > 3 ? (k - 3) * 2 : 0); c.beginPath(); c.moveTo(x - 3, y); c.lineTo(x + 4, y - 1); c.stroke(); }
+        fronds(c, 44, 30, 7, 30, leaf);
+        c.fillStyle = '#6b4a2b';
+        for (const [x, y] of [[41, 36], [47, 37], [44, 40]]) { c.beginPath(); c.arc(x, y, 3.2, 0, TAU); c.fill(); }
+      });
+      case 1: return Gfx.sprite(56, 112, 28, 104, c => {
+        // Bamboo: a clump of jointed stalks with a few leaves.
+        for (const [x, top, w] of [[18, 14, 6], [28, 4, 7], [38, 18, 6], [23, 30, 5], [34, 26, 5]]) {
+          c.fillStyle = shade(T.bark, -0.15);
+          c.fillRect(x - w / 2, top, w, 104 - top);
+          c.fillStyle = shade(T.bark, 0.15);
+          c.fillRect(x - w / 2, top, w * 0.4, 104 - top);
+          c.fillStyle = shade(T.bark, -0.4);
+          for (let y = top + 14; y < 100; y += 16) c.fillRect(x - w / 2 - 1, y, w + 2, 2);
+          c.fillStyle = leaf;
+          for (let y = top + 6; y < 70; y += 22) {
+            c.beginPath(); c.ellipse(x + 8, y, 8, 2.5, -0.5, 0, TAU); c.fill();
+            c.beginPath(); c.ellipse(x - 8, y + 9, 8, 2.5, 0.5, 0, TAU); c.fill();
+          }
+        }
+      });
+      case 2: return Gfx.sprite(90, 120, 45, 112, c => {
+        // Mahogany: a tall red trunk with buttress roots and a wide, dark crown.
+        c.fillStyle = shade(T.bark, -0.25);
+        c.beginPath(); c.moveTo(30, 113); c.lineTo(40, 60); c.lineTo(50, 60); c.lineTo(60, 113); c.closePath(); c.fill();
+        trunk(c, 40, 50, 46, 108, T.bark);
+        blobs(c, [[45, 38, 24], [22, 48, 16], [68, 48, 16], [32, 22, 15], [58, 24, 15], [45, 14, 12]], leaf);
+      });
+      case 3: return Gfx.sprite(70, 108, 35, 100, c => {
+        // Ironwood: a gnarled dark trunk, ash-dusted needles.
+        trunk(c, 31, 39, 64, 101, T.bark);
+        pineTiers(c, 35, 80, 3, 28, 30, 18, 6, leaf);
+        c.fillStyle = 'rgba(190,180,175,0.7)';
+        for (const [x, y] of [[26, 74], [44, 70], [35, 52], [30, 40], [41, 37]]) { c.beginPath(); c.ellipse(x, y, 4, 1.6, 0, 0, TAU); c.fill(); }
+      });
+      default: return Gfx.sprite(84, 104, 42, 96, c => {
+        // Sunwood: a broad golden crown that glows.
+        trunk(c, 38, 46, 56, 97, T.bark);
+        c.fillStyle = 'rgba(255,220,120,0.25)';
+        c.beginPath(); c.arc(42, 40, 36, 0, TAU); c.fill();
+        blobs(c, [[42, 40, 22], [24, 50, 15], [60, 50, 15], [30, 24, 14], [54, 26, 14], [42, 16, 11]], leaf);
+      });
+    }
+  }
   // Each tree: a sprite anchored at the base of its trunk.
   function treeSprite(i, leafOverride) {
+    if (WORLD) return jungleSprite(i, leafOverride);
     const T = TYPES[i], leaf = leafOverride || T.leaf;
     switch (i) {
       case 0: return Gfx.sprite(60, 92, 30, 84, c => {
@@ -240,7 +349,9 @@
         nearby(x, y, gap, t => { if (ok && Math.hypot(t.x - x, t.y - y) < gap * (0.8 + 0.2 * r())) ok = false; });
         if (!ok) continue;
         const T = TYPES[zi];
-        const t = { x, y, type: zi, zone: zi, hp: T.hp, state: 0, timer: 0, g: 1, shake: 0, fallDir: 1, lucky: 0, size: 0.85 + r() * 0.3, claimed: null };
+        // The Jungle Coast has giants: half again as big, five times the wood, five times as tough.
+        const giant = WORLD && r() < 0.07;
+        const t = { x, y, type: zi, zone: zi, hp: T.hp * (giant ? 5 : 1), state: 0, timer: 0, g: 1, shake: 0, fallDir: 1, lucky: 0, size: giant ? 1.5 : 0.85 + r() * 0.3, giant, claimed: null };
         trees.push(t);
         byZone[zi].push(t);
         const k = cellKey(Math.floor(x / CELL), Math.floor(y / CELL));
@@ -259,7 +370,7 @@
       const x = r() * WORLD_W, y = r() * WORLD_H;
       const zone = ZONES.findIndex(z => inRect({ x, y }, z));
       const k = r();
-      decor.push({ x, y, kind: k < 0.4 ? 'rock' : k < 0.8 ? 'flower' : 'bush', c: r(), snow: zone === 3 });
+      decor.push({ x, y, kind: k < 0.4 ? 'rock' : k < 0.8 ? 'flower' : 'bush', c: r(), snow: zone === 3 && !WORLD, ash: zone === 3 && WORLD === 1, sand: WORLD === 1 && (zone === 0 || zone < 0) });
     }
   })();
 
@@ -394,7 +505,7 @@
   // Cuts a standing tree for dt seconds' worth of damage. Returns false if the vehicle is too full.
   function cut(v, t, dmg, dt) {
     const T = TYPES[t.type];
-    if (loadOf(v).length + v.incoming + T.logs > capFor(v)) return false;
+    if (loadOf(v).length + v.incoming + T.logs * (t.giant ? 5 : 1) > capFor(v)) return false;
     t.hp -= dmg * dt * (v.player && frenzy > 0 ? FRENZY_SAW : 1);
     t.shake = 0.12;
     v.cutting = true;
@@ -408,8 +519,9 @@
     t.state = 1; t.timer = 0; t.hp = 0;
     t.fallDir = t.x >= v.x ? 1 : -1;
     t.claimed = null;
-    v.incoming += T.logs;
-    for (let i = 0; i < T.logs; i++) {
+    const logs = T.logs * (t.giant ? 5 : 1);
+    v.incoming += logs;
+    for (let i = 0; i < logs; i++) {
       flyers.push({ kind: 'log', type: t.type, x0: t.x, y0: t.y, z0: 24, to: v, t: -0.18 - i * 0.09, dur: 0.38 });
     }
     chips(t, 8);
@@ -507,8 +619,9 @@
       fx.emit({ x: cx + Arcade.rand(-z.w / 2, z.w / 2), y: cy + Arcade.rand(-z.h / 2, z.h / 2), vx: Arcade.rand(-30, 30), vy: Arcade.rand(-80, -20), life: Arcade.rand(0.8, 1.6),
         size: Arcade.rand(2, 4), color: ['#ffe066', '#ffffff', '#9fe870'][i % 3], shape: 'square', spin: 4 });
     }
-    if (s.unlocked - 1 === 2) Arcade.flag('timber-haul-redwood');
-    if (s.unlocked === ZONES.length) Arcade.flag('timber-haul-maple');
+    if (!WORLD && s.unlocked - 1 === 2) Arcade.flag('timber-haul-redwood');
+    if (!WORLD && s.unlocked === ZONES.length) Arcade.flag('timber-haul-maple');
+    if (WORLD && s.unlocked === ZONES.length) Arcade.flag('timber-haul-grove');
     if (!s.order || s.order.type < s.unlocked - 2) newOrder();
     persist();
     const T = TYPES[s.unlocked - 1];
@@ -518,7 +631,9 @@
       lines: [
         `${T.name} trees: ${T.logs > 1 ? `${T.logs} logs each, ` : ''}${money(T.value)} a log before mill bonus.`,
         T.hp > sawDmg(s.lv.saw) * 2 ? 'They are tough. Upgrade your saw at the garage.' : 'Your saw can handle them. Go get them!',
-        s.unlocked < ZONES.length ? `Next up: ${ZONES[s.unlocked].name} for ${money(ZONES[s.unlocked].cost)}.` : 'Every forest is open. Keep hauling for the top of the leaderboard!',
+        s.unlocked < ZONES.length ? `Next up: ${ZONES[s.unlocked].name} for ${money(ZONES[s.unlocked].cost)}.`
+          : WORLD ? 'Every forest on the Jungle Coast is open. Keep hauling for the top of the leaderboard!'
+          : `Every forest is open! A ferry dock has opened by the sawmill: ${money(FERRY_COST)} sails you to World 2, the Jungle Coast.`,
       ],
       button: 'Keep hauling',
       onAction: () => ui.hide(),
@@ -562,6 +677,36 @@
     persist();
     garagePanel();
   }
+  // ---------- Ferry ----------
+
+  let inFerry = false;
+  const ferryOpen = () => WORLD === 1 || s.unlocked >= ZONES.length || s.ferry;
+  function ferryPanel() {
+    const to = WORLD ? 0 : 1;
+    const paid = s.ferry || WORLD === 1;
+    const blurb = to
+      ? `<p>World 2, the <b>Jungle Coast</b>: palms, bamboo, mahogany, ironwood on a smoking volcano, and the Golden Grove's sunwood. Giant trees hold five times the wood. Logs there are worth ${50}× more.</p>
+         <p>You start fresh there with your own cash, upgrades and crew. Your Timberland stays just as you left it, and your lifetime earnings keep counting in both.</p>`
+      : '<p>Sail back to <b>Timberland</b>? Your Jungle Coast progress is saved. Crews only work in the world you\'re in.</p>';
+    ui.show({
+      title: `⛴ Ferry to ${WORLD_NAMES[to]}`,
+      html: `${blurb}${paid ? '' : `<p class="th-cash">${money(s.cash)}</p>`}
+        <div class="menu"><button class="btn" type="button" data-sail ${!paid && s.cash < FERRY_COST ? 'disabled' : ''}>${paid ? 'Set sail' : `Buy the ferry: ${money(FERRY_COST)}`}</button></div>`,
+      button: 'Not yet',
+      onAction: () => ui.hide(),
+      onRender: panel => panel.querySelector('[data-sail]').addEventListener('click', () => {
+        if (!paid) {
+          if (s.cash < FERRY_COST) return;
+          s.cash -= FERRY_COST;
+          s.ferry = true;
+        }
+        if (to === 1) Arcade.flag('timber-haul-ferry');
+        sfx.unlock();
+        sail(to);
+      }),
+    });
+  }
+
   const canAffordUpgrade = () => UPS.some(u => s.lv[u.id] < u.max && s.cash >= upCost(u, s.lv[u.id])) || (CREW_COST[s.crew] !== undefined && s.cash >= CREW_COST[s.crew]);
 
   // ---------- Update ----------
@@ -584,7 +729,7 @@
     if (v.v > 60 && Math.random() < dt * 14) {
       const bx = v.x - Math.cos(v.a) * 30, by = v.y - Math.sin(v.a) * 30;
       fx.emit({ x: bx + Arcade.rand(-8, 8), y: by + Arcade.rand(-8, 8), vx: Arcade.rand(-15, 15), vy: Arcade.rand(-25, -5), life: 0.6, size: 3, grow: 9,
-        color: inRect(v, ZONES[3]) ? 'rgba(255,255,255,0.55)' : 'rgba(150,120,80,0.35)' });
+        color: inRect(v, ZONES[3]) ? (WORLD ? 'rgba(70,60,60,0.45)' : 'rgba(255,255,255,0.55)') : 'rgba(150,120,80,0.35)' });
     }
   }
 
@@ -637,6 +782,11 @@
       unloadT = 0;
       if (dist(truck, MILL_PAD) > MILL_PAD.r + 20) tripSold = 0;
     }
+
+    // Ferry dock: opens its panel once per visit.
+    const atFerry = ferryOpen() && dist(truck, FERRY_PAD) < FERRY_PAD.r;
+    if (atFerry && !inFerry) { truck.v = 0; inFerry = true; keys.clear(); joy = null; ferryPanel(); }
+    if (!atFerry) inFerry = false;
 
     // Garage pad: opens the upgrade panel once per visit.
     const atGarage = dist(truck, GARAGE_PAD) < GARAGE_PAD.r;
@@ -720,7 +870,7 @@
         if (t.timer > 0.55) { t.state = 2; t.timer = 0; }
       } else if (t.state === 2) {
         t.timer += dt;
-        if (t.timer > TYPES[t.type].regrow) { t.state = 0; t.g = 0.05; t.hp = TYPES[t.type].hp; }
+        if (t.timer > TYPES[t.type].regrow) { t.state = 0; t.g = 0.05; t.hp = TYPES[t.type].hp * (t.giant ? 5 : 1); }
       } else if (t.g < 1) t.g = Math.min(1, t.g + dt / 1.4);
       if (t.lucky > 0) {
         t.lucky -= dt;
@@ -830,8 +980,41 @@
     ctx.fillRect(vx, vy, W + 40, H + 40);
     const z = ZONES[3];
     if (cam.x + W > z.x && cam.y < z.y + z.h) {
-      ctx.fillStyle = SNOW;
-      ctx.fillRect(z.x, z.y, z.w, z.h);
+      if (!WORLD) {
+        ctx.fillStyle = SNOW;
+        ctx.fillRect(z.x, z.y, z.w, z.h);
+      } else {
+        // Volcano Slopes: glowing cracks in the ash.
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(z.x, z.y, z.w, z.h);
+        ctx.clip();
+        ctx.strokeStyle = `rgba(255,${110 + Math.sin(time * 2) * 30},40,0.55)`;
+        ctx.lineWidth = 3;
+        const rr = Gfx.rng(42);
+        for (let k = 0; k < 26; k++) {
+          let x = z.x + rr() * z.w, y = z.y + rr() * z.h;
+          ctx.beginPath(); ctx.moveTo(x, y);
+          for (let j = 0; j < 4; j++) { x += rr() * 40 - 20; y += rr() * 30 + 6; ctx.lineTo(x, y); }
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+    }
+    if (WORLD) {
+      // The beach meets the sea along the bottom-left edge.
+      const b = ZONES[0];
+      const sg = ctx.createLinearGradient(0, b.y + b.h - 70, 0, b.y + b.h);
+      sg.addColorStop(0, 'rgba(64,170,220,0)');
+      sg.addColorStop(0.35, 'rgba(64,170,220,0.85)');
+      sg.addColorStop(1, '#1f78b4');
+      ctx.fillStyle = sg;
+      ctx.fillRect(b.x, b.y + b.h - 70, b.w, 70);
+      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let x = b.x; x <= b.x + b.w; x += 12) ctx.lineTo(x, b.y + b.h - 46 + Math.sin(x * 0.05 + time * 2) * 4);
+      ctx.stroke();
     }
 
     // Dirt roads.
@@ -849,15 +1032,19 @@
     for (const d of decor) {
       if (!onScreen(d.x, d.y, 20)) continue;
       if (d.kind === 'rock') {
-        ctx.fillStyle = d.snow ? '#b9c6cf' : '#8f9493';
+        ctx.fillStyle = d.snow ? '#b9c6cf' : d.ash ? '#3a3333' : '#8f9493';
         ctx.beginPath(); ctx.ellipse(d.x, d.y, 6 + d.c * 5, 4 + d.c * 3, 0, 0, TAU); ctx.fill();
         ctx.fillStyle = d.snow ? '#e6eef3' : '#b4b9b7';
         ctx.beginPath(); ctx.ellipse(d.x - 1.5, d.y - 1.5, 3 + d.c * 3, 2 + d.c * 2, 0, 0, TAU); ctx.fill();
-      } else if (d.kind === 'flower' && !d.snow) {
+      } else if (d.kind === 'flower' && d.sand) {
+        // Shells on the sand.
+        ctx.fillStyle = ['#fff3e0', '#ffccbc', '#f8bbd0'][Math.floor(d.c * 3)];
+        ctx.beginPath(); ctx.arc(d.x, d.y, 3.5, Math.PI, 0); ctx.fill();
+      } else if (d.kind === 'flower' && !d.snow && !d.ash) {
         ctx.fillStyle = ['#ffffff', '#ffd84a', '#ff8fb1', '#b59bff'][Math.floor(d.c * 4)];
         for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(d.x + i * 5 - 5, d.y + (i % 2) * 3, 2, 0, TAU); ctx.fill(); }
       } else if (d.kind === 'bush') {
-        const c = d.snow ? '#9db8b4' : '#4f9a3f';
+        const c = d.snow ? '#9db8b4' : d.ash ? '#5d5a4a' : d.sand ? '#7fae4a' : '#4f9a3f';
         ctx.fillStyle = shade(c, -0.2);
         ctx.beginPath(); ctx.arc(d.x, d.y, 8, 0, TAU); ctx.arc(d.x + 8, d.y + 1, 6, 0, TAU); ctx.fill();
         ctx.fillStyle = c;
@@ -922,8 +1109,9 @@
     const wob = t.shake > 0 ? Math.sin(time * 70) * 2.2 : 0;
     const g = t.g < 1 ? Gfx.ease.outBack(t.g) : 1;
     sp.draw(ctx, t.x + wob, t.y, t.size * g);
-    if (t.shake > 0 && t.hp < TYPES[t.type].hp) {
-      Gfx.bar(ctx, t.x - 16, t.y - 92 * t.size, 32, 5, t.hp / TYPES[t.type].hp, '#ff6b4a');
+    const maxHp = TYPES[t.type].hp * (t.giant ? 5 : 1);
+    if (t.shake > 0 && t.hp < maxHp) {
+      Gfx.bar(ctx, t.x - 16, t.y - 92 * t.size, 32, 5, t.hp / maxHp, '#ff6b4a');
     }
   }
 
@@ -1152,6 +1340,7 @@
     drawBelt();
     drawPad(MILL_PAD, '#ffb347', 'SELL', '💰');
     drawPad(GARAGE_PAD, '#57b6ff', 'UPGRADE', '🔧');
+    if (ferryOpen()) drawPad(FERRY_PAD, '#4dd0e1', WORLD ? 'FERRY HOME' : s.ferry ? 'FERRY' : money(FERRY_COST), '⛴');
     if (pad) {
       const z = ZONES[s.unlocked];
       drawPad(pad, '#7ee081', money(Math.ceil(z.cost - s.paid)), '🔓', s.paid / z.cost);
@@ -1197,6 +1386,7 @@
     let target = null, color = '#ffd166', icon = '';
     if (full && dist(truck, MILL_PAD) > MILL_PAD.r) { target = MILL_PAD; icon = '💰'; }
     else if (pad && s.cash >= ZONES[s.unlocked].cost - s.paid && dist(truck, pad) > PAD_R) { target = pad; color = '#7ee081'; icon = '🔓'; }
+    else if (!WORLD && !s.ferry && ferryOpen() && s.cash >= FERRY_COST && dist(truck, FERRY_PAD) > FERRY_PAD.r) { target = FERRY_PAD; color = '#4dd0e1'; icon = '⛴'; }
     else if (lucky) { target = { x: lucky.x, y: lucky.y - 40 }; color = '#ffd84a'; icon = '✨'; }
     else if (canAffordUpgrade() && s.load.length === 0 && dist(truck, GARAGE_PAD) > GARAGE_PAD.r && s.lifetime < 2000) { target = GARAGE_PAD; color = '#57b6ff'; icon = '🔧'; }
     if (!target) return;
@@ -1269,6 +1459,7 @@
     const dot = (x, y, c, r = 2.5) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(mx + x * ms, my + y * ms, r, 0, TAU); ctx.fill(); };
     dot(MILL_PAD.x, MILL_PAD.y, '#ffb347', 3);
     dot(GARAGE_PAD.x, GARAGE_PAD.y, '#57b6ff', 3);
+    if (ferryOpen()) dot(FERRY_PAD.x, FERRY_PAD.y, '#4dd0e1', 3);
     const pad = visiblePad();
     if (pad) dot(pad.x, pad.y, '#7ee081', 3);
     for (const t of trees) if (t.lucky > 0 && standing(t)) dot(t.x, t.y, '#ffd84a', 3);
@@ -1315,6 +1506,7 @@
   truck.x = s.x; truck.y = s.y; truck.a = s.a;
   collide(truck);
   inGarage = dist(truck, GARAGE_PAD) < GARAGE_PAD.r;
+  inFerry = dist(truck, FERRY_PAD) < FERRY_PAD.r;
   helpers = Array.from({ length: s.crew }, (_, i) => makeHelper(i));
   if (!s.order) newOrder();
   cam.x = Math.max(0, Math.min(WORLD_W - W, truck.x - W / 2));
@@ -1345,6 +1537,7 @@
       <li>Park on <b>💰 SELL</b> at the sawmill to cash in your load.</li>
       <li>Drive onto <b>🔧 UPGRADE</b> to improve your truck and hire a crew.</li>
       <li>Stand on a <b>🔓 sign</b> to pay for a new forest with better trees.</li>
+      <li>Open every forest to unlock the <b>⛴ ferry</b> to World 2, the Jungle Coast.</li>
       <li>Cut a <b>✨ lucky gold tree</b> to start a <b>Timber Frenzy</b>: logs sell ×${FRENZY_BASE}. More gold trees sprout nearby while it lasts; cut them to <b>stack</b> it.</li>
     </ul>`;
   if (!s.intro) {
@@ -1352,7 +1545,7 @@
   } else if (awayEarned > 0) {
     ui.show({ title: 'Welcome back!', html: `<p>Your crew kept hauling while you were away.</p><p class="big">+${money(awayEarned)}</p>`, button: 'Keep hauling', onAction: () => ui.hide() });
   } else {
-    ui.show({ title: '🌲 Timber Haul', html: `<p>${money(s.cash)} in the bank · ${ZONES[s.unlocked - 1].name}</p>${tips}`, button: 'Keep hauling', onAction: () => ui.hide() });
+    ui.show({ title: WORLD ? '🌴 Timber Haul: Jungle Coast' : '🌲 Timber Haul', html: `<p>${money(s.cash)} in the bank · ${ZONES[s.unlocked - 1].name}</p>${tips}`, button: 'Keep hauling', onAction: () => ui.hide() });
   }
   requestAnimationFrame(frame);
 })();

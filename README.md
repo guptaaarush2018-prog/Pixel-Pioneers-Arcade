@@ -8,17 +8,20 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | --- | --- | --- |
 | Stickman Evolution: The 95th | Fighting | Linked from the hub; hosted at [pixel-pioneers-studios.github.io/Stickman-Battles](https://pixel-pioneers-studios.github.io/Stickman-Battles/) |
 | Paintball Arena | Fighting (platform shooter) | Linked from the hub; hosted at [plzgimmeaname.github.io/paintball-web](https://plzgimmeaname.github.io/paintball-web/) |
+| Getaway City | Open world (top-down city on foot or in any car: heists with up to five-star police chases and a helicopter, taxi shifts, pizza runs, a street race, stunt ramps, 40 hidden packages, a car dealer, perks, day and night; progress saves, the score is lifetime earnings) | Leaderboard |
+| Block Frontier | Sandbox (first-person block world in WebGL on a generated island: caves and ore veins, mining tiers, 22 crafting recipes, glooms at night, a saved world; Survival scores expedition points, Creative lets you fly) | Leaderboard |
+| Zap Arena | Shooter (first-person laser tag in WebGL against five bots: bunny hops, air strafing, slides and jump pads, three blasters, two arenas, three bot levels) | Online duel |
 | Pixel Pitch | Sports (4-a-side football, knockout Cup with golden goal) | Live 1v1 |
 | Hoop Duel | Sports (1v1 basketball, On Fire streaks) | Live 1v1 |
 | Pixel Gridiron | Sports (top-down football, season mode, play cards with route diagrams) | Online duel |
 | Ice Clash | Sports (3-on-3 hockey with goalies, slapshots, sudden-death overtime) | Online duel |
 | Apex GP | Racing (pseudo-3D Grand Prix: 8 circuits, slipstream, tyre wear, pit stops, championship) | Online duel |
 | Grand Slam | Sports (arcade baseball: pitch selection, timed swings, fielding plays) | Online duel |
-| Putt Planet | Sports (space mini golf, 12 holes) | Online duel |
+| Putt Planet | Sports (space mini golf: Moonbase Classic, Frost Nebula with ice, spinning blades, orbiting moons and moving cups, the Magma Belt with lava, repulsors, conveyors and switch gates, and a random nine-hole Asteroid Tour; star coins on every hole) | Online duel (on an Asteroid Tour) |
 | Light Trail | Arcade (trail duel, shrinking arena) | Live 1v1, two on one keyboard |
 | Quick Draw | Arcade (reaction standoff, outlaw ladder) | Live 1v1, two on one keyboard |
 | Buzz Bout | Trivia (700+ questions plus generated math, category draft, final wager, Streak and Daily 10; some questions from the [Open Trivia Database](https://opentdb.com), CC BY-SA 4.0) | Live 1v1, two on one device |
-| Beat Lane | Rhythm (four lanes, twelve synthesized songs in different styles, three difficulties) | Online duel |
+| Beat Lane | Rhythm (four lanes, seventeen synthesized songs including a 174-240 BPM Extreme set, five difficulties up to Expert and Insane with 16th-note runs and chords, a level for every chart, ghost taps punish mashing) | Online duel |
 | Pocket Racer | Racing | Its own mini-site: six-cup career with stars, 38 tracks, garage of 20 unlockable cars, time trials with per-track world leaderboards and friend ghosts, track builder, synthesized engine sound and music, follow camera on phones, live 1v1 races, world-record ghost |
 | Rune Rumble | Strategy (lane battler: 42 cards, rune wells, decks, caches, ladder) | Live 1v1 |
 | Realm Rivals | Strategy (kingdom builder) | Live 1v1 kingdom wars, plus the long-term Kingdom mode |
@@ -30,11 +33,11 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | Fleet Hunt | Strategy (hidden fleets, sonar, airstrikes) | Live 1v1 |
 | Chess | Strategy (classic, or Crystal chess with level-ups) | Live 1v1 |
 | Taco Truck Tycoon | Tycoon (five spots, weekday crowds, four-item menu, rivals and critics, endless mode) | Online duel |
-| Timber Haul | Tycoon (drive-and-saw logging truck, stacking loads, garage upgrades, crew trucks, five forests, lucky trees, mill orders) | Leaderboard |
+| Timber Haul | Tycoon (drive-and-saw logging truck, stacking loads, garage upgrades, crew trucks, five forests, lucky trees, mill orders, and a ferry to World 2: the Jungle Coast, with its own economy, five new trees, a volcano and giant trees) | Leaderboard |
 | Sweet Works | Idle (merge matching candy machines, conveyor shipping, 20 sweets to discover, upgrades, auto-merger, franchises) | Leaderboard |
 | Gem Mine | Idle (nine layers to breach, ore refinery, Lab research, abilities, stacking rush and Overdrive combos, drill bits, expeditions, relics, Core tree, challenge dives, core collapse with echoes and legacy perks) | Leaderboard |
 | Pocket Pet | Idle (virtual pet, earns treats from other games) | Leaderboard |
-| Crowd Rush | Arcade (gate runner with smart-pick streaks, recruits and shields) | Online duel |
+| Crowd Rush | Arcade (gate runner with smart-pick streaks, recruits and shields; stairs priced so a strong run reaches the ×3.0 summit) | Online duel |
 | Lane Rush | Racing | Online duel |
 | Neon Noodle | Arcade (snake with x8 fever combos and magnet, frenzy and shatter power-ups) | Online duel |
 | Block Bloom | Puzzle (block placement: clear rows and columns, combos, gem blocks that earn shuffles) | Online duel |
@@ -56,6 +59,8 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | Peak Run | Cards (tri-peaks solitaire with combos, hot streaks, chain bonuses and golden power cards) | Leaderboard |
 
 Every game also feeds the shared **profile**: playtime, games finished, days played, and achievements (arcade-wide, plus Bronze/Silver/Gold medals and specials for each game). All of that lives in the player's browser and works without any setup.
+
+The two first-person games share [`assets/js/gl3d.js`](assets/js/gl3d.js), a small WebGL 1 toolkit with no libraries: matrices, one shader (vertex colours, a texture atlas, fog, day and night light, glowing vertices), meshes from plain float arrays, mouse look with pointer lock, and a 2D HUD canvas laid over the 3D one. Their worlds and textures are generated in code, so there are no image files.
 
 Games that want more polish than flat shapes can load [`assets/js/gfx.js`](assets/js/gfx.js) after `arcade.js`: colour shading, soft shadows, fake-3D boxes and extruded vehicles, outlined text, HUD cards and bars, particles, floating "+$" popups, screen shake, easing and pre-rendered sprites. Timber Haul and Sweet Works are built on it, and Taco Truck Tycoon uses it for its scenery. Its effects never call `Math.random`, so they're safe in online duels.
 

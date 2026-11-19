@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Block Frontier · Pixel Pioneers Arcade</title>
+  <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../assets/css/arcade.css">
+  <style>
+    .gl-wrap { position: relative; }
+    .gl-wrap #hud { position: absolute; left: 0; top: 0; pointer-events: none; border: none; }
+    .bf-grid { display: grid; grid-template-columns: repeat(9, 1fr); gap: 4px; margin: 6px 0 12px; }
+    .bf-slot { position: relative; aspect-ratio: 1; padding: 0; border-radius: 6px; border: 2px solid var(--line); background: var(--surface-2); cursor: pointer; display: grid; place-items: center; }
+    .bf-slot.sel { border-color: var(--accent); }
+    .bf-slot img { width: 70%; image-rendering: pixelated; }
+    .bf-slot b { position: absolute; right: 3px; bottom: 1px; font-size: 11px; text-shadow: 0 1px 2px #000; }
+    .bf-recipes { display: grid; gap: 6px; max-height: min(36vh, 260px); overflow-y: auto; text-align: left; padding-right: 4px; }
+    .bf-recipe { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; font-size: 13px; }
+    .bf-recipe img { width: 22px; image-rendering: pixelated; vertical-align: middle; }
+    .bf-recipe .bf-need { flex: 1; color: var(--muted); }
+    .bf-recipe .bf-need.ok { color: var(--text); }
+    .bf-recipe button { padding: 5px 10px; font-size: 13px; }
+    .bf-recipe button:disabled { opacity: .4; cursor: not-allowed; }
+    .bf-label { text-align: left; font-size: 12px; color: var(--muted); margin: 0; }
+  </style>
+</head>
+<body class="game" data-game="block-frontier">
+  <header class="topbar">
+    <a class="back" href="../../index.html">← All games</a>
+    <h1>Block Frontier</h1>
+    <div class="stats">
+      <span>Points<b id="points">0</b></span>
+      <span>Day<b id="day">1</b></span>
+      <span>Best<b id="best">0</b></span>
+    </div>
+    <button class="icon-btn" id="mute" type="button">Sound on</button>
+  </header>
+
+  <main class="stage">
+    <div class="gl-wrap"><canvas id="game"></canvas><canvas id="hud"></canvas></div>
+    <div class="overlay" id="overlay" hidden></div>
+  </main>
+
+  <p class="help">Click to look around · <kbd>WASD</kbd> move · <kbd>Space</kbd> jump · <kbd>Shift</kbd> sprint · hold left click to mine, right click to place · <kbd>1</kbd>–<kbd>9</kbd> or scroll to pick · <kbd>E</kbd> inventory and crafting · <kbd>Esc</kbd> pause</p>
+
+  <script src="../../assets/js/config.js"></script>
+  <script src="../../assets/js/catalog.js"></script>
+  <script src="../../assets/js/arcade.js"></script>
+  <script src="../../assets/js/gfx.js"></script>
+  <script src="../../assets/js/gl3d.js"></script>
+  <script src="../../assets/js/filter.js"></script>
+  <script src="../../assets/js/friends.js"></script>
+  <script src="../../assets/js/online.js"></script>
+  <script src="../../assets/js/chat.js"></script>
+  <script src="../../assets/js/invites.js"></script>
+  <script src="../../assets/js/relay.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
