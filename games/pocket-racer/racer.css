@@ -320,6 +320,16 @@
 .online-grid .card { padding: 16px; }
 .online-grid .menu { margin-top: 10px; }
 .online-grid select.field { width: 100%; }
+.mode-tiles { grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)); }
+.mode-tiles .tile { min-height: 118px; }
+.mode-best { margin-top: auto; padding-top: 8px; font-size: 12px; font-weight: 700; color: var(--c, var(--gold)); }
+.mode-rules { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 14px 24px; margin-bottom: 18px; padding: 16px 18px 16px 22px; overflow: hidden; }
+.mode-rules::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--c, var(--gold)); }
+.mode-rules ol { flex: 1 1 260px; margin: 0; padding-left: 20px; line-height: 1.6; }
+.mode-rules li::marker { color: var(--c, var(--gold)); font-weight: 800; }
+.mode-record { display: flex; flex-direction: column; align-items: flex-end; }
+.mode-record small { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.mode-record b { font-size: 22px; font-weight: 900; font-style: italic; color: var(--c, var(--gold)); }
 
 /* ---------- Race HUD ---------- */
 

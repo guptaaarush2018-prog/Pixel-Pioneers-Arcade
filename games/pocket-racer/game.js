@@ -1560,7 +1560,7 @@
         <div class="menu"><button class="btn secondary" type="button" data-quit>Quit tournament</button></div>`,
       button: 'Next race',
       onAction: startTournamentRace,
-      onRender: panel => panel.querySelector('[data-quit]').addEventListener('click', () => { tourney = null; toMenu('modes'); }),
+      onRender: panel => panel.querySelector('[data-quit]').addEventListener('click', () => { tourney = null; toMenu('mode-tourney'); }),
     });
   }
 
@@ -1580,7 +1580,7 @@
       lines: [`${tourney.points} points · ${tourney.wins} race win${tourney.wins === 1 ? '' : 's'} in ${tourney.races}`],
       html: `${tourneyTable()}<div class="reward"><span><span class="coin">●</span> +${coins}</span></div>`,
       button: 'New tournament',
-      onAction: () => { tourney = null; toMenu('modes'); },
+      onAction: () => { tourney = null; toMenu('mode-tourney'); },
     });
   }
 
@@ -1865,14 +1865,15 @@
   let garagePick = null;
   let recordsPick = 'harbor', recordsTab = 'track';
 
-  const head = (title, sub = '') => `<div class="screen-head"><button class="back-btn" type="button" data-go="home" aria-label="Back">←</button><div><h2>${title}</h2>${sub ? `<p>${sub}</p>` : ''}</div></div>`;
+  const head = (title, sub = '', back = 'home') => `<div class="screen-head"><button class="back-btn" type="button" data-go="${back}" aria-label="Back">←</button><div><h2>${title}</h2>${sub ? `<p>${sub}</p>` : ''}</div></div>`;
 
   function go(view, arg) {
     if (state !== 'menu') return;
-    returnView = ['home', 'career', 'quick', 'trial', 'modes', 'online', 'garage', 'records', 'builder'].includes(view) ? view : 'home';
+    if (/^mode-/.test(view)) { arg = view.slice(5); view = 'mode'; }
+    returnView = ['home', 'career', 'quick', 'trial', 'modes', 'online', 'garage', 'records', 'builder'].includes(view) ? view : view === 'mode' && MODE_INFO[arg] ? 'mode-' + arg : 'home';
     setView('menu');
     spinners = [];
-    const views = { home, career, quick: () => quick('race'), trial: () => quick('trial'), modes, online: onlineView, garage, records, builder };
+    const views = { home, career, quick: () => quick('race'), trial: () => quick('trial'), modes, mode: modeView, online: onlineView, garage, records, builder };
     const v = (views[view] || home)(arg);
     screens.innerHTML = `<section class="screen">${v.html}</section>`;
     screens.scrollTop = 0;
@@ -1880,7 +1881,7 @@
     screens.querySelectorAll('canvas[data-thumb]').forEach(c => drawThumb(c, findTrack(c.dataset.thumb)));
     v.wire?.(screens);
     document.querySelectorAll('#nav [data-go]').forEach(b => b.toggleAttribute('aria-current', false));
-    const navId = view === 'trial' ? 'quick' : view;
+    const navId = view === 'trial' ? 'quick' : view === 'mode' ? 'modes' : view;
     document.querySelector(`#nav [data-go="${navId}"]`)?.setAttribute('aria-current', 'page');
     updateWallet();
     S.startMusic();
@@ -2043,89 +2044,81 @@
     </button>`;
   }
 
+  // Special modes: a hub of tiles, and each mode on its own screen with its rules, its record,
+  // a track picker and the settings it uses.
+  const MODE_INFO = {
+    knockout: { ico: '💥', name: 'Knockout', color: '#ff4d5e', tag: 'Last place is out',
+      rules: [`Six cars on track.`, `Every ${KO_INTERVAL} seconds the car in last is eliminated.`, `Survive to the end to win.`],
+      best: () => null, level: true, start: t => ({ mode: 'knockout', track: t, laps: 5 }) },
+    chase: { ico: '⏱️', name: 'Checkpoint chase', color: '#4f8cff', tag: 'Beat the clock',
+      rules: [`The clock starts at ${CHASE_START}s.`, `Each checkpoint buys more time.`, `The time bonus shrinks as the run goes on.`],
+      best: () => `${Arcade.load('racer:chase', 0)} checkpoints`, start: t => ({ mode: 'chase', track: t, laps: 999 }) },
+    rush: { ico: '🪙', name: 'Coin Rush', color: '#ffc53d', tag: `${RUSH_TIME}s coin grab`,
+      rules: [`${RUSH_TIME} seconds on a track full of coins.`, `Grab five in a row to double them.`, `Gold coins are worth five and add two seconds.`],
+      best: () => `${Arcade.load('racer:rush', 0)} coins`, start: t => ({ mode: 'rush', track: t, laps: 999 }) },
+    drift: { ico: '🌀', name: 'Drift King', color: '#c77dff', tag: 'Slide for points',
+      rules: [`${DRIFT_LAPS} laps with boost turned off.`, `Hold a slide to grow the multiplier, up to ×5.`, `Leave the track mid-drift and the combo is gone.`],
+      best: () => `${Arcade.load('racer:drift', 0).toLocaleString()} pts`, start: t => ({ mode: 'drift', track: t, laps: DRIFT_LAPS }) },
+    comeback: { ico: '🔥', name: 'Comeback', color: '#ff8a1f', tag: 'Start dead last',
+      rules: [`An ${COMEBACK_CARS}-car grid, and you start at the back.`, `Three laps to carve through the field.`, `Every place you gain scores.`],
+      best: () => null, level: true, start: t => ({ mode: 'comeback', track: t, laps: 3 }) },
+    tourney: { ico: '🏆', name: 'Tournament', color: '#3ddc84', tag: 'Championship series',
+      rules: [`A series on random tracks against the same three rivals.`, `Points per race: 10 / 7 / 5 / 3.`, `Most points at the end takes the trophy.`],
+      best: () => null, level: true, noTrack: true },
+  };
+
   function modes() {
-    const all = [...D.ALL_TRACKS, ...customTracks()];
-    const options = sel => all.map(t => `<option value="${esc(t.id)}" ${t.id === sel ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
-    const levels = D.LEVELS.map(l => `<button class="chip" type="button" data-mode-level="${l.id}" aria-pressed="${l === menuLevel}">${l.name}</button>`).join('');
-    const chaseBest = Arcade.load('racer:chase', 0);
+    const tiles = Object.entries(MODE_INFO).map(([id, m]) => {
+      const best = m.best();
+      return `<button class="tile mode-tile" type="button" data-go="mode-${id}" style="--c:${m.color}"><span class="ico">${m.ico}</span><b>${m.name}</b><small>${m.tag}</small>${best ? `<span class="mode-best">Best · ${best}</span>` : ''}</button>`;
+    }).join('');
     return {
-      html: `${head('Special modes', 'Five race formats and a championship series, on any track.')}
-        <div class="online-grid">
-          <div class="card" style="padding:16px">
-            <h3 style="margin:0 0 4px">💥 Knockout</h3>
-            <p class="muted-note" style="margin-top:0">Six cars. Every ${KO_INTERVAL} seconds the last-place car is eliminated. Don't be last when the bell rings.</p>
-            <label class="section-title" for="ko-track">Track</label>
-            <select class="field" id="ko-track">${options(quickPick.trackId)}</select>
-            <div class="filters" style="margin:10px 0">${levels}</div>
-            <button class="btn" type="button" data-start-ko style="width:100%">Start knockout</button>
-          </div>
-          <div class="card" style="padding:16px">
-            <h3 style="margin:0 0 4px">⏱️ Checkpoint chase</h3>
-            <p class="muted-note" style="margin-top:0">The clock starts at ${CHASE_START}s. Every checkpoint buys a little more time, but the bonus shrinks. Best: <b>${chaseBest}</b> checkpoints.</p>
-            <label class="section-title" for="chase-track">Track</label>
-            <select class="field" id="chase-track">${options(quickPick.trackId)}</select>
-            <button class="btn" type="button" data-start-chase style="width:100%;margin-top:10px">Start chase</button>
-          </div>
-          <div class="card" style="padding:16px">
-            <h3 style="margin:0 0 4px">🪙 Coin Rush</h3>
-            <p class="muted-note" style="margin-top:0">${RUSH_TIME} seconds and a track full of coins. Chain five for double, and gold coins add time. Best: <b>${Arcade.load('racer:rush', 0)}</b>.</p>
-            <label class="section-title" for="rush-track">Track</label>
-            <select class="field" id="rush-track">${options(quickPick.trackId)}</select>
-            <button class="btn" type="button" data-start-rush style="width:100%;margin-top:10px">Start rush</button>
-          </div>
-          <div class="card" style="padding:16px">
-            <h3 style="margin:0 0 4px">🌀 Drift King</h3>
-            <p class="muted-note" style="margin-top:0">${DRIFT_LAPS} laps, no boost. Slide through corners for points; long drifts multiply up to ×5. Best: <b>${Arcade.load('racer:drift', 0).toLocaleString()}</b>.</p>
-            <label class="section-title" for="drift-track">Track</label>
-            <select class="field" id="drift-track">${options(quickPick.trackId)}</select>
-            <button class="btn" type="button" data-start-drift style="width:100%;margin-top:10px">Start drifting</button>
-          </div>
-          <div class="card" style="padding:16px;grid-column:1/-1">
-            <h3 style="margin:0 0 4px">🔥 Comeback</h3>
-            <p class="muted-note" style="margin-top:0">An ${COMEBACK_CARS}-car grid and you start dead last. Three laps to carve your way through. Every place gained scores.</p>
-            <label class="section-title" for="comeback-track">Track</label>
-            <select class="field" id="comeback-track">${options(quickPick.trackId)}</select>
-            <div class="filters" style="margin:10px 0">${levels}</div>
-            <button class="btn" type="button" data-start-comeback style="width:100%">Start comeback</button>
-          </div>
-          <div class="card" style="padding:16px;grid-column:1/-1">
-            <h3 style="margin:0 0 4px">🏆 Tournament</h3>
-            <p class="muted-note" style="margin-top:0">A championship series on random tracks with the same three rivals. Points: 10 / 7 / 5 / 3. Most points at the end wins.</p>
-            <div class="filters" data-tourney-races style="margin-bottom:8px"><button class="chip" type="button" data-races="3" aria-pressed="true">3 races</button><button class="chip" type="button" data-races="5" aria-pressed="false">5 races</button></div>
-            <div class="filters" data-tourney-levels style="margin-bottom:10px">${levels}</div>
-            <button class="btn" type="button" data-start-tourney style="width:100%">Start tournament</button>
-          </div>
+      html: `${head('Special modes', 'Five race formats and a championship series. Pick one to see how it works.')}<div class="tiles mode-tiles">${tiles}</div>`,
+    };
+  }
+
+  function modeView(id) {
+    const m = MODE_INFO[id];
+    if (!m) return modes();
+    const all = [...D.ALL_TRACKS, ...customTracks()];
+    if (!all.some(t => t.id === quickPick.trackId)) quickPick.trackId = 'harbor';
+    const best = m.best();
+    const levels = D.LEVELS.map(l => `<button class="chip" type="button" data-level="${l.id}" aria-pressed="${l === menuLevel}">${l.name}</button>`).join('');
+    const races = id === 'tourney' ? `<label>Races</label><div class="filters">${[3, 5].map(n => `<button class="chip" type="button" data-races="${n}" aria-pressed="${n === 3}">${n} races</button>`).join('')}</div>` : '';
+    const setup = (m.level ? `<label>Rivals</label><div class="filters">${levels}</div>` : '') + races;
+    return {
+      html: `${head(`${m.ico} ${m.name}`, m.tag, 'modes')}
+        <div class="card mode-rules" style="--c:${m.color}">
+          <ol>${m.rules.map(r => `<li>${r}</li>`).join('')}</ol>
+          ${best ? `<div class="mode-record"><small>Your best</small><b>${best}</b></div>` : ''}
+        </div>
+        ${m.noTrack ? '' : `<p class="section-title">Track</p><div class="track-grid">${all.map(t => trackCard(t, quickPick.trackId)).join('')}</div>`}
+        <div class="race-setup">
+          ${setup ? `<div class="setup-row">${setup}</div>` : ''}
+          <button class="big-btn" type="button" data-start>Start ${m.name.toLowerCase()}</button>
         </div>`,
       wire: el => {
-        el.querySelectorAll('[data-mode-level]').forEach(b => b.addEventListener('click', () => {
-          menuLevel = D.LEVELS.find(l => l.id === b.dataset.modeLevel);
+        el.querySelectorAll('[data-track]').forEach(b => b.addEventListener('click', () => {
+          S.sfx.tick();
+          quickPick.trackId = b.dataset.track;
+          Arcade.save('racer:track', quickPick.trackId);
+          el.querySelectorAll('[data-track]').forEach(x => x.setAttribute('aria-pressed', x === b));
+        }));
+        el.querySelectorAll('[data-level]').forEach(b => b.addEventListener('click', () => {
+          menuLevel = D.LEVELS.find(l => l.id === b.dataset.level);
           Arcade.save('racer:level', menuLevel.id);
-          el.querySelectorAll('[data-mode-level]').forEach(x => x.setAttribute('aria-pressed', x.dataset.modeLevel === menuLevel.id));
+          el.querySelectorAll('[data-level]').forEach(x => x.setAttribute('aria-pressed', x === b));
         }));
-        let races = 3;
+        let count = 3;
         el.querySelectorAll('[data-races]').forEach(b => b.addEventListener('click', () => {
-          races = +b.dataset.races;
-          el.querySelectorAll('[data-races]').forEach(x => x.setAttribute('aria-pressed', +x.dataset.races === races));
+          count = +b.dataset.races;
+          el.querySelectorAll('[data-races]').forEach(x => x.setAttribute('aria-pressed', x === b));
         }));
-        const pickTrack = id => { quickPick.trackId = id; Arcade.save('racer:track', id); };
-        el.querySelector('#ko-track').addEventListener('change', e => pickTrack(e.target.value));
-        for (const id of ['#chase-track', '#rush-track', '#drift-track', '#comeback-track']) el.querySelector(id).addEventListener('change', e => pickTrack(e.target.value));
-        const begin = (sel, opts) => {
-          const t = findTrack(el.querySelector(sel).value);
-          if (t) startRace({ track: t, level: menuLevel, ...opts });
-        };
-        el.querySelector('[data-start-rush]').addEventListener('click', () => begin('#rush-track', { mode: 'rush', laps: 999 }));
-        el.querySelector('[data-start-drift]').addEventListener('click', () => begin('#drift-track', { mode: 'drift', laps: DRIFT_LAPS }));
-        el.querySelector('[data-start-comeback]').addEventListener('click', () => begin('#comeback-track', { mode: 'comeback', laps: 3 }));
-        el.querySelector('[data-start-ko]').addEventListener('click', () => {
-          const t = findTrack(el.querySelector('#ko-track').value);
-          if (t) startRace({ mode: 'knockout', track: t, laps: 5, level: menuLevel });
+        el.querySelector('[data-start]').addEventListener('click', () => {
+          if (m.noTrack) return startTournament(count);
+          const t = findTrack(quickPick.trackId) || D.TRACKS[0];
+          startRace({ level: menuLevel, ...m.start(t) });
         });
-        el.querySelector('[data-start-chase]').addEventListener('click', () => {
-          const t = findTrack(el.querySelector('#chase-track').value);
-          if (t) startRace({ mode: 'chase', track: t, laps: 999, level: menuLevel });
-        });
-        el.querySelector('[data-start-tourney]').addEventListener('click', () => startTournament(races));
       },
     };
   }
