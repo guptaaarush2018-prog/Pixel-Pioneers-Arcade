@@ -15,14 +15,16 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | Hoop Duel | Sports (1v1 basketball, On Fire streaks) | Live 1v1 |
 | Pixel Gridiron | Sports (top-down football, season mode, play cards with route diagrams) | Online duel |
 | Ice Clash | Sports (3-on-3 hockey with goalies, slapshots, sudden-death overtime) | Online duel |
-| Apex GP | Racing (pseudo-3D Grand Prix: 8 circuits, slipstream, tyre wear, pit stops, championship) | Online duel |
+| Apex GP | Racing (pseudo-3D Grand Prix: 12 circuits, a 12-round season of race weekends with qualifying and fastest-lap points, Time Trial, Elimination, Reverse Sprint and Endurance modes, wet races, six unlockable cars with their own handling, five AI levels up to Alien that plan their braking, draft, boost and defend) | Online duel |
 | Grand Slam | Sports (arcade baseball: pitch selection, timed swings, fielding plays) | Online duel |
+| Skipstone | Sports (flick to skim a stone: release speed and angle are the throw, tap before touchdowns for perfect skips, lily pads and ducks) | Online duel |
 | Putt Planet | Sports (space mini golf: Moonbase Classic, Frost Nebula with ice, spinning blades, orbiting moons and moving cups, the Magma Belt with lava, repulsors, conveyors and switch gates, and a random nine-hole Asteroid Tour; star coins on every hole) | Online duel (on an Asteroid Tour) |
 | Light Trail | Arcade (trail duel, shrinking arena) | Live 1v1, two on one keyboard |
 | Quick Draw | Arcade (reaction standoff, outlaw ladder) | Live 1v1, two on one keyboard |
 | Buzz Bout | Trivia (700+ questions plus generated math, category draft, final wager, Streak and Daily 10; some questions from the [Open Trivia Database](https://opentdb.com), CC BY-SA 4.0) | Live 1v1, two on one device |
 | Beat Lane | Rhythm (four lanes, seventeen synthesized songs including a 174-240 BPM Extreme set, five difficulties up to Expert and Insane with 16th-note runs and chords, a level for every chart, ghost taps punish mashing) | Online duel |
-| Pocket Racer | Racing | Its own mini-site: eight-cup career with stars, 48 tracks, garage of 22 unlockable cars, slipstream boost and overtake bonuses, rival head-to-head records, Knockout and Checkpoint Chase modes, championship tournaments, time trials with per-track world leaderboards and friend ghosts, track builder, synthesized engine sound and music, follow camera on phones, live 1v1 races, world-record ghost (records only count on boost-free, overtake-free runs) |
+| Pocket Racer | Racing | Its own mini-site: eight-cup career with stars, 48 tracks, garage of 22 unlockable cars, slipstream boost and overtake bonuses, rival head-to-head records, Knockout, Checkpoint Chase, Coin Rush, Drift King and Comeback modes, championship tournaments, time trials with per-track world leaderboards and friend ghosts, track builder, synthesized engine sound and music, follow camera on phones, live 1v1 races, world-record ghost (records only count on boost-free, overtake-free runs) |
+| Chroma Burst | Strategy (chain-reaction colour war: grow cells to four dots and they burst into their neighbours; up to three bots on 5×5 to 9×9, or two players on one device) | Online duel |
 | Rune Rumble | Strategy (lane battler: 42 cards, rune wells, decks, caches, ladder) | Live 1v1 |
 | Realm Rivals | Strategy (kingdom builder) | Live 1v1 kingdom wars, plus the long-term Kingdom mode |
 | Rampart | Strategy (tower defense where you build the maze) | Online duel |
@@ -43,6 +45,7 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | Block Bloom | Puzzle (block placement: clear rows and columns, combos, gem blocks that earn shuffles) | Online duel |
 | Crystal Swap | Puzzle (match-3 with blast and prism crystals and flow chains) | Online duel |
 | Sudoku Siege | Puzzle (sudoku, races with fog) | Live 1v1 race |
+| Volt Grid | Puzzle (rotate wire tiles to power every bulb; one-solution boards from 4×4 to 9×9 against a clock, par bonus) | Online duel |
 | Pixel Reveal | Puzzle (picture logic, gallery) | Online duel |
 | Lantern Maze | Maze chase | Online duel |
 | Brick Burst | Arcade (brick breaker with rally combos, fireball and laser power-ups, bomb bricks) | Online duel |
@@ -57,9 +60,14 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | Video Poker | Cards | Leaderboard |
 | High-Low | Cards | Leaderboard |
 | Peak Run | Cards (tri-peaks solitaire with combos, hot streaks, chain bonuses and golden power cards) | Leaderboard |
+| Ricochet Rally | Arcade (slingshot bank shots: every wall or bumper bank before a hit multiplies it; mines and orbiting targets on later tables) | Online duel |
 | Orbit Weaver | Arcade (one-button gravity slingshot: time your release, chain clean captures, endless shrinking planets) | Online duel |
 | Deep Salvage | Adventure (side-view submarine run: three oxygen tanks, treasure chains, mines, jellyfish and a bottomless trench) | Online duel |
 | Market Mayhem | Strategy (90-second trading floor: five tickers, news shocks, win streaks and a closing net worth) | Online duel |
+
+The sports games share a broadcast layer in [`assets/js/sports.js`](assets/js/sports.js): spring-animated lower-third stings for goals and big plays, a short slow-motion beat on scoring moments (eased back on a critically damped spring), match stats on the result panel (shots, saves, possession, FG, hits, yards), and haptics on phones.
+
+The hub pages load [`assets/js/fluid.js`](assets/js/fluid.js), a small spring engine after Apple's *Designing Fluid Interfaces*: cards lift, tilt and press in on pointer-down, the genre filter's selection pill springs between chips, filtering glides cards to their new places, and the chat sheet can be flicked away (1:1 drag, rubber-banding, momentum projection). Every animation starts from the value on screen and keeps its velocity when re-targeted. `arcade.css` adds translucent materials, instant press feedback, materializing panels, size-aware type tracking, and fallbacks for reduced motion, reduced transparency and increased contrast.
 
 Every game also feeds the shared **profile**: playtime, games finished, days played, and achievements (arcade-wide, plus Bronze/Silver/Gold medals and specials for each game). All of that lives in the player's browser and works without any setup.
 

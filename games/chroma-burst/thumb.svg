@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+<defs>
+<radialGradient id="g" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#fff"/><stop offset=".3" stop-color="#ffc53d"/><stop offset="1" stop-color="#c8901a"/></radialGradient>
+<radialGradient id="c" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#fff"/><stop offset=".3" stop-color="#ff5d7a"/><stop offset="1" stop-color="#b8304a"/></radialGradient>
+<radialGradient id="h" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffc53d" stop-opacity=".5"/><stop offset="1" stop-color="#ffc53d" stop-opacity="0"/></radialGradient>
+</defs>
+<rect width="320" height="200" fill="#0d0f17"/>
+<g fill="#ffffff" fill-opacity=".05">
+<rect x="70" y="16" width="40" height="40" rx="8"/><rect x="114" y="16" width="40" height="40" rx="8"/><rect x="158" y="16" width="40" height="40" rx="8"/><rect x="202" y="16" width="40" height="40" rx="8"/>
+<rect x="70" y="60" width="40" height="40" rx="8"/><rect x="114" y="60" width="40" height="40" rx="8"/><rect x="158" y="60" width="40" height="40" rx="8"/><rect x="202" y="60" width="40" height="40" rx="8"/>
+<rect x="70" y="104" width="40" height="40" rx="8"/><rect x="114" y="104" width="40" height="40" rx="8"/><rect x="158" y="104" width="40" height="40" rx="8"/><rect x="202" y="104" width="40" height="40" rx="8"/>
+<rect x="70" y="148" width="40" height="40" rx="8"/><rect x="114" y="148" width="40" height="40" rx="8"/><rect x="158" y="148" width="40" height="40" rx="8"/><rect x="202" y="148" width="40" height="40" rx="8"/>
+</g>
+<circle cx="134" cy="80" r="34" fill="url(#h)"/>
+<circle cx="134" cy="80" r="16" fill="url(#g)"/><g fill="#fff"><circle cx="134" cy="74" r="2.5"/><circle cx="128" cy="85" r="2.5"/><circle cx="140" cy="85" r="2.5"/></g>
+<circle cx="90" cy="80" r="14" fill="url(#g)"/><circle cx="90" cy="80" r="2.5" fill="#fff"/>
+<circle cx="134" cy="124" r="14" fill="url(#g)"/><g fill="#fff"><circle cx="130" cy="124" r="2.5"/><circle cx="138" cy="124" r="2.5"/></g>
+<circle cx="178" cy="80" r="15" fill="url(#c)"/><g fill="#fff"><circle cx="174" cy="80" r="2.5"/><circle cx="182" cy="80" r="2.5"/></g>
+<circle cx="222" cy="124" r="15" fill="url(#c)"/><g fill="#fff"><circle cx="222" cy="119" r="2.5"/><circle cx="217" cy="128" r="2.5"/><circle cx="227" cy="128" r="2.5"/></g>
+<circle cx="178" cy="168" r="14" fill="url(#c)"/><circle cx="178" cy="168" r="2.5" fill="#fff"/>
+<path d="M150 80 H162 M134 96 V108 M118 80 H106" stroke="#ffc53d" stroke-width="3" stroke-linecap="round" stroke-dasharray="2 5"/>
+<text x="16" y="34" font-size="15" fill="#ffc53d" font-family="system-ui,sans-serif" font-weight="900">CHROMA</text>
+<text x="16" y="52" font-size="15" fill="#ff5d7a" font-family="system-ui,sans-serif" font-weight="900">BURST</text>
+</svg>

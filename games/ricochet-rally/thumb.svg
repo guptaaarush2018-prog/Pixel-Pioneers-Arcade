@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+<defs><radialGradient id="felt" cx=".5" cy=".5" r=".7"><stop offset="0" stop-color="#1f5468"/><stop offset="1" stop-color="#0f2a36"/></radialGradient>
+<radialGradient id="bump" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#ffd0f0"/><stop offset="1" stop-color="#b0307f"/></radialGradient></defs>
+<rect width="320" height="200" fill="#0b131c"/>
+<rect x="14" y="14" width="292" height="172" rx="12" fill="url(#felt)" stroke="#96e6ff" stroke-opacity=".4" stroke-width="2"/>
+<path d="M150 160 L250 60 L300 110 L230 150" fill="none" stroke="#ffd25e" stroke-width="2" stroke-dasharray="6 6" opacity=".8"/>
+<circle cx="96" cy="74" r="20" fill="url(#bump)"/>
+<circle cx="230" cy="150" r="12" fill="none" stroke="#7af0c8" stroke-width="3"/><circle cx="230" cy="150" r="6" fill="#7af0c8" opacity=".35"/>
+<circle cx="180" cy="50" r="12" fill="none" stroke="#7af0c8" stroke-width="3"/><circle cx="180" cy="50" r="6" fill="#7af0c8" opacity=".35"/>
+<circle cx="60" cy="140" r="10" fill="#3a1010" stroke="#ff6b5e" stroke-width="3"/>
+<circle cx="150" cy="160" r="9" fill="#ffe9a8"/><circle cx="150" cy="160" r="4" fill="#e0a020"/>
+<line x1="150" y1="160" x2="120" y2="186" stroke="#fff" stroke-width="2.5" opacity=".7"/>
+<text x="26" y="40" font-size="14" fill="#ffd25e" font-family="system-ui,sans-serif" font-weight="900">RICOCHET</text>
+<text x="26" y="56" font-size="12" fill="#ffffff" opacity=".8" font-family="system-ui,sans-serif" font-weight="800">RALLY</text>
+</svg>

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+<rect width="320" height="200" fill="#0b0f1b"/>
+<g transform="translate(100 20)" stroke-linecap="round" stroke-width="8" fill="none">
+<g fill="#ffffff" fill-opacity=".04"><rect x="0" y="0" width="38" height="38" rx="6"/><rect x="40" y="0" width="38" height="38" rx="6"/><rect x="80" y="0" width="38" height="38" rx="6"/><rect x="0" y="40" width="38" height="38" rx="6"/><rect x="40" y="40" width="38" height="38" rx="6"/><rect x="80" y="40" width="38" height="38" rx="6"/><rect x="0" y="80" width="38" height="38" rx="6"/><rect x="40" y="80" width="38" height="38" rx="6"/><rect x="80" y="80" width="38" height="38" rx="6"/><rect x="0" y="120" width="38" height="38" rx="6"/><rect x="40" y="120" width="38" height="38" rx="6"/><rect x="80" y="120" width="38" height="38" rx="6"/></g>
+<path d="M59 79 V19 H99 M59 79 H19 V139 M59 79 V139 H99" stroke="#5fe1ff"/>
+<path d="M99 99 V139" stroke="#4a5263"/>
+</g>
+<circle cx="159" cy="99" r="12" fill="#ffc53d"/><text x="159" y="104" text-anchor="middle" font-size="13">⚡</text>
+<circle cx="199" cy="39" r="9" fill="#fff2b3" stroke="#ffd25e" stroke-width="2"/>
+<circle cx="119" cy="159" r="9" fill="#fff2b3" stroke="#ffd25e" stroke-width="2"/>
+<circle cx="199" cy="159" r="9" fill="#fff2b3" stroke="#ffd25e" stroke-width="2"/>
+<circle cx="199" cy="119" r="9" fill="#2a303c" stroke="#4a5263" stroke-width="2"/>
+<text x="20" y="36" font-size="15" fill="#5fe1ff" font-family="system-ui,sans-serif" font-weight="900">VOLT</text>
+<text x="20" y="54" font-size="15" fill="#ffffff" font-family="system-ui,sans-serif" font-weight="900">GRID</text>
+</svg>

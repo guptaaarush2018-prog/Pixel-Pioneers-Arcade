@@ -50,6 +50,7 @@
   // ---------- Game state ----------
 
   function newGame() {
+    Sports.clearSting();
     rival = Arcade.pick(RIVALS);
     LV = LEVELS[level];
     g = {
@@ -231,6 +232,7 @@
       g.play.end = Math.min(play.end, 1.6);
     }
     excite = play.result === 'hr' ? 1 : ['single', 'double', 'triple'].includes(play.result) ? 0.5 : 0.15;
+    if (play.result === 'hr') { Sports.slowmo(1.4, 0.3); Sports.buzz([30, 40, 90]); }
     if (excite > 0.3) Sports.sfx.cheer(excite * 1.3);
   }
 
@@ -268,8 +270,10 @@
     g.line[bat][g.inning - 1] = (g.line[bat][g.inning - 1] || 0) + runs;
     if (bat === 0) { fx.text(W / 2, 170, runs > 1 ? `${runs} RUNS SCORE` : 'RUN SCORES', '#ffc53d', 30); Sports.sfx.cheer(0.8); }
     else Sports.sfx.groan();
+    const half = `${g.top ? 'Top' : 'Bottom'} ${g.inning}`;
+    Sports.sting(`${bat === 0 ? ME.name : rival.name} ${runs > 1 ? `plate ${runs}` : 'score'}`, `${ME.short} ${g.runs[0]} – ${g.runs[1]} ${rival.name} · ${half}`, bat === 0 ? ME.shirt : rival.shirt);
     // Walk-off: the home team takes the lead in the last inning.
-    if (!g.top && g.inning >= innings && g.runs[0] > g.runs[1]) g.walkoff = true;
+    if (!g.top && g.inning >= innings && g.runs[0] > g.runs[1]) { g.walkoff = true; Sports.sting('Walk-off!', `${ME.name} win it in the ${g.inning}${['th', 'st', 'nd', 'rd'][g.inning % 10 * (g.inning < 11 || g.inning > 13)] || 'th'}`, ME.shirt, 2.6); }
   }
 
   function out(kind, n = 1) {
@@ -849,8 +853,10 @@
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
-    if (g && state !== 'paused' && state !== 'menu' && state !== 'over') update(AUTOPILOT ? dt * 3 : dt);
-    draw(state === 'paused' ? 0 : dt);
+    const sdt = dt * Sports.timeScale(dt);
+    if (g && state !== 'paused' && state !== 'menu' && state !== 'over') update(AUTOPILOT ? sdt * 3 : sdt);
+    draw(state === 'paused' ? 0 : sdt);
+    Sports.drawSting(ctx, W, H, dt);
     updateHud();
     requestAnimationFrame(frame);
   }

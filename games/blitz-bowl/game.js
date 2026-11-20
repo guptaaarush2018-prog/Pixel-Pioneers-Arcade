@@ -96,7 +96,11 @@
   const spotText = y => y === 50 ? 'midfield' : y < 50 ? `your ${Math.round(y)}` : `their ${Math.round(100 - y)}`;
   const clockText = () => overtime ? 'OT' : `Q${quarter} ${Math.floor(clock / 60)}:${String(Math.floor(clock % 60)).padStart(2, '0')}`;
 
+  let box = { yards: 0, big: 0, tds: 0, picks: 0, sacks: 0, plays: 0 };
+
   function newGame() {
+    box = { yards: 0, big: 0, tds: 0, picks: 0, sacks: 0, plays: 0 };
+    Sports.clearSting();
     team = teamSheet();
     fx.clear();
     Sports.startCrowd();
@@ -484,7 +488,16 @@
     };
     say(msgs[result.type], result.type === 'td' ? 2.2 : 1.3);
     Sports.sfx.whistle();
+    box.plays++;
+    if (result.type === 'td' || result.type === 'tackle' || result.type === 'out' || result.type === 'sack') box.yards += Math.round(gain);
+    if (gain >= 20 && result.type !== 'sack') { box.big++; Sports.sting(`Big play · ${Math.round(gain)} yards`, `${ME.name} ${us} – ${them}`, ME.color, 1.6); }
+    if (result.type === 'int') { box.picks++; Sports.sting('Intercepted', 'Turnover · their ball', '#ff5d5d', 1.8); Sports.buzz(60); }
+    if (result.type === 'sack') box.sacks++;
     if (result.type === 'td') {
+      box.tds++;
+      Sports.slowmo(1.1, 0.3);
+      Sports.buzz([40, 40, 90]);
+      Sports.sting(`Touchdown ${ME.name}!`, `${Math.max(0, Math.round(gain))}-yard score · ${box.yards} yards today`, ME.color, 2.2);
       deadT = 2.2;
       celebrate = 2.2;
       Sports.sfx.horn();
@@ -621,7 +634,7 @@
     Arcade.finish(ui, {
       score: AUTOPILOT ? 0 : us * 100 + (won ? 1500 : 0),
       title: won ? 'Victory!' : 'Defeat',
-      lines: [`${ME.name} ${us} – ${them} ${esc(opp)}`, record].filter(Boolean),
+      lines: [`${ME.name} ${us} – ${them} ${esc(opp)}`, `${box.yards} total yards · ${box.tds} TD · ${box.big} big play${box.big === 1 ? '' : 's'}${box.picks ? ` · ${box.picks} INT` : ''}`, record].filter(Boolean),
       button: 'Continue',
       onAction: menu,
     });
@@ -1205,8 +1218,10 @@
     const dt = Math.min(0.033, (now - last) / 1000);
     last = now;
     const run = state !== 'menu' && state !== 'paused' && state !== 'over' && state !== 'cpu';
-    if (run) for (let i = 0; i < (AUTOPILOT ? 3 : 1); i++) update(dt);
-    draw(run ? dt : 0);
+    const sdt = dt * Sports.timeScale(dt);
+    if (run) for (let i = 0; i < (AUTOPILOT ? 3 : 1); i++) update(sdt);
+    draw(run ? sdt : 0);
+    Sports.drawSting(ctx, W, H, dt);
     requestAnimationFrame(frame);
   }
 

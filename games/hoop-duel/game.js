@@ -25,6 +25,7 @@
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   const fx = Sports.particles();
   const shake = Sports.shaker();
+  const stats = Sports.stats();
   const crowd = Sports.makeCrowd(W, 150, { seed: 4, size: 7, colors: ['#ffc53d', '#ffc53d', '#4f8cff', '#4f8cff', '#e6e9ef', '#2b3247', '#ff5d5d'] });
   // Test hook: #autopilot lets a bot play for you too and posts no score.
   const AUTOPILOT = location.hash === '#autopilot';
@@ -37,6 +38,8 @@
   // ---------- Setup ----------
 
   function newGame() {
+    stats.reset();
+    Sports.clearSting();
     g = {
       time: MATCH, score: [0, 0], pause: 0, banner: null, events: [],
       players: [0, 1].map(i => ({ i, x: i === 0 ? 300 : W - 300, y: FLOOR, vy: 0, face: i === 0 ? 1 : -1, charge: 0, charging: false, stun: 0, stealT: 0, shotT: 0, dunk: 0, think: 0, plan: null })),
@@ -383,6 +386,13 @@
 
   // ---------- Flow ----------
 
+  // FG made/attempted for each side, plus threes and dunks.
+  function boxScore() {
+    const fg = i => `${stats.get('made', i)}/${stats.get('att', i)}`;
+    if (!stats.get('att', 0) && !stats.get('att', 1)) return '';
+    return `FG ${fg(me)} – ${fg(1 - me)} · ${stats.line([['threes', 'Threes'], ['dunks', 'Dunks']], me)}`.replace(/ · $/, '');
+  }
+
   function endGame() {
     state = 'over';
     Sports.stopCrowd();
@@ -395,7 +405,7 @@
       Arcade.finish(ui, {
         score: AUTOPILOT ? 0 : Math.round((mine * 15 + (won ? 300 : mine === theirs ? 100 : 0)) * L_.mult),
         title: won ? 'You win!' : mine === theirs ? "It's a tie" : 'You lost',
-        lines: [`${mine} – ${theirs} · ${L_.name} bot`],
+        lines: [`${mine} – ${theirs} · ${L_.name} bot`, boxScore()].filter(Boolean),
         button: 'Menu',
         onAction: () => showMenu(),
       });
@@ -697,7 +707,7 @@
       else if (e === 'rim') { S.clank(); fx.sparks(b.x, b.y, 6, '#ff9a5a', 90); }
       else if (e === 'board') S.thud(0.5);
       else if (e === 'shot' || e === 'perfect') Sports.noise(0.1, { vol: 0.04, from: 1500, to: 600, type: 'bandpass' });
-      else if (e === 'dunk') { S.thud(1.4); S.clank(); shake.kick(9); excite = 1; S.cheer(1.2); }
+      else if (e === 'dunk') { S.thud(1.4); S.clank(); shake.kick(9); excite = 1; S.cheer(1.2); Sports.buzz([30, 30, 70]); stats.add('att', b.shooter ?? 0); if (mode === 'bot') Sports.slowmo(0.9, 0.35); }
       else if (e === 'block') { S.thud(1); fx.text(b.x, b.y - 24, 'BLOCKED!', '#ff7a7a', 26); S.cheer(0.6); shake.kick(4); }
       else if (e === 'steal') { S.pop(); fx.text(b.x, b.y - 24, 'STOLEN!', '#5ec8d8', 24); S.cheer(0.4); }
       else if (e === 'swipe') Sports.noise(0.06, { vol: 0.03, from: 2500, to: 1200, type: 'bandpass' });
@@ -705,10 +715,20 @@
       else if (e[0] === 'q') {
         // Shot timing label over the shooter's head.
         const p = g.players[+e[1]], kind = e.slice(2);
+        stats.add('att', +e[1]);
         const [txt, col] = { perfect: ['PERFECT', '#ffc53d'], early: ['EARLY', '#7ab8ff'], late: ['LATE', '#ff7a7a'], good: ['GOOD', '#e6e9ef'] }[kind];
         fx.text(p.x, p.y - 140, txt, col, kind === 'perfect' ? 24 : 18);
       } else if (e.startsWith('score')) {
         const h = +e[5], big = e.endsWith('three') || e.endsWith('dunk');
+        stats.add('made', h);
+        if (e.endsWith('three')) stats.add('threes', h);
+        if (e.endsWith('dunk')) stats.add('dunks', h);
+        const who = h === me ? 'You' : (mode === 'bot' ? 'The bot' : 'They');
+        const tally = `${g.score[me]} – ${g.score[1 - me]}`;
+        if (g.score[h] >= WIN_AT) { Sports.sting(`${who} hit${h === me ? '' : 's'} the winner!`, tally, COLORS[h][0], 2.6); if (mode === 'bot') Sports.slowmo(1.3, 0.3); }
+        else if (e.endsWith('three')) Sports.sting(`${who} drain${h === me ? '' : 's'} a three`, tally, COLORS[h][0]);
+        else if (e.endsWith('dunk')) Sports.sting(`${who} throw${h === me ? '' : 's'} it down`, tally, COLORS[h][0]);
+        else if (g.score[h] >= WIN_AT - 3 && g.score[1 - h] < WIN_AT - 3) Sports.sting('Game point', tally, COLORS[h][0], 1.6);
         S.swish();
         swish[h] = 1;
         excite = big ? 1 : 0.6;
@@ -721,6 +741,7 @@
       } else if (e.startsWith('fire')) {
         const h = +e[4];
         S.horn();
+        Sports.sting(`${h === me ? 'You are' : mode === 'bot' ? 'The bot is' : 'They are'} on fire`, `${FIRE_AT} straight baskets · perfect window widened`, '#ff8a3d');
         for (let i = 0; i < 4; i++) setTimeout(() => fx.firework(Arcade.rand(160, W - 160), Arcade.rand(70, 170), Arcade.pick(['#ff8a3d', '#ffc53d', '#ff5d5d'])), i * 200);
         fx.text(g.players[h].x, g.players[h].y - 150, 'ON FIRE', '#ff8a3d', 28);
       } else if (e.startsWith('cold')) fx.text(g.players[+e[4]].x, g.players[+e[4]].y - 150, 'cooled off', '#7ab8ff', 16);
@@ -1045,6 +1066,7 @@
     fx.draw(ctx);
     ctx.restore();
     Sports.lighting(ctx, W, H, 0.22);
+    Sports.drawSting(ctx, W, H, dt);
 
     if (g.banner) {
       ctx.font = '900 italic 54px system-ui, sans-serif';
@@ -1088,7 +1110,7 @@
         guestPositions();
       } else {
         Object.assign(g.input[0], local);
-        acc += AUTOPILOT ? dt * 2 : dt;
+        acc += (AUTOPILOT ? dt * 2 : dt) * (mode === 'bot' ? Sports.timeScale(dt) : 1);
         while (acc >= STEP) {
           step(STEP);
           acc -= STEP;

@@ -33,8 +33,18 @@
   let circuit = null, theme = null, bg = null;
   let segments = [], trackLen = 0, mapPts = [];
   let cars = [], player = null;
-  let laps = 3, level = Arcade.load('apex:level', 1), LV = D.LEVELS[level];
-  let modeChamp = Arcade.load('apex:mode', 'race') === 'champ';
+  let laps = 3, quickLaps = 3, level = clamp(Arcade.load('apex:level', 1), 0, D.LEVELS.length - 1), LV = D.LEVELS[level];
+  let mode = Arcade.load('apex:mode2', 'race');
+  if (!D.MODES.some(m => m.id === mode)) mode = 'race';
+  let wetPick = Arcade.load('apex:wet', false);
+  let carPick = Arcade.load('apex:car', 'pioneer');
+  let session = 'race';   // race | quali | trial
+  let wet = false, car = D.CARS[0], elimDone = 0, outCount = 0;
+  const carById = id => D.CARS.find(c => c.id === id) || D.CARS[0];
+  const stats = () => ({ races: 0, wins: 0, podiums: 0, titles: 0, poles: 0, ...Arcade.load('apex:stats', {}) });
+  const carUnlocked = c => !c.unlock || stats()[c.unlock.stat] >= c.unlock.n;
+  const wearMul = () => (mode === 'endurance' ? 2 : 1) * (wet ? 0.75 : 1);
+  const solo = () => session !== 'race';
   let pickCircuit = Arcade.load('apex:circuit', 0);
   let lightsT = 0, goDelay = 0, raceT = 0, finishT = 0, results = null;
   let skyOff = 0, farOff = 0, midOff = 0;
@@ -118,45 +128,77 @@
 
   // ---------- Race setup ----------
 
-  function newRace() {
-    build(D.CIRCUITS[modeChamp ? champ().round : pickCircuit]);
-    LV = D.LEVELS[level];
-    const drivers = [...D.DRIVERS].sort(() => Math.random() - 0.5);
-    const startPos = Math.min(LV.grid, 11);
-    cars = D.TEAMS.map((team, i) => ({
-      team, ti: i, you: !!team.you, name: team.you ? Arcade.profile().name : drivers[i],
+  function makeCar(team, i, pace) {
+    const you = !!team.you;
+    return {
+      team: you ? { ...team, color: car.color, dark: car.dark, style: car.style } : team,
+      ti: i, you, name: you ? Arcade.profile().name : D.DRIVERS[(i - 1 + D.DRIVERS.length) % D.DRIVERS.length],
       x: 0, speed: 0, dist: 0, wear: 0, pitT: 0, pitted: false, pitLap: -1,
-      pace: team.you ? 1 : LV.pace * (0.95 + Math.random() * 0.06), lane: 0, finished: false, finishT: 0, best: Infinity, lapStart: 0, lapsDone: 0,
-      boost: 1, boosting: false, slip: 0,
-    }));
-    // Grid: two columns behind the line, you at your starting slot.
-    const order = cars.filter(c => !c.you).sort((a, b) => b.pace - a.pace);
-    order.splice(startPos, 0, cars.find(c => c.you));
-    order.forEach((c, i) => {
-      c.grid = i + 1;
-      c.dist = -(i + 1) * SEG * 2.2;
-      c.x = i % 2 ? 0.45 : -0.45;
-      c.lane = c.x;
-    });
+      pace: you ? 1 : pace ?? LV.pace * (0.955 + Math.random() * 0.055), lane: 0, finished: false, finishT: 0, best: Infinity, lapStart: 0, lapsDone: 0,
+      boost: 1, boosting: false, slip: 0, out: false, outAt: 0, mistake: 0, penalty: 0,
+    };
+  }
+
+  // opts: { session: 'race' | 'quali' | 'trial', grid: [team index...] | 'back', paces: [...] }
+  function newRace(opts = {}) {
+    session = opts.session || (mode === 'trial' ? 'trial' : 'race');
+    const season = mode === 'season' ? champ() : null;
+    build(D.CIRCUITS[season ? season.round : pickCircuit]);
+    LV = D.LEVELS[level];
+    wet = season ? !!season.wet : wetPick;
+    car = carUnlocked(carById(carPick)) ? carById(carPick) : D.CARS[0];
+    laps = { season: 3, sprint: 2, endurance: 8, elim: 6 }[mode] || quickLaps;
+    if (session === 'quali') laps = 2;
+    if (session === 'trial') laps = 5;
+    const teams = solo() ? [D.TEAMS[0]] : D.TEAMS;
+    cars = teams.map((team, i) => makeCar(team, i, opts.paces?.[i]));
     player = cars.find(c => c.you);
+    if (solo()) {
+      // A flying start from the run-up to the line.
+      player.dist = -SEG * 60;
+      player.speed = MAX * 0.6;
+      player.grid = 1;
+    } else {
+      let order;
+      const bots = cars.filter(c => !c.you);
+      if (Array.isArray(opts.grid)) order = opts.grid.map(ti => cars[ti]);
+      else if (opts.grid === 'back') order = [...bots.sort((a, b) => b.pace - a.pace), player];
+      else if (mode === 'sprint') order = [...bots.sort((a, b) => a.pace - b.pace), player];
+      else {
+        order = bots.sort((a, b) => b.pace - a.pace);
+        order.splice(Math.min(LV.grid, 11), 0, player);
+      }
+      order.forEach((c, i) => {
+        c.grid = i + 1;
+        c.dist = -(i + 1) * SEG * 2.2;
+        c.x = i % 2 ? 0.45 : -0.45;
+        c.lane = c.x;
+      });
+    }
     fx.clear();
+    Sports.clearSting();
     results = null;
     raceT = 0;
     lightsT = 0;
     goDelay = Math.random() * 0.8;
     finishT = 0;
+    elimDone = 0;
+    outCount = 0;
     skyOff = farOff = midOff = 0;
-    state = 'lights';
+    state = solo() ? 'racing' : 'lights';
     engine.start();
+    if (solo()) Sports.sting(session === 'quali' ? 'Qualifying' : 'Time trial', `${circuit.name} · ${laps} flying laps${wet ? ' · wet' : ''}`, '#ffc53d', 2.4);
+    else if (mode === 'season') Sports.sting(`Round ${champ().round + 1} · ${circuit.name}`, `Grand Prix · starting P${player.grid}${wet ? ' · wet track' : ''}`, '#ffc53d', 3);
   }
 
   // ---------- Championship ----------
 
+  const freshSeason = () => ({ v: 2, round: 0, points: D.TEAMS.map(() => 0), level, wet: Math.random() < 0.2, grid: null, paces: null, wins: 0 });
   function champ() {
-    const s = Arcade.load('apex:season', null);
-    return s && Array.isArray(s.points) && s.points.length === D.TEAMS.length ? s : { round: 0, points: D.TEAMS.map(() => 0), level };
+    const s = Arcade.load('apex:season2', null);
+    return s && s.v === 2 && Array.isArray(s.points) && s.points.length === D.TEAMS.length && s.round < D.CIRCUITS.length ? s : freshSeason();
   }
-  const saveChamp = s => Arcade.save('apex:season', s);
+  const saveChamp = s => Arcade.save('apex:season2', s);
 
   // ---------- Simulation ----------
 
@@ -167,7 +209,7 @@
     const p = player;
     const seg = segAt(p.dist + startZ());
     const pct = p.speed / MAX;
-    const grip = 1 - p.wear * 0.45;
+    const grip = (1 - p.wear * 0.45) * car.grip * (wet ? 0.82 : 1);
     let left = input.left, right = input.right, gas = input.gas || (touchDriving && !input.brake), brake = input.brake;
     if (AUTOPILOT || state === 'finished') ({ left, right, gas, brake } = botDrive(p));
     if (p.pitT > 0) return pitStop(p, dt);
@@ -179,9 +221,9 @@
 
     // Boost: a burst of extra power while the meter lasts. Slipstreaming fills it faster.
     p.boosting = input.boost && p.boost > 0.02 && gas && state === 'racing';
-    p.boost = clamp(p.boost + dt * (p.boosting ? -0.28 : p.slip > 0.4 ? 0.12 : 0.04), 0, 1);
-    const top = MAX * (1 - p.wear * 0.06) * (p.boosting ? 1.1 : 1) * (p.slip > 0.4 ? 1.06 : 1);
-    if (gas) p.speed += ACCEL * (p.boosting ? 1.4 : 1) * dt * (1 - Math.max(0, p.speed - top) / top);
+    p.boost = clamp(p.boost + dt * (p.boosting ? -0.28 / car.boost : p.slip > 0.4 ? 0.12 : 0.04), 0, 1);
+    const top = MAX * car.top * (wet ? 0.95 : 1) * (1 - p.wear * 0.06) * (p.boosting ? 1.1 : 1) * (p.slip > 0.4 ? 1.06 : 1);
+    if (gas) p.speed += ACCEL * car.accel * (p.boosting ? 1.4 : 1) * dt * (1 - Math.max(0, p.speed - top) / top);
     else if (brake) p.speed += BRAKE * dt;
     else p.speed += DECEL * dt;
     if (p.speed > top) p.speed = Math.max(top, p.speed + DECEL * dt);
@@ -208,7 +250,7 @@
     const myZ = p.dist;
     p.slip = Math.max(0, p.slip - dt * 0.8);
     for (const c of cars) {
-      if (c === p || c.pitT > 0) continue;
+      if (c === p || c.pitT > 0 || c.out) continue;
       const gap = c.dist - myZ;
       const overlapX = Math.abs(c.x - p.x) < CAR_W / ROAD * 1.05;
       if (gap > 0 && gap < SEG * 1.4 && overlapX && p.speed > c.speed) {
@@ -221,11 +263,11 @@
     }
 
     // Tyres wear with speed and cornering, faster when sliding over the grass.
-    p.wear = clamp(p.wear + dt * (0.002 + pct * 0.0025 + Math.abs(seg.curve) * pct * 0.0008 + (Math.abs(p.x) > 1 ? 0.008 : 0)), 0, 1);
+    p.wear = clamp(p.wear + dt * (0.002 + pct * 0.0025 + Math.abs(seg.curve) * pct * 0.0008 + (Math.abs(p.x) > 1 ? 0.008 : 0)) * car.wear * wearMul(), 0, 1);
 
     // The pit lane: slow down and keep right on the last straight.
     const lapPos = (((p.dist % trackLen) + trackLen) % trackLen);
-    if (state === 'racing' && lapPos > trackLen - PIT_LEN * SEG && lapPos < trackLen - SEG * 4 && p.x > 0.7 && p.speed < MAX * 0.42 && p.pitLap !== p.lapsDone && p.wear > 0.05) {
+    if (state === 'racing' && !solo() && lapPos > trackLen - PIT_LEN * SEG && lapPos < trackLen - SEG * 4 && p.x > 0.7 && p.speed < MAX * 0.42 && p.pitLap !== p.lapsDone && p.wear > 0.05) {
       p.pitT = 2.8;
       p.pitLap = p.lapsDone;
       Sports.sfx.whistle();
@@ -252,18 +294,47 @@
     fx.sparks(W / 2, H - 50, Math.round(14 * k), '#ffd86b', 200);
   }
 
-  // Bot drivers: keep to a racing line, brake for corners, pass slower cars, and pit once.
-  function botDrive(c) {
-    const seg = segAt(c.dist + startZ() + SEG * 18);
-    const near = segAt(c.dist + startZ() + SEG * 6);
-    const curve = Math.max(Math.abs(seg.curve), Math.abs(near.curve));
-    const target = c.pace * MAX * (1 - curve * 0.05) * (1 - c.wear * 0.06);
-    // Hug the inside of the next corner.
+  // Bot drivers: plan braking for the corners ahead, keep to a racing line, draft, pass slower
+  // cars, pit once. Higher levels boost on the straights and defend against you.
+  function botDrive(c, dt = STEP) {
+    const ai = c.you ? 2 : LV.ai;
+    const pace = c.you ? 1 : c.pace;
+    const wetK = wet ? 0.92 : 1;
+    const corner = cv => pace * MAX * (1 - Math.abs(cv) * 0.05) * (1 - c.wear * 0.06) * wetK;
+    let target;
+    if (ai === 0) {
+      target = corner(Math.max(Math.abs(segAt(c.dist + SEG * 18).curve), Math.abs(segAt(c.dist + SEG * 6).curve)));
+    } else {
+      // The fastest speed now that still lets the car brake down for each corner in time.
+      const brakeA = MAX * 0.6 * (ai >= 3 ? 1.1 : 0.85);
+      target = corner(segAt(c.dist + SEG * 2).curve);
+      for (let k = 4; k <= 34; k += 3) {
+        const v = corner(segAt(c.dist + SEG * k).curve);
+        target = Math.min(target, Math.sqrt(v * v + 2 * brakeA * k * SEG));
+      }
+    }
+    if (ai === 0 && !c.you) {
+      // Rookies have moments: a lock-up or a missed apex now and then.
+      c.mistake = Math.max(0, c.mistake - dt);
+      if (c.mistake <= 0 && Math.random() < dt * 0.04) c.mistake = 1.2;
+      if (c.mistake > 0) target *= 0.78;
+    }
+    const seg = segAt(c.dist + SEG * 18);
     let want = clamp(-seg.curve * 0.12, -0.6, 0.6);
+    if (!c.you) c.slip = Math.max(0, c.slip - dt * 0.8);
     for (const o of cars) {
-      if (o === c) continue;
+      if (o === c || o.out) continue;
       const gap = o.dist - c.dist;
       if (gap > 0 && gap < SEG * 20 && Math.abs(o.x - want) < 0.4 && o.speed < c.speed + 200) want = o.x > 0 ? o.x - 0.55 : o.x + 0.55;
+      if (!c.you && ai >= 1 && gap > SEG && gap < SEG * 14 && Math.abs(o.x - c.x) < 0.35 && c.speed > MAX * 0.6) c.slip = Math.min(1, c.slip + dt * 1.6);
+      // Defend: on the straights, move across to cover you when you're closing from behind.
+      if (!c.you && ai >= 3 && o.you && gap < 0 && gap > -SEG * 10 && o.speed > c.speed * 0.98 && Math.abs(seg.curve) < 2) want = lerp(want, clamp(o.x, -0.7, 0.7), 0.5);
+    }
+    if (!c.you && ai >= 2) {
+      const straight = Math.abs(segAt(c.dist + SEG * 25).curve) < 1 && Math.abs(segAt(c.dist + SEG * 8).curve) < 1;
+      c.boosting = state === 'racing' && straight && c.boost > 0.05 && c.speed > target * 0.8;
+      c.boost = clamp(c.boost + dt * (c.boosting ? -0.3 : c.slip > 0.4 ? 0.12 : 0.04), 0, 1);
+      if (c.boosting) target *= 1.08;
     }
     c.lane = lerp(c.lane, clamp(want, -0.85, 0.85), 0.05);
     const steer = c.lane - c.x;
@@ -271,22 +342,56 @@
   }
 
   function updateBot(c, dt) {
+    if (c.out) {
+      // Eliminated: pull off onto the grass and stop.
+      c.speed = Math.max(0, c.speed + BRAKE * 0.4 * dt);
+      c.x = lerp(c.x, 2.4, dt * 1.5);
+      return;
+    }
     if (c.pitT > 0) return pitStop(c, dt);
-    const ctl = botDrive(c);
+    const ctl = botDrive(c, dt);
     const seg = segAt(c.dist + startZ());
     const pct = c.speed / MAX;
-    if (ctl.gas) c.speed += ACCEL * 0.95 * dt;
+    if (ctl.gas) c.speed += ACCEL * (LV.ai >= 3 ? 1.02 : 0.95) * (c.boosting ? 1.3 : 1) * dt;
     else if (ctl.brake) c.speed += BRAKE * 0.6 * dt;
     else c.speed += DECEL * dt * 0.5;
-    c.speed = clamp(c.speed, 0, MAX * c.pace * 1.04);
+    const cap = MAX * c.pace * 1.04 * (c.boosting ? 1.08 : 1) * (c.slip > 0.4 ? 1.04 : 1) * (wet ? 0.95 : 1);
+    c.speed = clamp(c.speed, 0, cap);
     c.x = clamp(lerp(c.x, c.lane, dt * 2.2) - dt * pct * seg.curve * 0.02, -0.95, 0.95);
-    c.wear = clamp(c.wear + dt * (0.002 + pct * 0.0028), 0, 1);
-    // Pit when the tyres are gone, if there's a lap left to use them.
+    c.wear = clamp(c.wear + dt * (0.002 + pct * 0.0028) * wearMul(), 0, 1);
+    // Pit when the tyres are gone (or at half distance in Endurance), if there's a lap left.
     const lapPos = (((c.dist % trackLen) + trackLen) % trackLen);
-    if (!c.pitted && c.wear > 0.62 && c.lapsDone < laps - 1 && lapPos > trackLen - PIT_LEN * SEG && lapPos < trackLen - SEG * 10) {
+    const due = c.wear > 0.62 || (mode === 'endurance' && c.lapsDone >= laps / 2);
+    if (!c.pitted && due && c.lapsDone < laps - 1 && lapPos > trackLen - PIT_LEN * SEG && lapPos < trackLen - SEG * 10) {
       c.pitT = 2.8 + Math.random();
       c.lane = 1.2;
     }
+  }
+
+  // A lone bot's flying lap at full pace, for qualifying times.
+  const refCache = new Map();
+  function refLap() {
+    const key = circuit.id + wet + level;
+    if (refCache.has(key)) return refCache.get(key);
+    const saved = cars;
+    const c = makeCar(D.TEAMS[1], 1, 1);
+    c.pitted = true;
+    c.dist = -trackLen * 0.2;
+    c.speed = MAX * 0.6;
+    cars = [c];
+    let t = 0, t0 = null;
+    for (let i = 0; i < 60 * 600; i++) {
+      updateBot(c, STEP);
+      const before = c.dist;
+      c.dist += c.speed * STEP;
+      t += STEP;
+      if (before < 0 && c.dist >= 0) t0 = t;
+      if (t0 !== null && c.dist >= trackLen) break;
+    }
+    cars = saved;
+    const lap = t - (t0 ?? 0);
+    refCache.set(key, lap);
+    return lap;
   }
 
   const startZ = () => 0;   // the line sits at z = 0; dist counts from it
@@ -305,7 +410,10 @@
     updatePlayer(dt);
     for (const c of cars) if (!c.you) updateBot(c, dt);
     for (const c of cars) {
+      const before = c.dist;
       c.dist += c.speed * dt;
+      if (before < 0 && c.dist >= 0) c.lapStart = raceT;
+      if (c.out) continue;
       const done = Math.floor(c.dist / trackLen);
       if (done > c.lapsDone && c.dist > 0) {
         const lap = raceT - c.lapStart;
@@ -314,13 +422,26 @@
         c.lapsDone = done;
         if (c.you && done < laps) {
           Sports.sfx.select();
-          fx.text(W / 2, H * 0.3, done === laps - 1 ? 'FINAL LAP' : `LAP ${done + 1}`, '#ffffff', 34);
+          if (solo()) fx.text(W / 2, H * 0.3, `${fmt(lap)}${lap <= c.best ? '  BEST' : ''}`, lap <= c.best ? '#3ddc84' : '#ffffff', 34);
+          else fx.text(W / 2, H * 0.3, done === laps - 1 ? 'FINAL LAP' : `LAP ${done + 1}`, '#ffffff', 34);
         }
         if (done >= laps && !c.finished) {
           c.finished = true;
           c.finishT = raceT;
+          if (mode === 'endurance' && !solo() && !c.pitted) c.penalty = 10;
           if (c.you) finishRace();
         }
+      }
+    }
+    // Elimination: whenever the leader starts a new lap, the last two running cars are out.
+    if (mode === 'elim' && !solo() && state === 'racing') {
+      const lead = Math.max(...cars.filter(c => !c.out).map(c => c.lapsDone));
+      if (lead > elimDone && lead < laps) {
+        elimDone = lead;
+        const running = ranking().filter(c => !c.out && !c.finished);
+        for (const c of running.slice(-2)) if (running.length > 1) eliminate(c);
+        const left = cars.filter(c => !c.out);
+        if (state === 'racing' && left.length === 1 && left[0].you) { player.finished = true; player.finishT = raceT; finishRace(); }
       }
     }
     // Sparks and dust are drawn in screen space; tilt the background with the road.
@@ -331,54 +452,147 @@
     midOff += seg.curve * pct * 0.0032;
     if (state === 'finished') {
       finishT += dt;
-      if (finishT > 3 && !results) showResults();
+      if (finishT > (solo() ? 1.4 : 3) && !results) showResults();
     }
   }
 
-  const ranking = () => [...cars].sort((a, b) => (a.finished && b.finished ? a.finishT - b.finishT : a.finished ? -1 : b.finished ? 1 : b.dist - a.dist));
+  const ranking = () => [...cars].sort((a, b) => {
+    if (a.out || b.out) return a.out && b.out ? b.outAt - a.outAt : a.out ? 1 : -1;
+    if (a.finished && b.finished) return a.finishT + a.penalty - (b.finishT + b.penalty);
+    return a.finished ? -1 : b.finished ? 1 : b.dist - a.dist;
+  });
+
+  function eliminate(c) {
+    c.out = true;
+    c.outAt = ++outCount;
+    if (c.you) {
+      Sports.sting('Eliminated', `Out on lap ${elimDone + 1} · classified P${position(c)}`, '#ff5d5d', 2.6);
+      Sports.sfx.lose();
+      state = 'finished';
+    } else {
+      Sports.sting(`${c.name} is out`, `${cars.filter(o => !o.out).length} cars left`, c.team.color, 1.8);
+      Sports.sfx.buzzer();
+    }
+  }
   const position = c => ranking().indexOf(c) + 1;
 
   function finishRace() {
     state = 'finished';
+    if (solo()) { Sports.sfx.good(); return; }
     const pos = position(player);
     fx.confetti(W / 2, H * 0.4, pos <= 3 ? 120 : 40, ['#1b1d22', '#f4f4f4', '#ffc53d']);
     if (pos === 1) Sports.sfx.win(); else Sports.sfx.good();
     Sports.sfx.cheer(pos <= 3 ? 1.4 : 0.6);
   }
 
+  function bumpStats(fn) {
+    const st = stats();
+    fn(st);
+    Arcade.save('apex:stats', st);
+  }
+
   function showResults() {
+    if (session === 'quali') return qualiResults();
+    if (session === 'trial') return trialResults();
     // Cars still running are placed by how far round they are, with an estimated gap.
     const order = ranking();
     const lead = order[0];
+    const total = c => c.finishT + c.penalty;
     results = order.map((c, i) => {
-      const t = c.finished ? c.finishT : raceT + (laps * trackLen - c.dist) / Math.max(1, c.speed || MAX * 0.8);
-      return { c, pos: i + 1, gap: i === 0 ? fmt(t) : `+${(t - (lead.finished ? lead.finishT : t)).toFixed(1)}s` };
+      const t = c.finished ? total(c) : raceT + (laps * trackLen - c.dist) / Math.max(1, c.speed || MAX * 0.8);
+      return { c, pos: i + 1, gap: c.out ? 'OUT' : i === 0 ? fmt(t) : `+${(t - (lead.finished ? total(lead) : t)).toFixed(1)}s` };
     });
     engine.stop();
     const pos = results.find(r => r.c.you).pos;
     const won = pos === 1;
+    const before = D.CARS.filter(carUnlocked).map(c => c.id);
+    bumpStats(st => { st.races++; if (won) st.wins++; if (pos <= 3) st.podiums++; });
     if (won) Arcade.flag('apex-gp-win');
     if (won && level >= 1 && player.grid >= 12) Arcade.flag('apex-gp-pole');
-    let champHtml = '';
-    if (modeChamp) {
+    if (won && mode === 'elim') Arcade.flag('apex-gp-elim');
+    if (won && mode === 'endurance') Arcade.flag('apex-gp-endurance');
+    if (won && wet) Arcade.flag('apex-gp-wet');
+    if (won && level >= 4) Arcade.flag('apex-gp-alien');
+    let champHtml = '', button = 'Race again';
+    if (mode === 'season') {
       const s = champ();
       results.forEach(r => { s.points[r.c.ti] += D.POINTS[r.pos - 1] || 0; });
+      // One bonus point for the fastest lap, if that driver finished in the top ten.
+      const fl = results.filter(r => r.pos <= 10 && r.c.best < Infinity).sort((a, b) => a.c.best - b.c.best)[0];
+      if (fl) s.points[fl.c.ti] += 1;
+      if (won) s.wins = (s.wins || 0) + 1;
       s.round++;
+      s.grid = null;
+      s.paces = null;
+      s.wet = Math.random() < 0.22;
       const table = D.TEAMS.map((t, i) => ({ t, pts: s.points[i], i })).sort((a, b) => b.pts - a.pts);
       const done = s.round >= D.CIRCUITS.length;
-      if (done && table[0].t.you) Arcade.flag('apex-gp-season');
-      champHtml = `<p class="muted-note">${done ? 'Final championship standings' : `Championship after round ${s.round} of ${D.CIRCUITS.length}`}</p>
-        <ol class="board-list">${table.slice(0, 5).map(r => `<li class="${r.t.you ? 'me' : ''}"><span class="name">${esc(r.t.name)}</span><b>${r.pts}</b></li>`).join('')}</ol>`;
-      if (done) champHtml = `<p class="new-best">${table[0].t.you ? 'You are World Champion!' : `${esc(table[0].t.name)} take the title.`}</p>` + champHtml;
-      saveChamp(done ? { round: 0, points: D.TEAMS.map(() => 0), level } : s);
+      const mine = table.findIndex(r => r.t.you) + 1;
+      if (done && mine === 1) { Arcade.flag('apex-gp-season'); bumpStats(st => st.titles++); }
+      champHtml = `${fl ? `<p class="muted-note">Fastest lap: ${esc(fl.c.name)} ${fmt(fl.c.best)} (+1)</p>` : ''}
+        <p class="muted-note">${done ? 'Final championship standings' : `Standings after round ${s.round} of ${D.CIRCUITS.length} · you are P${mine}`}</p>
+        <ol class="board-list">${table.slice(0, 6).map((r, k) => `<li class="${r.t.you ? 'me' : ''}"><span class="rank">${k + 1}</span><span class="name">${esc(r.i ? D.DRIVERS[r.i - 1] : Arcade.profile().name)} <small style="color:${r.t.color}">${esc(r.t.name)}</small></span><b>${r.pts}</b></li>`).join('')}</ol>`;
+      if (done) champHtml = `<p class="new-best">${mine === 1 ? 'You are World Champion!' : `${esc(table[0].t.name)} take the title. You finish P${mine}.`}</p>` + champHtml;
+      saveChamp(done ? freshSeason() : s);
+      button = done ? 'New season' : 'Next weekend';
     }
-    const score = AUTOPILOT ? 0 : Math.round(((13 - pos) * 100 + (player.best < Infinity ? Math.max(0, 600 - player.best * 8) : 0) + (player.grid - pos) * 25) * LV.mult);
+    const fresh = D.CARS.filter(c => carUnlocked(c) && !before.includes(c.id));
+    const modeMult = { sprint: 0.8, endurance: 1.4, elim: 1.1 }[mode] || 1;
+    const score = AUTOPILOT ? 0 : Math.round(((13 - pos) * 100 + (player.best < Infinity ? Math.max(0, 600 - player.best * 8) : 0) + (player.grid - pos) * 25) * LV.mult * modeMult * (wet ? 1.15 : 1));
+    const modeName = D.MODES.find(m => m.id === mode).name;
     Arcade.finish(ui, {
       score: Math.max(0, score),
-      title: won ? 'Victory!' : pos <= 3 ? `Podium! P${pos}` : `Finished P${pos}`,
-      lines: [`${esc(circuit.name)} · ${laps} laps · started P${player.grid}`, `Best lap ${player.best < Infinity ? fmt(player.best) : '—'}`],
-      html: `<ol class="board-list">${results.slice(0, 6).map(r => `<li class="${r.c.you ? 'me' : ''}"><span class="rank">${r.pos}</span><span class="name">${esc(r.c.name)} <small style="color:${r.c.team.color}">${esc(r.c.team.name)}</small></span><b>${r.gap}</b></li>`).join('')}</ol>${champHtml}`,
-      button: modeChamp && champ().round > 0 ? 'Next round' : 'Race again',
+      title: player.out ? `Eliminated · P${pos}` : won ? 'Victory!' : pos <= 3 ? `Podium! P${pos}` : `Finished P${pos}`,
+      lines: [`${esc(circuit.name)} · ${modeName} · ${laps} laps${wet ? ' · wet' : ''} · started P${player.grid}`, `Best lap ${player.best < Infinity ? fmt(player.best) : '—'}${player.penalty ? ` · +${player.penalty}s penalty (no pit stop)` : ''}`],
+      html: `<ol class="board-list">${results.slice(0, 6).map(r => `<li class="${r.c.you ? 'me' : ''}"><span class="rank">${r.pos}</span><span class="name">${esc(r.c.name)} <small style="color:${r.c.team.color}">${esc(r.c.team.name)}</small></span><b>${r.gap}</b></li>`).join('')}</ol>${champHtml}
+        ${fresh.map(c => `<p class="new-best">New car unlocked: ${esc(c.name)}</p>`).join('')}`,
+      button,
+      onAction: () => start(),
+    });
+  }
+
+  // Qualifying: your best lap against the field's simulated times sets the grid.
+  function qualiResults() {
+    results = true;
+    engine.stop();
+    const ref = refLap();
+    const paces = D.TEAMS.map((t, i) => (i ? LV.pace * (0.955 + Math.random() * 0.055) : 1));
+    const times = D.TEAMS.map((t, i) => (i ? (ref / paces[i]) * (1 + Arcade.rand(-0.004, 0.012)) : player.best));
+    const grid = times.map((t, i) => i).sort((a, b) => times[a] - times[b]);
+    const s = champ();
+    s.grid = grid;
+    s.paces = paces;
+    saveChamp(s);
+    const mine = grid.indexOf(0) + 1;
+    if (mine === 1) { Arcade.flag('apex-gp-pole-position'); bumpStats(st => st.poles++); }
+    const pole = times[grid[0]];
+    const row = (ti, k) => `<li class="${ti === 0 ? 'me' : ''}"><span class="rank">${k + 1}</span><span class="name">${esc(ti ? D.DRIVERS[ti - 1] : Arcade.profile().name)} <small style="color:${D.TEAMS[ti].color}">${esc(D.TEAMS[ti].name)}</small></span><b>${k ? `+${(times[ti] - pole).toFixed(3)}` : fmt(times[ti])}</b></li>`;
+    const show = grid.slice(0, 6).map(row);
+    if (mine > 6) show.push(row(0, mine - 1));
+    ui.show({
+      title: mine === 1 ? 'Pole position!' : `Qualified P${mine}`,
+      html: `<p class="big">${fmt(player.best)}</p><p>${esc(circuit.name)} · round ${s.round + 1}${wet ? ' · wet' : ''}</p><ol class="board-list">${show.join('')}</ol>`,
+      button: 'Start the Grand Prix',
+      onAction: () => { ui.hide(); newRace({ session: 'race', grid, paces }); },
+      delay: 400,
+    });
+  }
+
+  function trialResults() {
+    results = true;
+    engine.stop();
+    const key = `apex:tt:${circuit.id}${wet ? ':wet' : ''}`;
+    const prev = Arcade.load(key, null);
+    const isRec = player.best < Infinity && (!prev || player.best < prev);
+    if (isRec) Arcade.save(key, player.best);
+    const ref = refLap();
+    bumpStats(st => st.races++);
+    const score = AUTOPILOT || player.best === Infinity ? 0 : Math.round(Math.max(0, ref * 1.2 - player.best) * 60 * LV.mult) + 200;
+    Arcade.finish(ui, {
+      score,
+      title: isRec ? 'New lap record!' : 'Session over',
+      lines: [`${esc(circuit.name)} · best lap ${player.best < Infinity ? fmt(player.best) : '—'}${prev ? ` · record ${fmt(Math.min(prev, player.best))}` : ''}`, `${LV.name} reference lap ${fmt(ref)}`],
+      button: 'Go again',
       onAction: () => start(),
     });
   }
@@ -589,6 +803,22 @@
     // Tyre smoke when sliding, exhaust heat when boosting.
     if (Math.abs(player.x) > 1 && player.speed > MAX * 0.3) fx.dust(W / 2 + (Math.random() < 0.5 ? -110 : 110), H - 20, 2, theme.grass[1], 80);
     if (player.boosting && Math.random() < 0.7) fx.dust(W / 2 + (Math.random() - 0.5) * 20, cy + chh * 0.8, 1, 'rgba(120,200,255,0.6)', 30);
+    if (wet) {
+      // Rain: a grey wash, falling streaks, and spray off your rear tyres.
+      ctx.fillStyle = 'rgba(30,45,70,0.22)';
+      ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = 'rgba(210,225,255,0.35)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      const t = performance.now() / 1000;
+      for (let i = 0; i < 110; i++) {
+        const sx = (i * 137.5 + t * 90 * (1 + (i % 3) * 0.3)) % W, sy = (i * 53 + t * 900 * (1 + (i % 4) * 0.2)) % H;
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx - 5, sy + 18);
+      }
+      ctx.stroke();
+      if (player.speed > MAX * 0.4 && Math.random() < 0.8) fx.dust(W / 2 + (Math.random() < 0.5 ? -100 : 100), H - 24, 1, 'rgba(220,230,245,0.55)', 90);
+    }
   }
 
   function hud() {
@@ -598,12 +828,17 @@
     pill(12, 12, 196, 74);
     ctx.textAlign = 'left';
     ctx.fillStyle = '#ffc53d';
-    ctx.font = '900 40px system-ui, sans-serif';
-    ctx.fillText(`P${pos}`, 24, 56);
-    const pw = ctx.measureText(`P${pos}`).width;
-    ctx.fillStyle = '#9aa3b5';
-    ctx.font = '700 12px system-ui, sans-serif';
-    ctx.fillText(`/${cars.length}`, 26 + pw, 56);
+    if (solo()) {
+      ctx.font = '900 22px system-ui, sans-serif';
+      ctx.fillText(session === 'quali' ? 'QUALI' : 'TRIAL', 24, 52);
+    } else {
+      ctx.font = '900 40px system-ui, sans-serif';
+      ctx.fillText(`P${pos}`, 24, 56);
+      const pw = ctx.measureText(`P${pos}`).width;
+      ctx.fillStyle = '#9aa3b5';
+      ctx.font = '700 12px system-ui, sans-serif';
+      ctx.fillText(`/${cars.filter(c => !c.out).length}`, 26 + pw, 56);
+    }
     ctx.fillStyle = '#f4f4f4';
     ctx.font = '800 13px system-ui, sans-serif';
     ctx.fillText(`LAP ${Math.min(laps, player.lapsDone + 1)}/${laps}`, 118, 34);
@@ -663,6 +898,16 @@
       ctx.textAlign = 'center';
       ctx.fillText('TYRES GONE · PIT: keep right & slow down before the line', W / 2, 30);
     }
+    const ttKey = `apex:tt:${circuit.id}${wet ? ':wet' : ''}`;
+    const note = mode === 'elim' && !solo() && state === 'racing' ? `ELIMINATION · bottom two out as the leader starts lap ${Math.min(laps, elimDone + 2)}`
+      : mode === 'endurance' && !solo() && !player.pitted && state === 'racing' ? 'ENDURANCE · pit stop required (10s penalty if you skip it)'
+        : session === 'trial' ? `RECORD ${Arcade.load(ttKey, null) ? fmt(Arcade.load(ttKey, 0)) : '—'}` : '';
+    if (note && player.wear <= 0.7) {
+      ctx.fillStyle = '#f4f4f4';
+      ctx.font = '800 12px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(note, W / 2, 30);
+    }
     if (player.slip > 0.4) {
       ctx.fillStyle = '#ffffff';
       ctx.font = '800 14px system-ui, sans-serif';
@@ -697,13 +942,14 @@
       ctx.fillStyle = '#fff';
       ctx.font = '900 40px system-ui, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(`CHEQUERED FLAG · P${pos}`, W / 2, H * 0.28 + 48);
+      ctx.fillText(solo() ? `SESSION OVER · ${player.best < Infinity ? fmt(player.best) : '—'}` : player.out ? `ELIMINATED · P${pos}` : `CHEQUERED FLAG · P${pos}`, W / 2, H * 0.28 + 48);
     }
+    Sports.drawSting(ctx, W, H, 1 / 60);
   }
 
   function updateTopbar() {
     if (!player) return;
-    $('pos').textContent = `P${position(player)}`;
+    $('pos').textContent = solo() ? (session === 'quali' ? 'Q' : 'TT') : `P${position(player)}`;
     $('lap').textContent = `${Math.min(laps, player.lapsDone + 1)}/${laps}`;
     $('speed').textContent = Math.round(player.speed * KMH);
   }
@@ -752,13 +998,35 @@
 
   function start() {
     ui.hide();
-    Arcade.countPlay();
-    if (modeChamp) {
+    if (mode === 'season') {
       const s = champ();
-      if (s.round === 0) saveChamp({ ...s, level });
+      if (s.round === 0 && !s.grid) saveChamp({ ...s, level });
       else level = s.level ?? level;
+      return weekend();
     }
     newRace();
+  }
+
+  // A race weekend: qualifying first (or skip it and start from the back), then the Grand Prix.
+  function weekend() {
+    const s = champ(), c = D.CIRCUITS[s.round];
+    if (s.grid) return newRace({ session: 'race', grid: s.grid, paces: s.paces });
+    player = null;
+    state = 'menu';
+    build(c);
+    ui.show({
+      title: `Round ${s.round + 1} of ${D.CIRCUITS.length}`,
+      html: `<p class="big" style="font-size:26px">${esc(c.name)}</p>
+        <p>${esc(c.country)} · ${D.LEVELS[level].name} field${s.wet ? ' · <b>rain forecast</b>' : ' · dry'}</p>
+        <p class="muted-note">Qualifying: two flying laps on your own. Your best lap against the field's times sets your grid slot.</p>
+        <div class="menu"><button class="btn secondary" type="button" data-skip>Skip qualifying (start last)</button><button class="btn secondary" type="button" data-back>Back to menu</button></div>`,
+      button: 'Go to qualifying',
+      onAction: () => { ui.hide(); newRace({ session: 'quali' }); },
+      onRender: panel => {
+        panel.querySelector('[data-skip]').addEventListener('click', () => { ui.hide(); newRace({ session: 'race', grid: 'back' }); });
+        panel.querySelector('[data-back]').addEventListener('click', () => menu());
+      },
+    });
   }
 
   function pause() {
@@ -767,7 +1035,7 @@
     state = 'paused';
     ui.show({
       title: 'Paused',
-      html: `<p>${esc(circuit.name)} · lap ${Math.min(laps, player.lapsDone + 1)} of ${laps}</p><div class="menu"><button class="btn secondary" type="button" data-quit>Retire</button></div>`,
+      html: `<p>${esc(circuit.name)} · ${solo() ? (session === 'quali' ? 'qualifying lap' : 'time trial lap') : 'lap'} ${Math.min(laps, player.lapsDone + 1)} of ${laps}</p><div class="menu"><button class="btn secondary" type="button" data-quit>${solo() ? 'Leave session' : 'Retire'}</button></div>`,
       button: 'Resume',
       onAction: resume,
       onRender: panel => panel.querySelector('[data-quit]').addEventListener('click', () => { engine.stop(); state = 'menu'; menu(); }),
@@ -824,24 +1092,39 @@
   function menu() {
     state = 'menu';
     player = null;
-    build(D.CIRCUITS[modeChamp ? champ().round : pickCircuit]);
+    build(D.CIRCUITS[mode === 'season' ? champ().round : pickCircuit]);
     Versus.attach(duelOpts);
   }
 
+  const statLine = c => `Top ${Math.round(c.top * 100)} · Accel ${Math.round(c.accel * 100)} · Grip ${Math.round(c.grip * 100)} · Tyre life ${Math.round(100 / c.wear)} · Boost ${Math.round(c.boost * 100)}`;
+
   function menuHtml() {
     const s = champ();
-    const circuits = D.CIRCUITS.map((c, i) => `<button class="chip" type="button" data-circuit="${i}" aria-pressed="${i === pickCircuit}">${esc(c.name)}</button>`).join('');
-    return `<p>Grand Prix racing against eleven rivals. Draft in the slipstream, save your boost for the straights, and pit when your tyres go.</p>
+    const m = D.MODES.find(x => x.id === mode);
+    const chip = (attr, val, on, label, extra = '') => `<button class="chip" type="button" data-${attr}="${val}" aria-pressed="${on}" ${extra}>${label}</button>`;
+    const circuits = D.CIRCUITS.map((c, i) => chip('circuit', i, i === pickCircuit, esc(c.name))).join('');
+    const carChips = D.CARS.map(c => {
+      const open = carUnlocked(c);
+      return chip('car', c.id, c.id === carPick && open, `${open ? '' : '🔒 '}${esc(c.name)}`, open ? '' : `disabled title="${esc(c.unlock.text)}"`);
+    }).join('');
+    const cur = carUnlocked(carById(carPick)) ? carById(carPick) : D.CARS[0];
+    const locked = D.CARS.filter(c => !carUnlocked(c));
+    const table = D.TEAMS.map((t, i) => ({ t, pts: s.points[i], i })).sort((a, b) => b.pts - a.pts);
+    const mine = table.findIndex(r => r.t.you) + 1;
+    const seasonInfo = `<p class="muted-note">Round ${s.round + 1} of ${D.CIRCUITS.length}: <b>${esc(D.CIRCUITS[s.round].name)}</b>${s.wet ? ' · rain forecast' : ''}${s.round ? ` · you are P${mine} with ${s.points[0]} pts` : ''}${s.grid ? ' · qualifying done' : ''}</p>
+      ${s.round ? '<button class="btn secondary" type="button" data-reset>Start a new season</button>' : ''}`;
+    return `<p>${esc(m.desc)}</p>
       <ul>
         <li><span class="kbd-only"><kbd>↑</kbd> throttle, <kbd>↓</kbd> brake, <kbd>←</kbd><kbd>→</kbd> steer, <kbd>Shift</kbd> boost.</span><span class="touch-only">Hold the left or right side to steer; the throttle is automatic. Brake and Boost buttons below.</span></li>
-        <li>To pit, keep right in the pit lane before the line and slow down.</li>
+        <li>To pit, keep right in the pit lane before the line and slow down. Wet tracks have less grip.</li>
       </ul>
       <div class="menu">
-        <div class="row"><button class="chip" type="button" data-mode="race" aria-pressed="${!modeChamp}">Single race</button><button class="chip" type="button" data-mode="champ" aria-pressed="${modeChamp}">Championship</button></div>
-        ${modeChamp ? `<p class="muted-note">Round ${s.round + 1} of ${D.CIRCUITS.length}: <b>${esc(D.CIRCUITS[s.round].name)}</b>${s.round ? ` · you have ${s.points[0]} points` : ''}</p>${s.round ? '<button class="btn secondary" type="button" data-reset>Start a new championship</button>' : ''}`
-          : `<div class="row" style="flex-wrap:wrap">${circuits}</div>`}
-        <div class="row">${D.LEVELS.map((l, i) => `<button class="chip" type="button" data-level="${i}" aria-pressed="${i === level}">${l.name}</button>`).join('')}</div>
-        <div class="row">${[3, 5].map(n => `<button class="chip" type="button" data-laps="${n}" aria-pressed="${n === laps}">${n} laps</button>`).join('')}</div>
+        <div class="row" style="flex-wrap:wrap">${D.MODES.map(x => chip('mode', x.id, x.id === mode, esc(x.name))).join('')}</div>
+        ${mode === 'season' ? seasonInfo : `<div class="row" style="flex-wrap:wrap">${circuits}</div>`}
+        <div class="row" style="flex-wrap:wrap">${D.LEVELS.map((l, i) => chip('level', i, i === level, l.name)).join('')}</div>
+        ${mode !== 'season' ? `<div class="row" style="flex-wrap:wrap">${chip('wet', 0, !wetPick, '☀️ Dry')}${chip('wet', 1, wetPick, '🌧 Wet')}${mode === 'race' ? [3, 5, 8].map(n => chip('laps', n, n === quickLaps, `${n} laps`)).join('') : ''}</div>` : ''}
+        <div class="row" style="flex-wrap:wrap">${carChips}</div>
+        <p class="muted-note" style="margin-top:2px"><b>${esc(cur.name)}</b>: ${esc(cur.blurb)}<br>${statLine(cur)}${locked.length ? `<br>Unlock next: ${esc(locked[0].name)} (${esc(locked[0].unlock.text.toLowerCase())})` : ''}</p>
       </div>`;
   }
 
@@ -852,15 +1135,17 @@
     intro: {
       title: 'Apex GP',
       get html() { return menuHtml(); },
-      button: 'Start race',
+      get button() { return mode === 'season' ? (champ().grid ? 'Start the Grand Prix' : 'Start race weekend') : mode === 'trial' ? 'Start time trial' : 'Start race'; },
       onAction: start,
       onRender: panel => {
         const redraw = () => menu();
-        panel.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => { modeChamp = b.dataset.mode === 'champ'; Arcade.save('apex:mode', modeChamp ? 'champ' : 'race'); redraw(); }));
+        panel.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => { mode = b.dataset.mode; Arcade.save('apex:mode2', mode); redraw(); }));
         panel.querySelectorAll('[data-circuit]').forEach(b => b.addEventListener('click', () => { pickCircuit = +b.dataset.circuit; Arcade.save('apex:circuit', pickCircuit); redraw(); }));
         panel.querySelectorAll('[data-level]').forEach(b => b.addEventListener('click', () => { level = +b.dataset.level; Arcade.save('apex:level', level); redraw(); }));
-        panel.querySelectorAll('[data-laps]').forEach(b => b.addEventListener('click', () => { laps = +b.dataset.laps; redraw(); }));
-        panel.querySelector('[data-reset]')?.addEventListener('click', () => { saveChamp({ round: 0, points: D.TEAMS.map(() => 0), level }); redraw(); });
+        panel.querySelectorAll('[data-laps]').forEach(b => b.addEventListener('click', () => { quickLaps = +b.dataset.laps; redraw(); }));
+        panel.querySelectorAll('[data-wet]').forEach(b => b.addEventListener('click', () => { wetPick = b.dataset.wet === '1'; Arcade.save('apex:wet', wetPick); redraw(); }));
+        panel.querySelectorAll('[data-car]').forEach(b => b.addEventListener('click', () => { carPick = b.dataset.car; Arcade.save('apex:car', carPick); redraw(); }));
+        panel.querySelector('[data-reset]')?.addEventListener('click', () => { saveChamp(freshSeason()); redraw(); });
       },
     },
   };

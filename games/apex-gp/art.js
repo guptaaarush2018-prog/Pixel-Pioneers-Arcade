@@ -71,9 +71,13 @@ const ApexArt = (() => {
     rr(c, 34, 10, 132, 14, 3, wing);
     c.fillStyle = dark;
     c.fillRect(34, 20, 132, 3);
-    c.fillStyle = '#1b1d22';
+    c.fillStyle = team.style === 3 ? dark : '#1b1d22';
     c.fillRect(30, 6, 7, 26);
     c.fillRect(163, 6, 7, 26);
+    // Body styles: 1 twin-element wing, 2 shark fin, 3 glowing light strips.
+    if (team.style === 1) rr(c, 38, 2, 124, 6, 2, shade(col, 0.35));
+    if (team.style === 2) { c.fillStyle = dark; c.beginPath(); c.moveTo(96, 44); c.lineTo(100, 12); c.lineTo(104, 44); c.fill(); }
+    if (team.style === 3) { c.fillStyle = dark; c.fillRect(46, 84, 108, 3); c.fillRect(84, 60, 3, 28); c.fillRect(113, 60, 3, 28); }
     // Diffuser and the rain light.
     c.fillStyle = '#101115';
     c.beginPath(); c.moveTo(70, 92); c.lineTo(130, 92); c.lineTo(126, 104); c.lineTo(74, 104); c.fill();
@@ -86,7 +90,7 @@ const ApexArt = (() => {
 
   const carCache = new Map();
   function car(team, steer = 0) {
-    const key = team.color + steer;
+    const key = team.color + (team.style || 0) + steer;
     if (!carCache.has(key)) {
       const cv = canvas(200, 110);
       drawCar(cv.getContext('2d'), team, steer);

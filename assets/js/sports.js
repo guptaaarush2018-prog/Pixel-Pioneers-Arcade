@@ -329,5 +329,104 @@ const Sports = (() => {
     c.fillRect(0, 0, w, h);
   }
 
-  return { sfx, startCrowd, stopCrowd, excite, particles, shaker, makeCrowd, lighting, seeded, tone, noise, ensure, ctx: () => ac, master: () => master };
+  // ---------- Broadcast: springs, slow motion, stings, haptics, match stats ----------
+
+  const reduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+  // A spring described the way designers think: damping ratio (1 = no overshoot) and response
+  // (seconds to get there). It always moves from where it is now, so it can be re-targeted mid-flight.
+  function spring(value = 0, { damping = 1, response = 0.4 } = {}) {
+    const k = (2 * Math.PI / response) ** 2, c = 4 * Math.PI * damping / response;
+    const sp = { value, velocity: 0, target: value,
+      to(t, velocity) { sp.target = t; if (velocity !== undefined) sp.velocity = velocity; return sp; },
+      step(dt) {
+        for (let n = Math.ceil(dt / (1 / 120)), h = dt / Math.max(1, n), i = 0; i < n; i++) {
+          sp.velocity += (-k * (sp.value - sp.target) - c * sp.velocity) * h;
+          sp.value += sp.velocity * h;
+        }
+        return sp.value;
+      },
+      get settled() { return Math.abs(sp.value - sp.target) < 0.001 && Math.abs(sp.velocity) < 0.01; },
+    };
+    return sp;
+  }
+
+  // Slow motion for big moments. Games scale their simulation step with timeScale(); the speed
+  // eases back to normal on a critically damped spring so there is no jolt when it ends.
+  let slowUntil = 0;
+  const pace = spring(1, { damping: 1, response: 0.35 });
+  function slowmo(secs = 1.2, scale = 0.35) {
+    if (reduced()) return;
+    slowUntil = performance.now() + secs * 1000;
+    pace.to(scale);
+  }
+  function timeScale(dt) {
+    if (pace.target !== 1 && performance.now() > slowUntil) pace.to(1);
+    pace.step(dt);
+    return Math.max(0.05, Math.min(1, pace.value));
+  }
+
+  // Haptics fire on the same frame as the sound and the picture, and only for moments that matter.
+  function buzz(pattern = 30) {
+    if (muted() || !navigator.vibrate) return;
+    try { navigator.vibrate(pattern); } catch (e) { /* not allowed here */ }
+  }
+
+  // A TV-style lower third that slides in from the left on a spring and leaves the same way.
+  // sting(title, sub, color); then call drawSting(ctx, w, h, dt) after the scene each frame.
+  const stingState = { list: [] };
+  function sting(title, sub = '', color = '#ffc53d', hold = 2.2) {
+    stingState.list = [{ title, sub, color, hold, t: 0, x: spring(-1, { damping: 0.86, response: 0.45 }).to(0), fade: reduced() ? 0 : 1 }];
+  }
+  function drawSting(c, w, h, dt = 0) {
+    const st = stingState.list[0];
+    if (!st) return;
+    st.t += dt;
+    if (st.t > st.hold && st.x.target === 0) st.x.to(-1.15);
+    st.x.step(dt);
+    if (st.t > st.hold && st.x.value < -1.05) { stingState.list.shift(); return; }
+    const bw = Math.min(w * 0.62, 460), bh = 58, y = h - bh - 30;
+    const x = 24 + st.x.value * (bw + 40);
+    const alpha = reduced() ? Math.min(1, st.t * 5, Math.max(0, (st.hold + 0.3 - st.t) * 5)) : 1;
+    if (reduced()) st.x.value = 0;
+    c.save();
+    c.globalAlpha = alpha;
+    c.fillStyle = 'rgba(12,14,20,0.82)';
+    c.beginPath(); c.roundRect(x, y, bw, bh, 10); c.fill();
+    c.fillStyle = st.color;
+    c.beginPath(); c.roundRect(x, y, 8, bh, [10, 0, 0, 10]); c.fill();
+    c.fillStyle = 'rgba(255,255,255,0.14)';
+    c.fillRect(x + 8, y, bw - 18, 1);
+    c.textAlign = 'left';
+    c.fillStyle = '#fff';
+    c.font = '900 22px system-ui, sans-serif';
+    c.fillText(st.title, x + 22, y + (st.sub ? 26 : 37));
+    if (st.sub) {
+      c.fillStyle = 'rgba(255,255,255,0.7)';
+      c.font = '600 13px system-ui, sans-serif';
+      c.fillText(st.sub, x + 22, y + 45);
+    }
+    c.restore();
+  }
+  const clearSting = () => { stingState.list = []; };
+
+  // Running match stats for the end screen: stats.add('shots', team), stats.line(...).
+  function stats() {
+    let data = {};
+    return {
+      reset() { data = {}; },
+      add(key, team, n = 1) { (data[key] ||= [0, 0])[team] += n; },
+      get(key, team) { return (data[key] || [0, 0])[team]; },
+      pct(key, team) { const v = data[key] || [0, 0], t = v[0] + v[1]; return t ? Math.round(v[team] / t * 100) : 50; },
+      // "Shots 7 – 4 · Saves 2 – 3", from the point of view of `me`.
+      line(keys, me = 0) {
+        return keys.filter(([k]) => data[k]).map(([k, label, pct]) => pct
+          ? `${label} ${this.pct(k, me)}%`
+          : `${label} ${data[k][me]} – ${data[k][1 - me]}`).join(' · ');
+      },
+    };
+  }
+
+  return { sfx, startCrowd, stopCrowd, excite, particles, shaker, makeCrowd, lighting, seeded, tone, noise, ensure, ctx: () => ac, master: () => master,
+    spring, slowmo, timeScale, buzz, sting, drawSting, clearSting, stats, reduced };
 })();

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb98a"/><stop offset="1" stop-color="#ffe9c8"/></linearGradient>
+<linearGradient id="w" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5aa7c4"/><stop offset="1" stop-color="#23566e"/></linearGradient></defs>
+<rect width="320" height="140" fill="url(#sky)"/>
+<circle cx="236" cy="50" r="22" fill="#fff3d6"/>
+<path d="M0 140 Q60 100 120 120 T240 112 T320 120 V140 H0Z" fill="#9b7f86"/>
+<rect y="140" width="320" height="60" fill="url(#w)"/>
+<path d="M0 120 H40 Q56 130 48 160 L0 200Z" fill="#7a9a4a"/>
+<path d="M52 118 Q90 80 120 140 Q150 104 180 140 Q205 114 228 140 Q246 124 262 140" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="4 5" opacity=".8"/>
+<g fill="none" stroke="#fff" stroke-width="1.6" opacity=".8"><ellipse cx="120" cy="142" rx="14" ry="3"/><ellipse cx="180" cy="142" rx="10" ry="2.4"/><ellipse cx="228" cy="142" rx="7" ry="1.8"/></g>
+<ellipse cx="120" cy="142" rx="20" ry="4.5" fill="none" stroke="#ffd25e" stroke-width="2" opacity=".8"/>
+<ellipse cx="270" cy="134" rx="8" ry="3" fill="#6d6a72"/>
+<ellipse cx="300" cy="144" rx="16" ry="5" fill="#4f9a4a"/>
+<text x="16" y="34" font-size="20" fill="#3a2a2a" font-family="system-ui,sans-serif" font-weight="900">SKIPSTONE</text>
+</svg>

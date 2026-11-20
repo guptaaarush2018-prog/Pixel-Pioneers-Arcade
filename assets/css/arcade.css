@@ -1045,3 +1045,146 @@ body.kingdom-page { overflow: auto; height: auto; min-height: 100vh; }
 .mod-list .row { display: flex; flex-wrap: wrap; gap: 6px; }
 .mod-list .btn { padding: 5px 10px; font-size: 12px; }
 .mod-meta { color: var(--muted); font-size: 12px; }
+
+/* ---------- Fluid layer: response, materials, motion and accessibility ----------
+   Feedback lands on press, not release. Chrome is a translucent material that content scrolls
+   under. Non-gesture transitions use a critically damped spring curve (no overshoot); anything a
+   pointer drives is animated by fluid.js, which starts from the current on-screen value. */
+
+:root {
+  /* A critically damped spring (damping 1.0, response ~0.4s) sampled as a CSS easing. */
+  --spring: linear(0, 0.13 4.5%, 0.42 12%, 0.68 21%, 0.84 30%, 0.93 40%, 0.97 50%, 0.99 62%, 1);
+  --spring-fast: 260ms;
+  --spring-slow: 420ms;
+  --material: rgba(22, 25, 32, .72);
+  --material-thick: rgba(22, 25, 32, .86);
+  --material-edge: rgba(255, 255, 255, .07);
+}
+
+/* Type: tracking and leading change with size. Big text tightens; body stays near zero. */
+.featured h1, .page-head h1 { letter-spacing: -0.022em; line-height: 1.08; font-optical-sizing: auto; }
+.section-head h2, .panel h2, .box h2 { letter-spacing: -0.012em; }
+.panel .big { letter-spacing: -0.02em; }
+.eyebrow, .stats { letter-spacing: .06em; }
+body { line-height: 1.5; }
+
+/* Response: instant feedback on pointer-down. */
+.btn, .chip, .icon-btn, .chat-toggle, .ticket-pill, .site-nav a, .touchpad button {
+  transition: transform 100ms ease-out, filter 120ms ease-out, background-color 160ms ease-out, color 160ms ease-out, border-color 160ms ease-out;
+}
+.btn:active, .chip:active, .icon-btn:active, .chat-toggle:active, .ticket-pill:active, .site-nav a:active { transform: scale(0.96); filter: brightness(0.94); transition-duration: 40ms; }
+.touchpad button:active { transform: scale(0.94); }
+
+/* Materials: the hub header floats over the page as translucent glass. */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--material);
+  -webkit-backdrop-filter: blur(20px) saturate(170%);
+  backdrop-filter: blur(20px) saturate(170%);
+  border-bottom-color: transparent;
+  box-shadow: inset 0 -1px 0 var(--material-edge);
+  transition: box-shadow 240ms ease-out;
+}
+/* Scroll edge: a soft fade where content slides under the header, only once it actually does. */
+.site-header::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; top: 100%;
+  height: 18px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, .28), transparent);
+  opacity: 0;
+  transition: opacity 240ms ease-out;
+}
+.site-header.scrolled::after { opacity: 1; }
+
+/* Overlays: dim to focus, and the panel materializes (blur, scale and fade together). */
+.overlay {
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  animation: scrim-in var(--spring-fast) ease-out backwards;
+}
+.overlay > .panel {
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .45), inset 0 1px 0 var(--material-edge);
+  animation: materialize var(--spring-slow) var(--spring) backwards;
+}
+@keyframes scrim-in { from { background-color: rgba(10, 11, 14, 0); -webkit-backdrop-filter: blur(0); backdrop-filter: blur(0); } }
+@keyframes materialize { from { opacity: 0; transform: translateY(10px) scale(.96); filter: blur(6px); } }
+
+/* Chat: a floating sheet that grows out of the button that opened it, and goes back the same way. */
+.chat-panel {
+  background: var(--material-thick);
+  -webkit-backdrop-filter: blur(24px) saturate(170%);
+  backdrop-filter: blur(24px) saturate(170%);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, .55), inset 0 1px 0 var(--material-edge);
+  transform-origin: left bottom;
+  animation: materialize var(--spring-slow) var(--spring) backwards;
+}
+.chat-root.in-bar .chat-panel { transform-origin: right top; }
+.chat-panel header { cursor: grab; touch-action: none; border-bottom-color: var(--material-edge); }
+.chat-panel header::before {
+  content: '';
+  position: absolute;
+  left: 50%; top: 4px;
+  width: 36px; height: 4px;
+  margin-left: -18px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, .18);
+}
+.chat-panel header { position: relative; }
+.chat-panel.dragging header { cursor: grabbing; }
+
+/* Toasts leave along the path they came in on. */
+.toast {
+  background: var(--material-thick);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  backdrop-filter: blur(18px) saturate(160%);
+  animation: toast-in var(--spring-slow) var(--spring) backwards;
+}
+
+/* Hub: fluid.js drives card lift, tilt and press with springs, so CSS hands transforms over. */
+html.fluid .card { transition: border-color .15s; will-change: transform; }
+html.fluid .card:hover, html.fluid .card:focus-visible { transform: none; }
+.card { position: relative; }
+.card .shine {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: radial-gradient(circle at var(--sx, 50%) var(--sy, 0%), rgba(255, 255, 255, .10), transparent 55%);
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+.card:hover .shine { opacity: 1; }
+
+/* Filter chips: one selection pill that springs from chip to chip. */
+html.fluid .filters { position: relative; isolation: isolate; }
+html.fluid .filters .chip { position: relative; z-index: 1; }
+html.fluid .filters .chip[aria-pressed="true"] { background: transparent; border-color: transparent; }
+.chip-pill {
+  position: absolute;
+  left: 0; top: 0;
+  z-index: 0;
+  border-radius: 999px;
+  background: var(--text);
+  pointer-events: none;
+  will-change: transform, width;
+}
+
+/* Accessibility: gentler motion, solid materials, stronger edges. */
+@media (prefers-reduced-motion: reduce) {
+  .overlay > .panel, .chat-panel, .toast { animation: fade-in 200ms ease-out backwards; }
+  .overlay { animation: none; }
+  .btn:active, .chip:active, .icon-btn:active, .chat-toggle:active, .ticket-pill:active, .site-nav a:active, .touchpad button:active { transform: none; }
+}
+@keyframes fade-in { from { opacity: 0; } }
+@media (prefers-reduced-transparency: reduce) {
+  .site-header, .chat-panel, .toast { background: var(--surface); -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .overlay { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(10, 11, 14, .88); }
+}
+@media (prefers-contrast: more) {
+  :root { --material: var(--surface); --material-thick: var(--surface); --material-edge: #6b7383; --line: #555d6c; --muted: #b6bcc7; }
+  .site-header, .chat-panel, .toast { -webkit-backdrop-filter: none; backdrop-filter: none; border: 1px solid var(--material-edge); }
+}

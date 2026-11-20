@@ -63,6 +63,37 @@ const ApexData = (() => {
     { id: 'canyon', name: 'Red Canyon', country: 'Mesa', theme: 'canyon', laps: 3, pieces: [
       [130, 0, 0], [60, 3, 50], [60, -3, 30], [50, 6, 0], [80, 0, -60], [60, -4, -20], [60, 4, 0], [110, 0, 40], [60, -5, 0], [70, 0, -40], [60, 3, 0], [90, -2, 0], [80, 0, 0],
     ] },
+    { id: 'coral', name: 'Coral Bay', country: 'Island', theme: 'coast', laps: 3, pieces: [
+      [150, 0, 0], [50, 5, 0], [50, -5, 10], [90, 0, -10], [70, 3, 0], [70, 3, 20], [100, 0, -20], [40, -6, 0], [80, 0, 0], [60, 4.5, 30], [60, -2, -30], [120, 0, 0],
+    ] },
+    { id: 'frostline', name: 'Frostline', country: 'Glacier', theme: 'alpine', laps: 3, pieces: [
+      [110, 0, 0], [60, -3, 40], [60, -3, 40], [70, 5, -30], [50, -5.5, 0], [90, 0, -50], [70, 4, 20], [60, 4, -20], [110, 0, 30], [60, -4.5, -30], [80, 2.5, 0], [90, 0, 0],
+    ] },
+    { id: 'metro', name: 'Metro Grand Prix', country: 'Capital', theme: 'city', laps: 3, pieces: [
+      [120, 0, 0], [35, 6, 0], [70, 0, 0], [35, 6, 0], [50, -3, 0], [50, 3, 0], [100, 0, 0], [35, -6, 0], [35, 6, 0], [120, 0, 10], [40, 6, -10], [60, 0, 0], [40, 6, 0], [90, 0, 0],
+    ] },
+    { id: 'oasis', name: 'Oasis Run', country: 'Dunes', theme: 'desert', laps: 3, pieces: [
+      [180, 0, 0], [80, 2.5, 30], [80, -2.5, -30], [50, 5.5, 0], [160, 0, 0], [60, -4, 0], [60, 4, 0], [70, 5, 40], [100, 0, -40], [50, -5, 0], [70, 3, 0], [110, 0, 0],
+    ] },
+  ];
+
+  // Your car. Stats multiply the base handling; tyre life divides wear.
+  const CARS = [
+    { id: 'pioneer', name: 'Pioneer P1', color: '#ffc53d', dark: '#1c1500', style: 0, top: 1, accel: 1, grip: 1, wear: 1, boost: 1, blurb: 'The balanced all-rounder.' },
+    { id: 'arrow', name: 'Arrow RS', color: '#e8eef7', dark: '#e03a3a', style: 2, top: 1.045, accel: 0.92, grip: 0.9, wear: 1.05, boost: 1, blurb: 'Low drag: fastest on the straights, nervous in the corners.', unlock: { stat: 'races', n: 2, text: 'Finish 2 races' } },
+    { id: 'claw', name: 'Claw GT', color: '#3ddc84', dark: '#0d2a1a', style: 1, top: 0.975, accel: 1, grip: 1.2, wear: 1.1, boost: 0.9, blurb: 'Huge downforce carries speed through the corners.', unlock: { stat: 'podiums', n: 2, text: 'Finish on the podium twice' } },
+    { id: 'surge', name: 'Surge E', color: '#4fd1ff', dark: '#0b1a33', style: 2, top: 0.99, accel: 1.22, grip: 1, wear: 1, boost: 1.4, blurb: 'Electric torque and a big boost battery.', unlock: { stat: 'wins', n: 1, text: 'Win a race' } },
+    { id: 'marathon', name: 'Marathon LM', color: '#ff8a3d', dark: '#2a1608', style: 1, top: 0.985, accel: 0.98, grip: 1.05, wear: 0.55, boost: 1, blurb: 'Tyres that last forever. Built for endurance.', unlock: { stat: 'wins', n: 3, text: 'Win 3 races' } },
+    { id: 'phantom', name: 'Phantom X', color: '#24262d', dark: '#a46bff', style: 3, top: 1.05, accel: 1.1, grip: 1.1, wear: 0.9, boost: 1.2, blurb: 'The fastest thing in the paddock.', unlock: { stat: 'titles', n: 1, text: 'Win a season' } },
+  ];
+
+  const MODES = [
+    { id: 'race', name: 'Quick race', desc: 'One Grand Prix against eleven rivals on the circuit of your choice.' },
+    { id: 'season', name: 'Season', desc: 'A full 12-round world championship. Every race weekend has qualifying (two flying laps to set your grid slot) and then the Grand Prix. Points for the top ten, plus one for the fastest lap.' },
+    { id: 'trial', name: 'Time trial', desc: 'Five laps alone on track. Chase your best lap on every circuit.' },
+    { id: 'elim', name: 'Elimination', desc: 'Every time the leader starts a new lap, the last two cars are out. Survive to the flag.' },
+    { id: 'sprint', name: 'Reverse sprint', desc: 'Two laps with the grid reversed: the slowest cars start up front and you start dead last.' },
+    { id: 'endurance', name: 'Endurance', desc: 'Eight laps, tyres wear twice as fast, and a pit stop is mandatory: skip it for a 10-second penalty.' },
   ];
 
   const TEAMS = [
@@ -81,13 +112,16 @@ const ApexData = (() => {
   ];
   const DRIVERS = ['K. Arden', 'M. Sato', 'L. Moreau', 'J. Okafor', 'R. Lindqvist', 'T. Varga', 'S. Rossi', 'A. Kowal', 'D. Mendes', 'H. Park', 'E. Novak', 'P. Haddad', 'C. Brandt', 'N. Ivers'];
   const POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1, 0, 0];
+  // ai: 0 makes mistakes; 1 plans braking and drafts; 2 also boosts on straights; 3+ defends.
   const LEVELS = [
-    { name: 'Rookie', pace: 0.82, grid: 5, mult: 1 },
-    { name: 'Pro', pace: 0.9, grid: 11, mult: 1.6 },
-    { name: 'Legend', pace: 0.96, grid: 11, mult: 2.3 },
+    { name: 'Rookie', pace: 0.82, grid: 5, mult: 1, ai: 0 },
+    { name: 'Pro', pace: 0.9, grid: 11, mult: 1.6, ai: 1 },
+    { name: 'Legend', pace: 0.96, grid: 11, mult: 2.3, ai: 2 },
+    { name: 'Elite', pace: 1.0, grid: 11, mult: 3, ai: 3 },
+    { name: 'Alien', pace: 1.035, grid: 11, mult: 4, ai: 4 },
   ];
   // Invented sponsors for the trackside boards.
   const SPONSORS = [['PIXEL', '#ffc53d', '#1c1500'], ['TURBO COLA', '#e03a3a', '#ffffff'], ['GEM MINE', '#a46bff', '#ffffff'], ['APEX', '#1b1e24', '#ffc53d'], ['TACO TRUCK', '#3ddc84', '#0d2a1a'], ['NOVA FUEL', '#2f6fd6', '#ffffff'], ['ROCKET OIL', '#ff8a3d', '#1b1e24']];
 
-  return { THEMES, CIRCUITS, TEAMS, DRIVERS, POINTS, LEVELS, SPONSORS };
+  return { THEMES, CIRCUITS, TEAMS, DRIVERS, POINTS, LEVELS, SPONSORS, CARS, MODES };
 })();

@@ -35,6 +35,7 @@
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   const len = (x, y) => Math.hypot(x, y);
   const fx = Sports.particles();
+  const stats = Sports.stats();
   const shake = Sports.shaker();
   const crowd = Sports.makeCrowd(W, T - 22, { seed: 11, size: 6.5, colors: ['#ffc53d', '#ffc53d', '#4f8cff', '#e6e9ef', '#ff5d5d', '#2b3247', '#ffc53d'] });
 
@@ -48,6 +49,8 @@
   function newGame() {
     rival = Arcade.pick(RIVALS);
     L8 = LEVELS[level];
+    stats.reset();
+    Sports.clearSting();
     g = {
       period: 1, time: PERIOD, ot: false, score: [0, 0], myGoals: 0, shots: [0, 0],
       players: [], puck: { x: W / 2, y: MID_Y, vx: 0, vy: 0, owner: null, last: -1, grace: 0, block: null, blockT: 0, trail: [] },
@@ -280,6 +283,7 @@
           pk.blockT = 0.25;
         }
         pk.last = t;
+        stats.add('saves', t);
         g.events.push('save');
         fx.spray(gk.x, gk.y, Math.atan2(pk.vy, pk.vx), 10);
         return true;
@@ -301,6 +305,10 @@
     g.wait = 2.6;
     g.banner = { text: t === 0 ? 'GOAL!' : `${rival.name.split(' ').pop()} score`, t: 2.6, team: t };
     g.events.push(t === 0 ? 'goal' : 'against');
+    Sports.slowmo(1.2, 0.3);
+    Sports.buzz(t === 0 ? [40, 40, 90] : 60);
+    const scorer = t === 0 ? (pk.shot?.team === 0 && pk.shot.by === g.ctrl ? 'You score!' : `${ME.name} score!`) : `${rival.name} score`;
+    Sports.sting(g.ot ? `Overtime winner · ${scorer}` : scorer, `${ME.name} ${g.score[0]} – ${g.score[1]} ${rival.name} · P${g.ot ? 'OT' : g.period}`, t === 0 ? ME.color : rival.color);
     const gx = GOAL_X[1 - t];
     fx.confetti(gx, MID_Y, t === 0 ? 90 : 30, t === 0 ? [ME.color, '#ffffff', '#ff5d5d'] : [rival.color, '#ffffff']);
     if (t === 0) { excite = 1; shake.kick(8); }
@@ -542,6 +550,7 @@
             hitter.check = 0;
             if (g.puck.owner === hit) knockLoose(hit, hitter, 0.9);
             g.events.push('hit');
+            stats.add('hits', hitter.team);
             shake.kick(6);
             fx.spray((a.x + b.x) / 2, (a.y + b.y) / 2, Math.atan2(ny, nx), 14);
           }
@@ -617,7 +626,7 @@
     Arcade.finish(ui, {
       score,
       title: won ? 'You win!' : tie ? 'Tie game' : `${rival.name} win`,
-      lines: [`${ME.name} ${a} – ${b} ${rival.name}`, `Shots ${g.shots[0]} – ${g.shots[1]} · your goals ${g.myGoals}${g.myGoals >= 3 ? ' · hat trick!' : ''}`],
+      lines: [`${ME.name} ${a} – ${b} ${rival.name}`, `Shots ${g.shots[0]} – ${g.shots[1]} · your goals ${g.myGoals}${g.myGoals >= 3 ? ' · hat trick!' : ''}`, stats.line([['saves', 'Saves'], ['hits', 'Hits']], 0)].filter(Boolean),
       button: 'Play again',
       onAction: () => { ui.hide(); start(); },
     });
@@ -1058,6 +1067,7 @@
     }
     Sports.lighting(ctx, W, H, 0.25);
     ctx.restore();
+    Sports.drawSting(ctx, W, H, dt);
   }
 
   function updateHud() {
@@ -1079,7 +1089,7 @@
         g.wait -= dt;
         if (g.wait <= 0) faceoff();
       } else {
-        acc += AUTOPILOT ? dt * 6 : dt;
+        acc += (AUTOPILOT ? dt * 6 : dt) * Sports.timeScale(dt);
         while (acc >= STEP) {
           step(STEP);
           acc -= STEP;

@@ -41,6 +41,7 @@
   const len = (x, y) => Math.hypot(x, y);
   const fx = Sports.particles();
   const shake = Sports.shaker();
+  const stats = Sports.stats();
   const crowdTop = Sports.makeCrowd(W, 26, { seed: 9, size: 5, colors: ['#ffc53d', '#ffc53d', '#4f8cff', '#e6e9ef', '#2b3247', '#ff5d5d'] });
   const crowdBot = Sports.makeCrowd(W, 26, { seed: 17, size: 5, colors: ['#ffc53d', '#4f8cff', '#4f8cff', '#e6e9ef', '#2b3247', '#3ddc84'] });
   // Test hook: #autopilot lets the bots play both sides and posts no score.
@@ -66,6 +67,8 @@
   const side = team => (team === 0 ? 1 : -1);      // +1 attacks to the right
 
   function newMatch() {
+    stats.reset();
+    Sports.clearSting();
     m = {
       time: cupMatch ? CUP[cup.round].len : MATCH, score: [0, 0], players: [], ball: null,
       ctrl: [2, 2], pause: 0, banner: null, kickoff: 0, events: [], len: cupMatch ? CUP[cup.round].len : MATCH, golden: false,
@@ -512,6 +515,8 @@
     if (m.golden && m.banner && (m.banner.t -= dt) <= 0) m.banner = null;
   }
 
+  const matchLine = () => stats.line([['shots', 'Shots'], ['saves', 'Saves'], ['poss', 'Possession', true]], me);
+
   function endMatch() {
     state = 'over';
     const mine = m.score[me], theirs = m.score[1 - me];
@@ -549,13 +554,13 @@
           next = () => showMenu();
         }
         Arcade.save('pitch:cup', cup);
-        Arcade.finish(ui, { score: AUTOPILOT ? 0 : score, title, lines: [`${mine} – ${theirs} vs ${c.team.name}${m.golden ? ' (golden goal)' : ''}`, line], button, onAction: next });
+        Arcade.finish(ui, { score: AUTOPILOT ? 0 : score, title, lines: [`${mine} – ${theirs} vs ${c.team.name}${m.golden ? ' (golden goal)' : ''}`, line, matchLine()].filter(Boolean), button, onAction: next });
         return;
       }
       Arcade.finish(ui, {
         score: AUTOPILOT ? 0 : score,
         title: won ? 'You win!' : draw ? "It's a draw" : 'You lost',
-        lines: [`${mine} – ${theirs} · ${L_.name} bots`],
+        lines: [`${mine} – ${theirs} · ${L_.name} bots`, matchLine()].filter(Boolean),
         button: 'Menu',
         onAction: () => showMenu(),
       });
@@ -906,15 +911,18 @@
   function sounds(events) {
     const S = Sports.sfx, b = m.ball;
     for (const e of events) {
-      if (e === 's') { S.kick(1.3); Sports.excite(0.3, 1); }
+      if (e === 's') { S.kick(1.3); Sports.excite(0.3, 1); stats.add('shots', b.last ?? 0); }
       else if (e === 'p') S.kick(0.6);
       else if (e === 'w') S.bounce();
       else if (e === 'post') { S.clank(); fx.sparks(b.x, b.y, 8, '#ffffff', 100); S.groan(); }
       else if (e === 't' || e === 'slide') { S.thud(0.8); fx.dust(b.x, b.y, 7, 'rgba(190,220,170,0.7)', 50); }
-      else if (e === 'save') { S.pop(); fx.text(b.x, b.y - 20, 'SAVE!', '#5ec8d8', 22); S.cheer(0.5); }
+      else if (e === 'save') { S.pop(); fx.text(b.x, b.y - 20, 'SAVE!', '#5ec8d8', 22); S.cheer(0.5); stats.add('saves', (b.owner || b.block)?.team ?? b.last ?? 0); }
       else if (e === 'k') S.whistle();
       else if (e[0] === 'g') {
         const t = +e[1], good = t === me || mode === 'bot' && AUTOPILOT;
+        if (mode === 'bot') Sports.slowmo(1.1, 0.3);
+        Sports.buzz(good ? [40, 40, 90] : 60);
+        Sports.sting(good ? 'GOAL! You score' : 'GOAL! They score', `${m.score[me]} – ${m.score[1 - me]}${m.golden ? ' · golden goal' : ''}`, COLORS[t]);
         S.cheer(1.6);
         if (!good) S.groan();
         S.horn();
@@ -1162,6 +1170,7 @@
     fx.draw(ctx);
     ctx.restore();
     Sports.lighting(ctx, W, H, 0.2);
+    Sports.drawSting(ctx, W, H, dt);
 
     if (m.banner) {
       const goal = m.banner.text.includes('GOAL');
@@ -1228,7 +1237,8 @@
         guestPositions();
       } else {
         pushLocalInput();
-        acc += AUTOPILOT ? dt * 2.5 : dt;
+        acc += (AUTOPILOT ? dt * 2.5 : dt) * (mode === 'bot' ? Sports.timeScale(dt) : 1);
+        if (m.ball.owner) stats.add('poss', m.ball.owner.team, dt);
         while (acc >= STEP) {
           step(STEP);
           acc -= STEP;

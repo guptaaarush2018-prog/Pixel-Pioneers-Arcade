@@ -17,6 +17,10 @@
   const KO_CARS = 6;         // the Knockout grid
   const CHASE_START = 20;    // seconds on the clock in Checkpoint Chase
   const CHASE_BONUS = 2.6;   // seconds added per checkpoint
+  const RUSH_TIME = 60;      // seconds on the clock in Coin Rush
+  const RUSH_COINS = 7;      // coins on the track at once in Coin Rush
+  const DRIFT_LAPS = 3;      // laps in Drift King
+  const COMEBACK_CARS = 8;   // the Comeback grid: you start last
   const PARA_POINTS = [10, 7, 5, 3]; // tournament points by finishing place
   const PLACE_POINTS = [1000, 600, 400, 200];
   const MARGIN = 160;        // world drawn around the field, for the follow camera
@@ -274,6 +278,9 @@
   let boost = 0.4, boosting = false, drafting = false, overtakes = 0, raceBoostUsed = false;
   let koTimer = 0, koOut = false;
   let chaseLeft = 0, chaseNext = 0, chaseCount = 0, chaseCps = [];
+  let rushLeft = 0, rushCoins = [], rushGot = 0, rushChain = 0, rushChainT = 0;
+  let drift = { total: 0, pending: 0, mult: 1, t: 0, best: 0, wipe: 0 };
+  let comebackGained = 0;
   let tourney = null;   // { races, index, tracks, level, points, wins, field }
   let particles = [];
   let edit = null;
@@ -320,8 +327,12 @@
       cars = [mine, theirs];
       vs.mine = new Map();   // track step -> race time each car first reached it, for the live gap
       vs.theirs = new Map();
-    } else if (mode === 'trial' || mode === 'chase') {
+    } else if (mode === 'trial' || mode === 'chase' || mode === 'rush' || mode === 'drift') {
       cars = [makeCar(0, { skin: me, name: 'You' })];
+    } else if (mode === 'comeback') {
+      const skins = shuffle(D.SKINS.filter(s => s.id !== me.id));
+      const names = shuffle(D.RIVALS);
+      cars = [makeCar(COMEBACK_CARS - 1, { skin: me, name: 'You' }), ...Array.from({ length: COMEBACK_CARS - 1 }, (_, i) => makeCar(i, { skin: skins[i % skins.length], name: names[i % names.length], ai: true, pace: 1.0 - i * 0.018 }))];
     } else if (mode === 'knockout') {
       const skins = shuffle(D.SKINS.filter(s => s.id !== me.id));
       const names = shuffle(D.RIVALS);
@@ -362,6 +373,14 @@
       const per = Math.max(10, Math.round(N / 16));
       for (let i = 0; i < N; i += per) chaseCps.push(i);
     }
+    rushLeft = RUSH_TIME;
+    rushCoins = [];
+    rushGot = 0;
+    rushChain = 0;
+    rushChainT = 0;
+    if (mode === 'rush') for (let i = 0; i < RUSH_COINS; i++) spawnRushCoin();
+    drift = { total: 0, pending: 0, mult: 1, t: 0, best: 0, wipe: 0 };
+    comebackGained = 0;
     particles = [];
     snapCamera = true;
     if (!opts.vs && ['quick', 'career', 'trial'].includes(mode)) loadGhost();
@@ -569,7 +588,7 @@
       if (car.eliminated) { drive(car, dt, false, true, 0); effects(car, dt); continue; }
       let input;
       if (car === player && !car.ai && car.finished === null) {
-        input = { gas: keys.up || touchGas, brake: keys.down, steer: (keys.right ? 1 : 0) - (keys.left ? 1 : 0), boost: keys.boost && mode !== 'trial' };
+        input = { gas: keys.up || touchGas, brake: keys.down, steer: (keys.right ? 1 : 0) - (keys.left ? 1 : 0), boost: keys.boost && mode !== 'trial' && mode !== 'drift' };
       } else if (car.finished !== null && car !== player) {
         input = { gas: false, brake: true, steer: aiInput(car, dt).steer };
       } else {
@@ -617,6 +636,16 @@
         return;
       }
     }
+    if (mode === 'rush') {
+      rushLeft -= dt;
+      updateRush(dt);
+      if (rushLeft <= 0) {
+        rushLeft = 0;
+        finishRush();
+        return;
+      }
+    }
+    if (mode === 'drift' && player.finished === null) updateDrift(dt);
 
     if (mode === 'demo') {
       demoT -= dt;
@@ -646,7 +675,10 @@
     if (pos < lastPos && player.finished === null && raceTime > 2) {
       overtakes += lastPos - pos;
       S.sfx.overtake();
-      banner('OVERTAKE!');
+      if (mode === 'comeback') {
+        comebackGained = Math.max(comebackGained, COMEBACK_CARS - pos);
+        banner(pos === 1 ? 'INTO THE LEAD!' : `UP TO ${ordinal(pos)}`, `${COMEBACK_CARS - pos} places gained`);
+      } else if (mode !== 'drift') banner('OVERTAKE!');
       if (overtakes >= 5) Arcade.flag('pocket-racer-overtake');
     }
     lastPos = pos;
@@ -656,9 +688,11 @@
       player.pace = 0.5;
       player.ai = true;
       const place = position(player);
-      banner(mode === 'trial' ? 'FINISH' : place === 1 ? 'WINNER!' : `${ordinal(place)} PLACE`, fmt(player.finished));
-      (place === 1 || mode === 'trial' ? S.sfx.win : place <= 3 ? S.sfx.podium : S.sfx.lose)();
-      if (place <= 3 || mode === 'trial') confetti(place === 1 ? 90 : 40);
+      if (mode === 'drift') bankDrift();
+      const solo = mode === 'trial' || mode === 'drift';
+      banner(mode === 'drift' ? 'DRIFT OVER' : solo ? 'FINISH' : place === 1 ? 'WINNER!' : `${ordinal(place)} PLACE`, mode === 'drift' ? `${Math.round(drift.total).toLocaleString()} pts` : fmt(player.finished));
+      (place === 1 || solo ? S.sfx.win : place <= 3 ? S.sfx.podium : S.sfx.lose)();
+      if (place <= 3 || solo) confetti(place === 1 ? 90 : 40);
     }
     if (finishT !== null && state === 'playing') {
       finishT -= dt;
@@ -666,6 +700,7 @@
         S.stopCar();
         if (online()) finishOnline();
         else if (mode === 'trial') finishTrial();
+        else if (mode === 'drift') finishDrift();
         else if (mode === 'tournament') finishTournamentRace();
         else if (mode === 'knockout' && koOut) finishKnockout();
         else finishRace();
@@ -675,14 +710,14 @@
   }
 
   function onPlayerLap(lap) {
-    if (mode === 'chase') return;
+    if (mode === 'chase' || mode === 'rush') return;
     const lapTime = raceTime - lapStart;
     lapStart = raceTime;
     const record = Arcade.load(lapKey(track.id), null);
     const fastest = lapTime < bestLap;
     bestLap = Math.min(bestLap, lapTime);
     if (lap >= laps) return;
-    if (recordsValid() && !track.custom && (!record || lapTime < record) && fastest) {
+    if (mode !== 'drift' && recordsValid() && !track.custom && (!record || lapTime < record) && fastest) {
       banner('LAP RECORD', fmt(lapTime));
       S.sfx.bestLap();
     } else if (lap === laps - 1) {
@@ -893,6 +928,8 @@
       ctx.stroke();
       ctx.setLineDash([]);
     }
+    if (mode === 'rush') drawRushCoins();
+    if (mode === 'drift' && racingNow) drawDriftMeter();
     if (racingNow && raceTime < 3 && mode !== 'demo') {
       const bob = Math.sin(performance.now() / 150) * 2;
       ctx.fillStyle = '#ffc53d';
@@ -958,11 +995,11 @@
 
   function updateHud() {
     const pos = position(player);
-    const solo = mode === 'trial' || mode === 'chase';
+    const solo = mode === 'trial' || mode === 'chase' || mode === 'rush' || mode === 'drift';
     setText('pos', solo ? '–' : ordinal(pos));
     setText('pos-of', solo ? '' : `/${cars.length}`);
-    setText('lap', mode === 'chase' ? String(chaseCount) : `${Math.min(laps, Math.max(1, player.lap + 1))}/${laps}`);
-    if (lapLabel) lapLabel.textContent = mode === 'chase' ? 'CP' : 'Lap';
+    setText('lap', mode === 'chase' ? String(chaseCount) : mode === 'rush' ? String(rushGot) : `${Math.min(laps, Math.max(1, player.lap + 1))}/${laps}`);
+    if (lapLabel) lapLabel.textContent = mode === 'chase' ? 'CP' : mode === 'rush' ? 'Coins' : 'Lap';
     setText('time', raceTime.toFixed(2));
     const rec = Arcade.load(lapKey(track.id), null);
     setText('best', `Best ${isFinite(bestLap) ? bestLap.toFixed(2) : '–'}${rec ? ` · Rec ${rec.toFixed(2)}` : ''}`);
@@ -972,7 +1009,7 @@
     setText('gap', gapText());
     const boostEl = $('boost');
     if (boostEl) {
-      boostEl.style.display = mode === 'trial' ? 'none' : '';
+      boostEl.style.display = mode === 'trial' || mode === 'drift' ? 'none' : '';
       $('boost-fill').style.width = `${Math.round(boost * 100)}%`;
       boostEl.classList.toggle('on', boosting);
       boostEl.classList.toggle('full', boost > 0.995);
@@ -1013,6 +1050,9 @@
   function gapText() {
     if (mode === 'knockout' && state === 'playing') return `${aliveCars().length} cars left · knockout in ${Math.ceil(koTimer)}s`;
     if (mode === 'chase' && state === 'playing') return `${chaseLeft.toFixed(1)}s left · checkpoint ${chaseCount + 1}`;
+    if (mode === 'rush' && state === 'playing') return `${rushLeft.toFixed(1)}s left${rushChain > 1 ? ` · chain ×${rushChain}` : ''}`;
+    if (mode === 'drift' && state === 'playing') return `${Math.round(drift.total).toLocaleString()} drift pts${drift.pending > 1 ? ` · +${Math.round(drift.pending)} ×${drift.mult.toFixed(1)}` : ''}`;
+    if (mode === 'comeback' && state === 'playing') return `${comebackGained} place${comebackGained === 1 ? '' : 's'} gained`;
     const rival = net && cars.find(c => c.remote);
     if (!rival || countdown > 0 || player.finished !== null || rival.finished !== null) return '';
     const [lead, trail, times] = player.dist >= rival.dist ? [player, rival, net.mine] : [rival, player, net.theirs];
@@ -1139,7 +1179,9 @@
     const time = player.finished;
     const title = mode === 'knockout'
       ? (place === 1 ? 'Last car standing!' : 'Knocked out')
-      : place === 1 ? '1st place!' : `${ordinal(place)} place`;
+      : mode === 'comeback'
+        ? (place === 1 ? 'From last to first!' : `Last to ${ordinal(place)}`)
+        : place === 1 ? '1st place!' : `${ordinal(place)} place`;
     const before = unlockedIds();
     const rec = settleRecords(time);
 
@@ -1169,7 +1211,7 @@
     const overtakeCoins = track.custom ? 0 : Math.min(40, overtakes * 4);
     if (place === 1 && margin !== null && Math.abs(margin) < 0.15) Arcade.flag('pocket-racer-photo');
     const mult = event ? event.cup.reward : level.points;
-    const earned = track.custom ? 0 : Math.round(D.PLACE_COINS[place - 1] * mult) + rec.coins + overtakeCoins;
+    const earned = track.custom ? 0 : Math.round((D.PLACE_COINS[place - 1] || 5) * mult) + rec.coins + overtakeCoins;
     addCoins(earned);
     const fresh = unlockedIds().filter(id => !before.includes(id)).map(id => D.SKINS.find(s => s.id === id));
     if (fresh.length) setTimeout(() => S.sfx.unlock(), 900);
@@ -1189,7 +1231,7 @@
 
     const next = event && D.EVENTS[D.EVENTS.indexOf(event) + 1];
     const nextOpen = next && eventOpen(next);
-    const actionLabel = event ? (nextOpen && next.cup === event.cup ? 'Next race' : 'Career') : mode === 'knockout' ? 'Knockout again' : 'Race again';
+    const actionLabel = event ? (nextOpen && next.cup === event.cup ? 'Next race' : 'Career') : mode === 'knockout' ? 'Knockout again' : mode === 'comeback' ? 'Comeback again' : 'Race again';
     const action = () => {
       if (event && nextOpen && next.cup === event.cup) startEvent(next);
       else if (event) toMenu('career');
@@ -1209,7 +1251,8 @@
     }
 
     const arcadePar = (trackLen * laps) / PAR_SPEED;
-    const score = AUTOPILOT ? 0 : Math.round((PLACE_POINTS[place - 1] || 0) * level.points * laps / 3) + Math.round(Math.max(0, arcadePar / time - 1) * 4000) + (mode === 'knockout' ? 600 : 0);
+    const score = AUTOPILOT ? 0 : Math.round((PLACE_POINTS[place - 1] || 0) * level.points * laps / 3) + Math.round(Math.max(0, arcadePar / time - 1) * 4000) + (mode === 'knockout' ? 600 : 0) + (mode === 'comeback' ? (COMEBACK_CARS - place) * 120 : 0);
+    if (mode === 'comeback' && place === 1) Arcade.flag('pocket-racer-comeback');
     if (place === 1) Arcade.flag('pocket-racer-win');
     if (place === 1 && mode === 'knockout') Arcade.flag('pocket-racer-knockout');
     Arcade.finish(ui, {
@@ -1312,6 +1355,153 @@
       lines: [`${chaseCount} checkpoint${chaseCount === 1 ? '' : 's'} · best ${best}`],
       html: `<div class="reward"><span><span class="coin">●</span> +${coins}</span></div><p class="muted-note">Each checkpoint buys a little more time, but the bonus shrinks as the run goes on.</p>`,
       button: 'Chase again',
+      onAction: restart,
+    });
+  }
+
+  // ---------- Coin Rush: grab as many coins as you can in a minute ----------
+
+  function spawnRushCoin() {
+    for (let tries = 0; tries < 30; tries++) {
+      const i = Math.floor(Math.random() * N);
+      const p = path[i];
+      if (player && Math.hypot(p.x - player.x, p.y - player.y) < 140) continue;
+      if (rushCoins.some(c => Math.hypot(c.x - p.x, c.y - p.y) < 60)) continue;
+      const off = Arcade.rand(-1, 1) * (TRACK_W / 2 - 10);
+      const gold = Math.random() < 0.12;
+      rushCoins.push({ x: p.x + Math.cos(p.a + Math.PI / 2) * off, y: p.y + Math.sin(p.a + Math.PI / 2) * off, gold, t: 0, born: 0 });
+      return;
+    }
+  }
+
+  function updateRush(dt) {
+    rushChainT -= dt;
+    if (rushChainT <= 0) rushChain = 0;
+    for (const c of rushCoins) { c.t += dt; c.born = Math.min(1, c.born + dt * 3); }
+    for (let i = rushCoins.length - 1; i >= 0; i--) {
+      const c = rushCoins[i];
+      if (Math.hypot(c.x - player.x, c.y - player.y) > 24) continue;
+      rushCoins.splice(i, 1);
+      rushChain = rushChainT > 0 ? rushChain + 1 : 1;
+      rushChainT = 3;
+      const worth = (c.gold ? 5 : 1) * (rushChain >= 5 ? 2 : 1);
+      rushGot += worth;
+      if (c.gold) rushLeft += 2;
+      for (let k = 0; k < 10; k++) {
+        const a = Arcade.rand(0, Math.PI * 2), sp = Arcade.rand(40, 140);
+        particles.push({ x: c.x, y: c.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0, max: 0.6, size: 2.5, color: c.gold ? '#fff2b3' : '#ffc53d', kind: 'confetti', spin: 8, r: 0 });
+      }
+      S.sfx.coin();
+      if (c.gold) banner('GOLD COIN', '+5 · +2s');
+      else if (rushChain === 5) banner('COIN CHAIN', 'double coins');
+      if (rushGot >= 40) Arcade.flag('pocket-racer-rush');
+      spawnRushCoin();
+    }
+    while (rushCoins.length < RUSH_COINS) spawnRushCoin();
+  }
+
+  function drawRushCoins() {
+    const now = performance.now() / 1000;
+    for (const c of rushCoins) {
+      const spin = Math.abs(Math.cos(now * 3 + c.x));
+      const r = (c.gold ? 11 : 8) * (0.4 + 0.6 * c.born);
+      ctx.save();
+      ctx.translate(c.x, c.y);
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.beginPath();
+      ctx.ellipse(2, 3, r, r * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.scale(Math.max(0.15, spin), 1);
+      ctx.fillStyle = c.gold ? '#fff2b3' : '#ffc53d';
+      ctx.strokeStyle = c.gold ? '#ffb000' : '#b07a10';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function finishRush() {
+    if (state !== 'playing') return;
+    state = 'over';
+    S.stopCar();
+    const best = Math.max(Arcade.load('racer:rush', 0), rushGot);
+    Arcade.save('racer:rush', best);
+    const coins = track.custom ? 0 : Math.round(rushGot * 1.5);
+    addCoins(coins);
+    Arcade.countPlay();
+    Arcade.finish(ui, {
+      score: AUTOPILOT ? 0 : rushGot * 40,
+      title: 'Time!',
+      lines: [`${rushGot} coin${rushGot === 1 ? '' : 's'} grabbed · best ${best}`],
+      html: `${coins ? `<div class="reward"><span><span class="coin">●</span> +${coins}</span></div>` : ''}<p class="muted-note">Grab five in a row to double them. Gold coins are worth five and add two seconds.</p>`,
+      button: 'Rush again',
+      onAction: restart,
+    });
+  }
+
+  // ---------- Drift King: hold slides through corners for points ----------
+
+  function updateDrift(dt) {
+    drift.wipe = Math.max(0, drift.wipe - dt);
+    if (player.offTrack && drift.pending > 0) {
+      drift.pending = 0;
+      drift.mult = 1;
+      drift.t = 0;
+      drift.wipe = 1;
+      banner('WIPED OUT', 'combo lost');
+      S.sfx.lose();
+      return;
+    }
+    const sliding = player.slide > 0.35 && player.v > 120 && !player.offTrack;
+    if (sliding) {
+      drift.t += dt;
+      drift.mult = Math.min(5, 1 + Math.floor(drift.t / 1.2) * 0.5);
+      drift.pending += player.slide * player.v * dt * 0.6;
+      drift.grace = 0.45;
+    } else if (drift.pending > 0) {
+      drift.grace -= dt;
+      if (drift.grace <= 0) bankDrift();
+    }
+  }
+
+  function bankDrift() {
+    if (drift.pending < 1) { drift.pending = 0; drift.t = 0; drift.mult = 1; return; }
+    const pts = drift.pending * drift.mult;
+    drift.total += pts;
+    drift.best = Math.max(drift.best, pts);
+    if (pts >= 400) banner(pts >= 1500 ? 'MEGA DRIFT' : 'DRIFT', `+${Math.round(pts).toLocaleString()}`);
+    if (pts >= 400) Arcade.tone({ freq: 520, to: 1040, dur: 0.16, type: 'triangle', vol: 0.05 });
+    if (pts >= 2000) Arcade.flag('pocket-racer-drift');
+    drift.pending = 0;
+    drift.t = 0;
+    drift.mult = 1;
+  }
+
+  function drawDriftMeter() {
+    if (drift.pending < 1 && drift.wipe <= 0) return;
+    const text = drift.wipe > 0 ? 'WIPED' : `+${Math.round(drift.pending)} ×${drift.mult.toFixed(1)}`;
+    ctx.font = '800 12px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    tag(text, player.x, player.y - 24, drift.wipe > 0 ? '#ff5d5d' : drift.mult >= 3 ? '#ff8a1f' : '#ffc53d');
+  }
+
+  function finishDrift() {
+    state = 'over';
+    const total = Math.round(drift.total);
+    const best = Math.max(Arcade.load('racer:drift', 0), total);
+    Arcade.save('racer:drift', best);
+    const coins = track.custom ? 0 : Math.min(200, 20 + Math.round(total / 100));
+    addCoins(coins);
+    Arcade.countPlay();
+    Arcade.finish(ui, {
+      score: AUTOPILOT ? 0 : Math.round(total / 4),
+      title: 'Drift King',
+      lines: [`${total.toLocaleString()} drift points · best combo ${Math.round(drift.best).toLocaleString()}`, `Personal best ${best.toLocaleString()}`],
+      html: `${coins ? `<div class="reward"><span><span class="coin">●</span> +${coins}</span></div>` : ''}<p class="muted-note">Hold a slide to grow the multiplier up to ×5. Leave the track mid-drift and the combo is gone.</p>`,
+      button: 'Drift again',
       onAction: restart,
     });
   }
@@ -1775,7 +1965,7 @@
             ${tile('garage', '🚗', 'Garage', `${D.SKINS.filter(skinUnlocked).length}/${D.SKINS.length} cars`, '#c77dff')}
             ${tile('records', '🏆', 'Records', 'World leaderboards', '#ffc53d')}
             ${tile('builder', '🛠️', 'Track builder', `${customTracks().length} of your own`, '#ff8a1f')}
-            ${tile('modes', '🎯', 'Special modes', 'Knockout, chase, tournaments', '#ff5d5d')}
+            ${tile('modes', '🎯', 'Special modes', 'Knockout, drift, coin rush, more', '#ff5d5d')}
             ${tile('career', '⭐', 'Career', `${totalStars()}/${D.EVENTS.length * 3} stars · ${doneEvents}/${D.EVENTS.length} races`, '#ffc53d', 'wide')}
           </div>
           <div class="settings">${camChips()}<button class="chip" type="button" data-music aria-pressed="${S.musicOn()}">Music: ${S.musicOn() ? 'On' : 'Off'}</button></div>
@@ -1859,7 +2049,7 @@
     const levels = D.LEVELS.map(l => `<button class="chip" type="button" data-mode-level="${l.id}" aria-pressed="${l === menuLevel}">${l.name}</button>`).join('');
     const chaseBest = Arcade.load('racer:chase', 0);
     return {
-      html: `${head('Special modes', 'Two new race formats and a championship series, on any track.')}
+      html: `${head('Special modes', 'Five race formats and a championship series, on any track.')}
         <div class="online-grid">
           <div class="card" style="padding:16px">
             <h3 style="margin:0 0 4px">💥 Knockout</h3>
@@ -1875,6 +2065,28 @@
             <label class="section-title" for="chase-track">Track</label>
             <select class="field" id="chase-track">${options(quickPick.trackId)}</select>
             <button class="btn" type="button" data-start-chase style="width:100%;margin-top:10px">Start chase</button>
+          </div>
+          <div class="card" style="padding:16px">
+            <h3 style="margin:0 0 4px">🪙 Coin Rush</h3>
+            <p class="muted-note" style="margin-top:0">${RUSH_TIME} seconds and a track full of coins. Chain five for double, and gold coins add time. Best: <b>${Arcade.load('racer:rush', 0)}</b>.</p>
+            <label class="section-title" for="rush-track">Track</label>
+            <select class="field" id="rush-track">${options(quickPick.trackId)}</select>
+            <button class="btn" type="button" data-start-rush style="width:100%;margin-top:10px">Start rush</button>
+          </div>
+          <div class="card" style="padding:16px">
+            <h3 style="margin:0 0 4px">🌀 Drift King</h3>
+            <p class="muted-note" style="margin-top:0">${DRIFT_LAPS} laps, no boost. Slide through corners for points; long drifts multiply up to ×5. Best: <b>${Arcade.load('racer:drift', 0).toLocaleString()}</b>.</p>
+            <label class="section-title" for="drift-track">Track</label>
+            <select class="field" id="drift-track">${options(quickPick.trackId)}</select>
+            <button class="btn" type="button" data-start-drift style="width:100%;margin-top:10px">Start drifting</button>
+          </div>
+          <div class="card" style="padding:16px;grid-column:1/-1">
+            <h3 style="margin:0 0 4px">🔥 Comeback</h3>
+            <p class="muted-note" style="margin-top:0">An ${COMEBACK_CARS}-car grid and you start dead last. Three laps to carve your way through. Every place gained scores.</p>
+            <label class="section-title" for="comeback-track">Track</label>
+            <select class="field" id="comeback-track">${options(quickPick.trackId)}</select>
+            <div class="filters" style="margin:10px 0">${levels}</div>
+            <button class="btn" type="button" data-start-comeback style="width:100%">Start comeback</button>
           </div>
           <div class="card" style="padding:16px;grid-column:1/-1">
             <h3 style="margin:0 0 4px">🏆 Tournament</h3>
@@ -1897,7 +2109,14 @@
         }));
         const pickTrack = id => { quickPick.trackId = id; Arcade.save('racer:track', id); };
         el.querySelector('#ko-track').addEventListener('change', e => pickTrack(e.target.value));
-        el.querySelector('#chase-track').addEventListener('change', e => pickTrack(e.target.value));
+        for (const id of ['#chase-track', '#rush-track', '#drift-track', '#comeback-track']) el.querySelector(id).addEventListener('change', e => pickTrack(e.target.value));
+        const begin = (sel, opts) => {
+          const t = findTrack(el.querySelector(sel).value);
+          if (t) startRace({ track: t, level: menuLevel, ...opts });
+        };
+        el.querySelector('[data-start-rush]').addEventListener('click', () => begin('#rush-track', { mode: 'rush', laps: 999 }));
+        el.querySelector('[data-start-drift]').addEventListener('click', () => begin('#drift-track', { mode: 'drift', laps: DRIFT_LAPS }));
+        el.querySelector('[data-start-comeback]').addEventListener('click', () => begin('#comeback-track', { mode: 'comeback', laps: 3 }));
         el.querySelector('[data-start-ko]').addEventListener('click', () => {
           const t = findTrack(el.querySelector('#ko-track').value);
           if (t) startRace({ mode: 'knockout', track: t, laps: 5, level: menuLevel });
