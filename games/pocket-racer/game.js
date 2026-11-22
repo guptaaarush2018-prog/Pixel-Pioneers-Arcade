@@ -301,7 +301,7 @@
       y: p.y + Math.sin(p.a + Math.PI / 2) * side * 18,
       a: p.a, v: 0, idx: i, dist: -back, lap: 0,
       skin: spec.skin, name: spec.name, ai: !!spec.ai, pace: (spec.pace || 1) * level.pace,
-      lane: 0, laneT: Arcade.rand(1, 3), finished: null, offTrack: false,
+      lane: 0, laneT: Arcade.rand(1, 3), tank: Arcade.rand(0.3, 0.6), aiBoost: false, finished: null, offTrack: false,
       steer: 0, braking: false, gas: false, slide: 0, rear: null, puff: 0,
     };
   }
@@ -397,7 +397,8 @@
     N = path.length;
     rad = radii(path);
     racing = planRacingLine();
-    level = { ...D.LEVELS.find(l => l.id === ev.level), wander: 0 };
+    const lv = D.LEVELS.find(l => l.id === ev.level);
+    level = { ...lv, pace: lv.parPace || lv.pace, wander: 0, rubber: 0, boost: 0, block: false };
     const car = makeCar(0, { skin: D.SKINS[0], name: '', ai: true, pace: 1 });
     let t = 0;
     const dt = 1 / 60;
@@ -517,19 +518,41 @@
   // the arc that reaches it, then hold the line's planned speed scaled by their pace.
   function aiInput(car, dt) {
     car.laneT -= dt;
-    if (car.laneT <= 0) {
+    const racingPlayer = player && car !== player && !player.ai && player.finished === null && mode !== 'demo' && mode !== 'drift';
+    const { off, nx, ny, lim, speed } = racing;
+    // Ahead of you and close: swing across to cover your line (higher levels only).
+    const gap = racingPlayer ? car.dist - player.dist : -1;
+    const blocking = racingPlayer && level.block && gap > 6 && gap < 70 && car.v > 140;
+    if (blocking) {
+      const pi = player.idx;
+      const mine = (player.x - path[pi].x) * nx[pi] + (player.y - path[pi].y) * ny[pi];
+      car.lane += (clamp(mine - off[car.idx], -26, 26) - car.lane) * Math.min(1, dt * 3);
+      car.laneT = 0.4;
+    } else if (car.laneT <= 0) {
       car.lane = Arcade.rand(-1, 1) * level.wander;
       car.laneT = Arcade.rand(1.5, 3.5);
     }
-    const { off, nx, ny, lim, speed } = racing;
     const j = (car.idx + Math.round((24 + Math.max(0, car.v) * 0.22) / STEP)) % N;
     const o = clamp(off[j] + car.lane, -lim, lim);
     const dx = path[j].x + nx[j] * o - car.x, dy = path[j].y + ny[j] * o - car.y;
     const yaw = 2 * car.v * Math.sin(angleDiff(Math.atan2(dy, dx), car.a)) / Math.max(1, Math.hypot(dx, dy));
     const grip = Math.max(0.2, Math.min(1, Math.abs(car.v) / 110));
     const steer = clamp(yaw / (TURN * grip), -1, 1);
-    const target = speed[(car.idx + 2) % N] * car.pace;
-    return { gas: car.v < target, brake: car.v > target + 10, steer };
+    // Catch-up: the further behind you a rival is, the harder they push (never when you're the demo).
+    let pace = car.pace;
+    if (racingPlayer && level.rubber) pace *= 1 + clamp((player.dist - car.dist) / (N * 0.3), 0, 1) * level.rubber;
+    const target = speed[(car.idx + 2) % N] * pace;
+    // Boost on the straights, like you would: the tank fills slowly, and faster in your wake.
+    car.aiBoost = false;
+    if (level.boost && mode !== 'demo' && dt < 0.1) {
+      car.tank = Math.min(1, car.tank + dt * 0.05 * level.boost);
+      const ahead = speed[(car.idx + 12) % N] >= TOP_SPEED * 0.92 && speed[(car.idx + 2) % N] >= TOP_SPEED * 0.92;
+      if (ahead && car.tank > 0.05 && car.v > TOP_SPEED * 0.8 && car.finished === null) {
+        car.aiBoost = true;
+        car.tank = Math.max(0, car.tank - dt / BOOST_DRAIN);
+      }
+    }
+    return { gas: car.v < target || car.aiBoost, brake: car.v > target + 10 && !car.aiBoost, steer };
   }
 
   // Slipstream: sit in a rival's wake to fill the boost tank. Away from traffic it refills slowly.
@@ -594,7 +617,7 @@
       } else {
         input = aiInput(car, dt); // rivals, the demo, and your car on autopilot after the flag
       }
-      let useBoost = false;
+      let useBoost = !!car.aiBoost && car !== player;
       if (car === player && input.boost && boost > 0.01 && car.v > 40) {
         useBoost = true;
         boosting = true;
@@ -603,7 +626,7 @@
       }
       drive(car, dt, input.gas, input.brake, input.steer, useBoost);
       effects(car, dt);
-      if (useBoost) boostFlame();
+      if (useBoost && car === player) boostFlame();
       const lap = Math.floor(car.dist / N);
       if (lap > car.lap) {
         car.lap = lap;

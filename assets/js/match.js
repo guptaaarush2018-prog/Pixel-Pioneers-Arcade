@@ -58,13 +58,13 @@ const Match = (() => {
     });
   }
 
-  function offline(mode, level) {
+  function offline(mode, level, remember = true) {
     m.mode = mode;
     m.me = 0;
     m.round = 0;
     if (mode === 'cpu') {
       m.level = level;
-      Arcade.save(`${Arcade.gameId}:level`, level);
+      if (remember) Arcade.save(`${Arcade.gameId}:level`, level);
     }
     m.names = mode === 'cpu' ? ['You', `${opts.levels[level]} computer`] : ['Player 1', 'Player 2'];
     startRound();
@@ -234,5 +234,7 @@ const Match = (() => {
   const move = data => { if (m.mode === 'online' && room) room.conn.send('move', data); };
   const label = () => (m.mode === 'online' ? `${m.names[0]} vs ${m.names[1]}${room?.code ? ` · room ${room.code}` : ''}` : '');
 
-  return { setup, menu, move, mine, over, label, get mode() { return m.mode; }, get me() { return m.me; }, get names() { return m.names; }, get level() { return m.level; } };
+  // startOffline(mode, level, remember): begins a computer or same-device round without the menu
+  // (remember: false leaves the player's saved level alone, e.g. for a preset challenge).
+  return { setup, menu, startOffline: offline, move, mine, over, label, get mode() { return m.mode; }, get me() { return m.me; }, get names() { return m.names; }, get level() { return m.level; } };
 })();

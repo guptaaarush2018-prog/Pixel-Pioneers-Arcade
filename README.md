@@ -15,7 +15,7 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | Hoop Duel | Sports (1v1 basketball, On Fire streaks) | Live 1v1 |
 | Pixel Gridiron | Sports (top-down football, season mode, play cards with route diagrams) | Online duel |
 | Ice Clash | Sports (3-on-3 hockey with goalies, slapshots, sudden-death overtime) | Online duel |
-| Apex GP | Racing (pseudo-3D Grand Prix: 12 circuits, a 12-round season of race weekends with qualifying and fastest-lap points, Time Trial, Elimination, Reverse Sprint and Endurance modes, wet races, six unlockable cars with their own handling, five AI levels up to Alien that plan their braking, draft, boost and defend) | Online duel |
+| Apex GP | Racing (pseudo-3D Grand Prix: 12 circuits, a 12-round season of race weekends with qualifying and fastest-lap points, Time Trial, Elimination, Reverse Sprint and Endurance modes, wet races, six unlockable cars with their own handling, six AI levels up to Mythic that plan their braking, draft, boost, defend and attack, and push harder when you pull ahead) | Online duel |
 | Grand Slam | Sports (arcade baseball: pitch selection, timed swings, fielding plays) | Online duel |
 | Skipstone | Sports (flick to skim a stone: release speed and angle are the throw, tap before touchdowns for perfect skips, lily pads and ducks) | Online duel |
 | Putt Planet | Sports (space mini golf: Moonbase Classic, Frost Nebula with ice, spinning blades, orbiting moons and moving cups, the Magma Belt with lava, repulsors, conveyors and switch gates, and a random nine-hole Asteroid Tour; star coins on every hole) | Online duel (on an Asteroid Tour) |
@@ -23,8 +23,11 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | Quick Draw | Arcade (reaction standoff, outlaw ladder) | Live 1v1, two on one keyboard |
 | Buzz Bout | Trivia (700+ questions plus generated math, category draft, final wager, Streak and Daily 10; some questions from the [Open Trivia Database](https://opentdb.com), CC BY-SA 4.0) | Live 1v1, two on one device |
 | Beat Lane | Rhythm (four lanes, seventeen synthesized songs including a 174-240 BPM Extreme set, five difficulties up to Expert and Insane with 16th-note runs and chords, a level for every chart, ghost taps punish mashing) | Online duel |
-| Pocket Racer | Racing | Its own mini-site: eight-cup career with stars, 48 tracks, garage of 22 unlockable cars, slipstream boost and overtake bonuses, rival head-to-head records, Knockout, Checkpoint Chase, Coin Rush, Drift King and Comeback modes, championship tournaments, time trials with per-track world leaderboards and friend ghosts, track builder, synthesized engine sound and music, follow camera on phones, live 1v1 races, world-record ghost (records only count on boost-free, overtake-free runs) |
-| Chroma Burst | Strategy (chain-reaction colour war: grow cells to four dots and they burst into their neighbours; up to three bots on 5×5 to 9×9, or two players on one device) | Online duel |
+| Pocket Racer | Racing | Its own mini-site: eight-cup career with stars, 48 tracks, garage of 22 unlockable cars, slipstream boost and overtake bonuses, rival head-to-head records, Knockout, Checkpoint Chase, Coin Rush, Drift King and Comeback modes, seven rival levels up to Master that boost, block and chase you down, championship tournaments, time trials with per-track world leaderboards and friend ghosts, track builder, synthesized engine sound and music, follow camera on phones, live 1v1 races, world-record ghost (records only count on boost-free, overtake-free runs) |
+| Chroma Burst | Strategy (chain-reaction colour war: grow cells to four dots and they burst into their neighbours; six boards including walled Cross, Pillars, Donut, Bridge and Diamond, three new weekly challenges every Monday, up to three bots from Easy to Master, or two players on one device) | Live 1v1 |
+| Banner Siege | Strategy (quick Stratego: eleven hidden pieces each on a 6×7 board with lakes, Scouts, Miners, Spy, Bombs and a Flag) | Live 1v1 |
+| Tide Turner | Strategy (Reversi in short rounds: 6×6 quick or 8×8 classic, corner-aware computer) | Live 1v1 |
+| Rush Line | Strategy (Breakthrough: race a 7×7 board, capture only on the diagonal) | Live 1v1 |
 | Rune Rumble | Strategy (lane battler: 42 cards, rune wells, decks, caches, ladder) | Live 1v1 |
 | Realm Rivals | Strategy (kingdom builder) | Live 1v1 kingdom wars, plus the long-term Kingdom mode |
 | Rampart | Strategy (tower defense where you build the maze) | Online duel |

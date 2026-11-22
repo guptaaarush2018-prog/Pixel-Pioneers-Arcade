@@ -70,12 +70,17 @@ const RacerData = (() => {
 
   // Rival pace scales their racing-line speed; wander is how far (px) they drift off the line.
   const LEVELS = [
-    { id: 'rookie', name: 'Rookie', pace: 0.64, wander: 14, points: 0.6 },
-    { id: 'club', name: 'Club', pace: 0.71, wander: 11, points: 0.8, career: true },
-    { id: 'pro', name: 'Pro', pace: 0.78, wander: 8, points: 1 },
-    { id: 'expert', name: 'Expert', pace: 0.88, wander: 5, points: 1.25, career: true },
-    { id: 'ace', name: 'Ace', pace: 0.97, wander: 2, points: 1.5 },
-    { id: 'legend', name: 'Legend', pace: 1.01, wander: 1, points: 1.8, career: true },
+    // parPace is the pace three-star target times were set with, so harder rivals don't move them.
+    // rubber: extra pace (up to this much) when a rival is far behind you, so you can't just
+    // run away. boost: how fast a rival's boost tank refills (0 = they never boost). block: rivals
+    // ahead of you swing across to cover your line.
+    { id: 'rookie', name: 'Rookie', pace: 0.68, parPace: 0.64, wander: 12, points: 0.6, rubber: 0.03, boost: 0, block: false },
+    { id: 'club', name: 'Club', pace: 0.77, parPace: 0.71, wander: 9, points: 0.8, career: true, rubber: 0.05, boost: 0.3, block: false },
+    { id: 'pro', name: 'Pro', pace: 0.86, parPace: 0.78, wander: 6, points: 1, rubber: 0.07, boost: 0.6, block: false },
+    { id: 'expert', name: 'Expert', pace: 0.95, parPace: 0.88, wander: 3, points: 1.25, career: true, rubber: 0.09, boost: 0.85, block: true },
+    { id: 'ace', name: 'Ace', pace: 1.02, parPace: 0.97, wander: 1, points: 1.5, rubber: 0.11, boost: 1, block: true },
+    { id: 'legend', name: 'Legend', pace: 1.06, parPace: 1.01, wander: 0, points: 1.8, career: true, rubber: 0.13, boost: 1.2, block: true },
+    { id: 'master', name: 'Master', pace: 1.1, parPace: 1.01, wander: 0, points: 2.2, rubber: 0.16, boost: 1.4, block: true },
   ];
 
   // Career: six cups of six events. A podium unlocks the next event; finishing a cup opens the

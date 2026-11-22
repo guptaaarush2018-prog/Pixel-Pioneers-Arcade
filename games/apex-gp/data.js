@@ -112,13 +112,17 @@ const ApexData = (() => {
   ];
   const DRIVERS = ['K. Arden', 'M. Sato', 'L. Moreau', 'J. Okafor', 'R. Lindqvist', 'T. Varga', 'S. Rossi', 'A. Kowal', 'D. Mendes', 'H. Park', 'E. Novak', 'P. Haddad', 'C. Brandt', 'N. Ivers'];
   const POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1, 0, 0];
-  // ai: 0 makes mistakes; 1 plans braking and drafts; 2 also boosts on straights; 3+ defends.
+  // ai: 0 makes mistakes; 1 plans braking and drafts; 2 also boosts on straights; 3+ defends;
+  // 4+ brakes later and attacks the car ahead; 5 never errs.
+  // catchup: extra pace (up to this much) when a bot is far behind you, so you can't build a
+  // big gap and cruise. Not used in qualifying or time trials.
   const LEVELS = [
-    { name: 'Rookie', pace: 0.82, grid: 5, mult: 1, ai: 0 },
-    { name: 'Pro', pace: 0.9, grid: 11, mult: 1.6, ai: 1 },
-    { name: 'Legend', pace: 0.96, grid: 11, mult: 2.3, ai: 2 },
-    { name: 'Elite', pace: 1.0, grid: 11, mult: 3, ai: 3 },
-    { name: 'Alien', pace: 1.035, grid: 11, mult: 4, ai: 4 },
+    { name: 'Rookie', pace: 0.86, grid: 5, mult: 1, ai: 0, catchup: 0.03 },
+    { name: 'Pro', pace: 0.94, grid: 11, mult: 1.6, ai: 1, catchup: 0.05 },
+    { name: 'Legend', pace: 1.0, grid: 11, mult: 2.3, ai: 2, catchup: 0.07 },
+    { name: 'Elite', pace: 1.04, grid: 11, mult: 3, ai: 3, catchup: 0.09 },
+    { name: 'Alien', pace: 1.07, grid: 11, mult: 4, ai: 4, catchup: 0.11 },
+    { name: 'Mythic', pace: 1.1, grid: 11, mult: 5, ai: 5, catchup: 0.14 },
   ];
   // Invented sponsors for the trackside boards.
   const SPONSORS = [['PIXEL', '#ffc53d', '#1c1500'], ['TURBO COLA', '#e03a3a', '#ffffff'], ['GEM MINE', '#a46bff', '#ffffff'], ['APEX', '#1b1e24', '#ffc53d'], ['TACO TRUCK', '#3ddc84', '#0d2a1a'], ['NOVA FUEL', '#2f6fd6', '#ffffff'], ['ROCKET OIL', '#ff8a3d', '#1b1e24']];

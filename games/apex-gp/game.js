@@ -298,7 +298,9 @@
   // cars, pit once. Higher levels boost on the straights and defend against you.
   function botDrive(c, dt = STEP) {
     const ai = c.you ? 2 : LV.ai;
-    const pace = c.you ? 1 : c.pace;
+    c.catch = 1;
+    if (!c.you && LV.catchup && player && !player.out && !player.finished && cars.includes(player) && player.dist > c.dist) c.catch = 1 + clamp((player.dist - c.dist) / (trackLen * 0.25), 0, 1) * LV.catchup;
+    const pace = c.you ? 1 : c.pace * c.catch;
     const wetK = wet ? 0.92 : 1;
     const corner = cv => pace * MAX * (1 - Math.abs(cv) * 0.05) * (1 - c.wear * 0.06) * wetK;
     let target;
@@ -306,7 +308,7 @@
       target = corner(Math.max(Math.abs(segAt(c.dist + SEG * 18).curve), Math.abs(segAt(c.dist + SEG * 6).curve)));
     } else {
       // The fastest speed now that still lets the car brake down for each corner in time.
-      const brakeA = MAX * 0.6 * (ai >= 3 ? 1.1 : 0.85);
+      const brakeA = MAX * 0.6 * (ai >= 5 ? 1.35 : ai >= 4 ? 1.22 : ai >= 3 ? 1.1 : 0.85);
       target = corner(segAt(c.dist + SEG * 2).curve);
       for (let k = 4; k <= 34; k += 3) {
         const v = corner(segAt(c.dist + SEG * k).curve);
@@ -327,14 +329,16 @@
       const gap = o.dist - c.dist;
       if (gap > 0 && gap < SEG * 20 && Math.abs(o.x - want) < 0.4 && o.speed < c.speed + 200) want = o.x > 0 ? o.x - 0.55 : o.x + 0.55;
       if (!c.you && ai >= 1 && gap > SEG && gap < SEG * 14 && Math.abs(o.x - c.x) < 0.35 && c.speed > MAX * 0.6) c.slip = Math.min(1, c.slip + dt * 1.6);
+      // Attack (Alien and up): pull out of the slipstream toward the open side and pass.
+      if (!c.you && ai >= 4 && gap > SEG * 2 && gap < SEG * 9 && Math.abs(o.x - c.x) < 0.3 && c.speed > o.speed) want = o.x > 0 ? o.x - 0.6 : o.x + 0.6;
       // Defend: on the straights, move across to cover you when you're closing from behind.
       if (!c.you && ai >= 3 && o.you && gap < 0 && gap > -SEG * 10 && o.speed > c.speed * 0.98 && Math.abs(seg.curve) < 2) want = lerp(want, clamp(o.x, -0.7, 0.7), 0.5);
     }
     if (!c.you && ai >= 2) {
       const straight = Math.abs(segAt(c.dist + SEG * 25).curve) < 1 && Math.abs(segAt(c.dist + SEG * 8).curve) < 1;
       c.boosting = state === 'racing' && straight && c.boost > 0.05 && c.speed > target * 0.8;
-      c.boost = clamp(c.boost + dt * (c.boosting ? -0.3 : c.slip > 0.4 ? 0.12 : 0.04), 0, 1);
-      if (c.boosting) target *= 1.08;
+      c.boost = clamp(c.boost + dt * (c.boosting ? -0.3 : (c.slip > 0.4 ? 0.12 : 0.04) * (ai >= 4 ? 1.5 : 1)), 0, 1);
+      if (c.boosting) target *= ai >= 4 ? 1.11 : 1.08;
     }
     c.lane = lerp(c.lane, clamp(want, -0.85, 0.85), 0.05);
     const steer = c.lane - c.x;
@@ -352,10 +356,10 @@
     const ctl = botDrive(c, dt);
     const seg = segAt(c.dist + startZ());
     const pct = c.speed / MAX;
-    if (ctl.gas) c.speed += ACCEL * (LV.ai >= 3 ? 1.02 : 0.95) * (c.boosting ? 1.3 : 1) * dt;
+    if (ctl.gas) c.speed += ACCEL * (LV.ai >= 5 ? 1.08 : LV.ai >= 3 ? 1.02 : 0.95) * (c.boosting ? 1.3 : 1) * dt;
     else if (ctl.brake) c.speed += BRAKE * 0.6 * dt;
     else c.speed += DECEL * dt * 0.5;
-    const cap = MAX * c.pace * 1.04 * (c.boosting ? 1.08 : 1) * (c.slip > 0.4 ? 1.04 : 1) * (wet ? 0.95 : 1);
+    const cap = MAX * c.pace * (c.catch || 1) * 1.04 * (c.boosting ? 1.08 : 1) * (c.slip > 0.4 ? 1.04 : 1) * (wet ? 0.95 : 1);
     c.speed = clamp(c.speed, 0, cap);
     c.x = clamp(lerp(c.x, c.lane, dt * 2.2) - dt * pct * seg.curve * 0.02, -0.95, 0.95);
     c.wear = clamp(c.wear + dt * (0.002 + pct * 0.0028) * wearMul(), 0, 1);
