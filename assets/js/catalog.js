@@ -843,6 +843,7 @@ window.CATALOG = [
   },
   {
     id: 'banner-siege',
+    isNew: true,
     title: 'Banner Siege',
     genre: 'Strategy',
     desc: 'A quick Stratego-style siege. Eleven hidden pieces each: Scouts, Miners, Knights, a General, a Spy, Bombs and a Flag. Walk into an enemy piece and both are revealed; the higher rank wins. Bluff, bait, and capture the Flag. Computer or online.',
@@ -859,6 +860,7 @@ window.CATALOG = [
   },
   {
     id: 'tide-turner',
+    isNew: true,
     title: 'Tide Turner',
     genre: 'Strategy',
     desc: 'Reversi in short rounds. Trap a line of the other colour between two of yours and watch the whole row flip. A six-by-six quick board or the classic eight-by-eight, computer, friend or online.',
@@ -876,6 +878,7 @@ window.CATALOG = [
   },
   {
     id: 'rush-line',
+    isNew: true,
     title: 'Rush Line',
     genre: 'Strategy',
     desc: 'A race across a seven-by-seven board. Step forward, capture only on the diagonal, and be first to break through to the far row. Easy to learn, deep to win. Computer, friend or online.',

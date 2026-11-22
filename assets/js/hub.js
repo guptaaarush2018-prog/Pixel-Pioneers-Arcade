@@ -28,10 +28,12 @@ function renderFeatured() {
 
 function renderCards() {
   grid.innerHTML = '';
-  for (const g of CATALOG) {
+  const ordered = [...CATALOG.filter(g => g.isNew), ...CATALOG.filter(g => !g.isNew)];
+  for (const g of ordered) {
     if (active !== 'All' && g.genre !== active) continue;
     const best = Arcade.getBest(g.id);
-    const badge = g.online && badgeOn(g) ? `<span class="badge">${BADGES[g.online]}</span>` : '';
+    const tags = [g.isNew && 'New', g.online && badgeOn(g) && BADGES[g.online]].filter(Boolean);
+    const badge = tags.length ? `<span class="badge">${tags.join(' · ')}</span>` : '';
     const live = playing[g.id] ? `<span class="live">${playing[g.id]} playing</span>` : '';
     const card = document.createElement('a');
     card.className = g.url ? 'card external' : 'card';
