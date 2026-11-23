@@ -17,7 +17,7 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | Hoop Duel | Sports (1v1 basketball, On Fire streaks) | Live 1v1 |
 | Pixel Gridiron | Sports (top-down football, season mode, play cards with route diagrams) | Online duel |
 | Ice Clash | Sports (3-on-3 hockey with goalies, slapshots, sudden-death overtime) | Online duel |
-| Apex GP | Racing (pseudo-3D Grand Prix: 12 circuits, a 12-round season of race weekends with qualifying and fastest-lap points, Time Trial, Elimination, Reverse Sprint and Endurance modes, wet races, six unlockable cars with their own handling, six AI levels up to Mythic that plan their braking, draft, boost, defend and attack, and push harder when you pull ahead) | Online duel |
+| Apex GP | Racing (pseudo-3D Grand Prix: 12 circuits, a 12-round season of race weekends with qualifying and fastest-lap points, Time Trial, Elimination, Reverse Sprint and Endurance modes, wet races, six unlockable cars with their own handling, six AI levels up to Mythic that plan their braking, draft, boost, defend and attack, and push harder when you pull ahead) | Live race (just the two of you, host picks circuit, laps and weather), online duel |
 | Grand Slam | Sports (arcade baseball: pitch selection, timed swings, fielding plays) | Online duel |
 | Skipstone | Sports (flick to skim a stone: release speed and angle are the throw, tap before touchdowns for perfect skips, lily pads and ducks) | Online duel |
 | Putt Planet | Sports (space mini golf: Moonbase Classic, Frost Nebula with ice, spinning blades, orbiting moons and moving cups, the Magma Belt with lava, repulsors, conveyors and switch gates, and a random nine-hole Asteroid Tour; star coins on every hole) | Online duel (on an Asteroid Tour) |

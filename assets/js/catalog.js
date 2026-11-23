@@ -172,9 +172,10 @@ window.CATALOG = [
     id: 'apex-gp',
     title: 'Apex GP',
     genre: 'Racing',
-    desc: 'Open-wheel Grand Prix racing on twelve circuits. A full season of race weekends with qualifying, plus Time Trial, Elimination, Reverse Sprint and Endurance modes, wet races, six cars to unlock and six AI levels up to Mythic. Draft, boost, manage your tyres and pit when the grip goes.',
+    desc: 'Open-wheel Grand Prix racing on twelve circuits. A full season of race weekends with qualifying, plus Time Trial, Elimination, Reverse Sprint and Endurance modes, wet races, six cars to unlock and six AI levels up to Mythic. Draft, boost, manage your tyres and pit when the grip goes, or race a friend live.',
     goals: [900, 1600, 2400],
     online: 'duel',
+    relay: 'apex',
     extras: [
       { id: 'apex-gp-win', title: 'Apex GP: Chequered Flag', desc: 'Win a Grand Prix.' },
       { id: 'apex-gp-pole', title: 'Apex GP: Lights to Flag', desc: 'Win from the back of the grid on Pro.' },
@@ -184,6 +185,7 @@ window.CATALOG = [
       { id: 'apex-gp-endurance', title: 'Apex GP: Iron Man', desc: 'Win an Endurance race.' },
       { id: 'apex-gp-wet', title: 'Apex GP: Rain Master', desc: 'Win a wet race.' },
       { id: 'apex-gp-alien', title: 'Apex GP: Not of This World', desc: 'Win a race on Alien.' },
+      { id: 'apex-gp-online-win', title: 'Apex GP: Wheel to Wheel', desc: 'Win a live race against a real player.' },
     ],
   },
   {

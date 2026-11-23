@@ -1,6 +1,7 @@
 /* Apex GP: a behind-the-car Grand Prix racer. The road is a loop of short segments, each with
    a curve and a height, projected into perspective every frame (the classic arcade road
-   technique). Content is in data.js; cars, scenery and backgrounds are drawn in art.js. */
+   technique). Content is in data.js; cars, scenery and backgrounds are drawn in art.js.
+   Live race (live.js): just two real players on the host's circuit, laps and weather. */
 (() => {
   const W = 960, H = 540;
   const SEG = 200, ROAD = 2000, RUMBLE = 3, DRAW = 220;
@@ -412,10 +413,13 @@
     }
     raceT += dt;
     updatePlayer(dt);
-    for (const c of cars) if (!c.you) updateBot(c, dt);
+    for (const c of cars) if (!c.you && !c.remote) updateBot(c, dt);
+    if (netMode === 'live') liveSend(dt);
     for (const c of cars) {
       const before = c.dist;
       c.dist += c.speed * dt;
+      // The other player's car: their machine counts its laps; we just follow where it is.
+      if (c.remote) { liveFollow(c, dt); continue; }
       if (before < 0 && c.dist >= 0) c.lapStart = raceT;
       if (c.out) continue;
       const done = Math.floor(c.dist / trackLen);
@@ -482,6 +486,7 @@
 
   function finishRace() {
     state = 'finished';
+    if (netMode === 'live') live.send('fin', { t: Math.round(player.finishT * 1000) / 1000, b: player.best < Infinity ? Math.round(player.best * 1000) / 1000 : 0 });
     if (solo()) { Sports.sfx.good(); return; }
     const pos = position(player);
     fx.confetti(W / 2, H * 0.4, pos <= 3 ? 120 : 40, ['#1b1d22', '#f4f4f4', '#ffc53d']);
@@ -496,6 +501,7 @@
   }
 
   function showResults() {
+    if (netMode === 'live') return liveResults();
     if (session === 'quali') return qualiResults();
     if (session === 'trial') return trialResults();
     // Cars still running are placed by how far round they are, with an estimated gap.
@@ -1034,6 +1040,7 @@
   }
 
   function pause() {
+    if (netMode === 'live') return livePause();
     if (state !== 'racing' && state !== 'lights') return;
     pause.was = state;
     state = 'paused';
@@ -1094,6 +1101,10 @@
   }
 
   function menu() {
+    if (netMode) { netMode = null; mode = modeBeforeLive; }
+    rival = null;
+    live.leave();
+    engine.stop();
     state = 'menu';
     player = null;
     build(D.CIRCUITS[mode === 'season' ? champ().round : pickCircuit]);
@@ -1138,10 +1149,12 @@
     score: () => (player ? Math.max(0, Math.round((13 - position(player)) * 100 * LV.mult)) : 0),
     intro: {
       title: 'Apex GP',
-      get html() { return menuHtml(); },
+      get html() { return `${menuHtml()}${live.html("Live race against a real player: just the two of you, on the host's circuit, laps and weather")}<p class="error" data-live-error>${liveError}</p>`; },
       get button() { return mode === 'season' ? (champ().grid ? 'Start the Grand Prix' : 'Start race weekend') : mode === 'trial' ? 'Start time trial' : 'Start race'; },
       onAction: start,
       onRender: panel => {
+        live.wire(panel);
+        liveError = '';
         const redraw = () => menu();
         panel.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => { mode = b.dataset.mode; Arcade.save('apex:mode2', mode); redraw(); }));
         panel.querySelectorAll('[data-circuit]').forEach(b => b.addEventListener('click', () => { pickCircuit = +b.dataset.circuit; Arcade.save('apex:circuit', pickCircuit); redraw(); }));
@@ -1154,6 +1167,169 @@
     },
   };
 
+  // ---------- Live race (live.js) ----------
+  // Each machine drives its own car and streams where it is; the other car follows those
+  // updates. Both start on their own lights (the host picks the delay), each times its own race,
+  // and sends its finish time: the lower time wins.
+
+  let netMode = null, rival = null, liveError = '', sendT = 0, modeBeforeLive = mode;
+  const live = Live.create({
+    ui,
+    tag: 'apex',
+    label: 'Race',
+    title: 'The race',
+    onReady: host => { if (host) hostStart(); },
+    onEvent: onLive,
+    onState: st => { if (rival) rival.net = { ...st, at: performance.now() }; },
+    onRematch: hostStart,
+    onGone: lost => liveGone(lost),
+    onCancel: msg => { liveError = msg ? esc(msg) : ''; menu(); },
+  });
+
+  function hostStart() {
+    const o = { c: pickCircuit, laps: quickLaps, wet: wetPick, go: Math.round(Math.random() * 8) / 10, car: carPick };
+    live.send('start', o);
+    startLive(o);
+  }
+
+  function rivalCar(id) {
+    const c = carById(id);
+    rival.team = { ...D.TEAMS[1], name: c.name, color: c.color, dark: c.dark, style: c.style };
+  }
+
+  function startLive(o) {
+    if (!netMode) modeBeforeLive = mode;
+    netMode = 'live';
+    mode = 'race';
+    session = 'race';
+    build(D.CIRCUITS[o.c | 0] || D.CIRCUITS[0]);
+    LV = D.LEVELS[level];
+    wet = !!o.wet;
+    car = carUnlocked(carById(carPick)) ? carById(carPick) : D.CARS[0];
+    laps = clamp(o.laps | 0, 1, 8);
+    player = makeCar(D.TEAMS[0], 0);
+    rival = makeCar(D.TEAMS[1], 1, 1);
+    rival.remote = true;
+    rival.name = live.them;
+    rival.net = null;
+    rivalCar(o.car);
+    cars = [player, rival];
+    // Side by side on the front row: the host on the left.
+    player.grid = live.host ? 1 : 2;
+    rival.grid = live.host ? 2 : 1;
+    for (const c of cars) { c.dist = -SEG * 2.2; c.x = c.lane = c.grid === 1 ? -0.45 : 0.45; }
+    fx.clear();
+    Sports.clearSting();
+    results = null;
+    raceT = 0; lightsT = 0; finishT = 0; elimDone = 0; outCount = 0; sendT = 0;
+    goDelay = clamp(+o.go || 0, 0, 0.8);
+    skyOff = farOff = midOff = 0;
+    state = 'lights';
+    engine.start();
+    ui.hide();
+    liveSting();
+  }
+  const liveSting = () => Sports.sting(`Live race vs ${rival.name}`, `${circuit.name} · ${laps} lap${laps === 1 ? '' : 's'}${wet ? ' · wet' : ''}`, '#ffc53d', 2.6);
+
+  function onLive(name, d) {
+    if (name === 'hello') {
+      // The host starts before the guest's hello lands, so name them once it does.
+      if (rival && netMode === 'live') { rival.name = live.them; if (state === 'lights') liveSting(); }
+      return;
+    }
+    if (name === 'start' && !live.host) { startLive(d || {}); live.send('car', { car: car.id }); return; }
+    if (!rival || netMode !== 'live') return;
+    if (name === 'car') rivalCar(d?.car);
+    else if (name === 'fin' && !rival.finished) {
+      rival.finished = true;
+      rival.finishT = Math.max(0, +d?.t || 0);
+      if (+d?.b > 0) rival.best = +d.b;
+      rival.lapsDone = laps;
+      if (state === 'racing') Sports.sting(`${rival.name} finished`, fmt(rival.finishT), rival.team.color, 1.8);
+    }
+  }
+
+  function liveSend(dt) {
+    sendT -= dt;
+    if (sendT > 0) return;
+    sendT = 0.05;
+    live.state({ d: Math.round(player.dist), x: Math.round(player.x * 1000) / 1000, s: Math.round(player.speed), l: player.lapsDone, b: player.boosting ? 1 : 0, p: player.pitT > 0 ? 1 : 0 });
+  }
+
+  function liveFollow(c, dt) {
+    const st = c.net;
+    if (!st || !isFinite(st.d)) return;
+    const lag = Math.min(0.2, (performance.now() - st.at) / 1000);
+    const target = st.d + (+st.s || 0) * lag;
+    if (Math.abs(target - c.dist) > SEG * 30) c.dist = target;
+    else c.dist += (target - c.dist) * Math.min(1, dt * 6);
+    c.x += (clamp(+st.x || 0, -3, 3) - c.x) * Math.min(1, dt * 10);
+    c.speed = clamp(+st.s || 0, 0, MAX * 1.3);
+    if (!c.finished) c.lapsDone = clamp(st.l | 0, 0, laps);
+    c.boosting = !!st.b;
+    c.pitT = st.p ? 1 : 0;
+  }
+
+  function livePause() {
+    if (state !== 'racing' && state !== 'lights') return;
+    ui.show({
+      title: 'Menu',
+      html: `<p>The race keeps going while this is open.</p><p>${esc(circuit.name)} · lap ${Math.min(laps, player.lapsDone + 1)} of ${laps} · P${position(player)}</p>
+        <div class="menu"><button class="btn secondary" type="button" data-quit>Leave the race (counts as a loss)</button></div>`,
+      button: 'Back to the race',
+      onAction: () => ui.hide(),
+      onRender: panel => panel.querySelector('[data-quit]').addEventListener('click', () => { Relay.result('l'); menu(); }),
+    });
+  }
+
+  function liveResults() {
+    results = true;
+    engine.stop();
+    const mine = player.finishT, theirs = rival.finished ? rival.finishT : null;
+    const draw = theirs !== null && Math.abs(mine - theirs) < 0.005;
+    const won = !draw && (theirs === null || mine < theirs);
+    Arcade.countPlay();
+    Arcade.flag('online-match');
+    Relay.result(draw ? 'd' : won ? 'w' : 'l');
+    if (won) Arcade.flag('apex-gp-online-win');
+    if (won && wet) Arcade.flag('apex-gp-wet');
+    const them = esc(rival.name);
+    const vs = theirs === null ? `${them} is still racing` : `${them}: ${fmt(theirs)}${draw ? '' : ` (${won ? '+' : '−'}${Math.abs(theirs - mine).toFixed(2)}s)`}`;
+    ui.show({
+      title: draw ? 'Dead heat!' : won ? 'You win! 🏁' : `${them} wins`,
+      html: `<p class="big">${fmt(mine)}</p><p>${vs}</p>
+        <p class="muted-note">${esc(circuit.name)} · ${laps} lap${laps === 1 ? '' : 's'}${wet ? ' · wet' : ''} · your best lap ${player.best < Infinity ? fmt(player.best) : '—'}</p>
+        <div class="menu"><button class="btn secondary" type="button" data-leave>Leave</button></div>${live.waitNote}`,
+      button: 'Rematch',
+      onAction: () => live.rematch(),
+      onRender: panel => panel.querySelector('[data-leave]').addEventListener('click', () => menu()),
+    });
+  }
+
+  function liveGone(lost) {
+    const name = rival?.name || 'Your opponent';
+    const racing = netMode === 'live' && player && !results && state !== 'menu';
+    if (racing) {
+      results = true;
+      engine.stop();
+      state = 'finished';
+      if (lost) return ui.show({ title: 'Connection lost', html: "<p>Lost the connection to the game server, so this race doesn't count.</p>", button: 'Back to menu', onAction: () => menu() });
+      Arcade.countPlay();
+      Arcade.flag('online-match');
+      Arcade.flag('apex-gp-online-win');
+      Relay.result('w');
+      return ui.show({ title: `${esc(name)} left`, html: '<p>You win by forfeit.</p>', button: 'Back to menu', onAction: () => menu() });
+    }
+    if (netMode === 'live' && results) {
+      const w = document.querySelector('[data-live-wait]');
+      if (w) { w.textContent = `${name} left.`; return; }
+    }
+    liveError = lost ? 'Lost the connection to the game server.' : `${esc(name)} left.`;
+    menu();
+  }
+
+  const liveInvite = Live.invite('apex');
   menu();
+  if (liveInvite) live.connect('public', liveInvite);
   requestAnimationFrame(frame);
 })();
