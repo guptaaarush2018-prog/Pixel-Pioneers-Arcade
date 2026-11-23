@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#10162b"/><stop offset="1" stop-color="#3a1a5a"/></linearGradient></defs>
+  <rect width="320" height="200" fill="url(#g)"/>
+  <g fill="rgba(255,255,255,.05)"><rect x="20" width="30" height="200"/><rect x="120" width="30" height="200"/><rect x="230" width="30" height="200"/></g>
+  <g fill="#3a4a7a"><rect x="0" y="150" width="120" height="50"/><rect x="150" y="110" width="80" height="12"/><rect x="250" y="70" width="70" height="130"/><rect x="90" y="80" width="50" height="12"/></g>
+  <g fill="#7fa0ff"><rect x="0" y="150" width="120" height="4"/><rect x="150" y="110" width="80" height="4"/><rect x="250" y="70" width="70" height="4"/><rect x="90" y="80" width="50" height="4"/></g>
+  <g fill="#ff5d73"><path d="M60 150 L68 138 L76 150Z"/><path d="M76 150 L84 138 L92 150Z"/></g>
+  <circle cx="190" cy="60" r="12" fill="#d6dbe8"/><circle cx="190" cy="60" r="4" fill="#5a6070"/>
+  <rect x="280" y="0" width="6" height="70" fill="#ff3b6b"/>
+  <polygon points="120,56 123,64 132,64 125,69 128,78 120,73 112,78 115,69 108,64 117,64" fill="#ffd23f"/>
+  <rect x="24" y="134" width="14" height="14" fill="#fff"/><rect x="31" y="138" width="3" height="3" fill="#111"/>
+  <text x="160" y="190" font-family="system-ui,sans-serif" font-size="24" font-weight="900" fill="#fff" stroke="#170d24" stroke-width="4" paint-order="stroke" text-anchor="middle" letter-spacing="3">SPECK SPIRE</text>
+</svg>

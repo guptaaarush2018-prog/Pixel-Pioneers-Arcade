@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Wisp Wardens · Pixel Pioneers Arcade</title>
+  <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../assets/css/arcade.css">
+  <style>
+    .td .stage { display: flex; gap: 10px; padding: 8px; align-items: stretch; }
+    .td-field { flex: 1; min-width: 0; display: grid; place-items: center; position: relative; }
+    .td-field canvas { cursor: crosshair; }
+    .td-side { width: 292px; flex: none; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
+    .td-box { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+    .td-box h3 { margin: 0 0 8px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+    .td-shop { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .td-tw { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2, #1c2029); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+    .td-tw i { width: 22px; height: 22px; border-radius: 50%; flex: none; border: 2px solid rgba(255,255,255,.55); }
+    .td-tw b { display: block; font-size: 12px; line-height: 1.15; }
+    .td-tw small { color: #ffe14d; font-size: 11px; }
+    .td-tw:hover:not(:disabled), .td-tw.on { border-color: var(--accent); }
+    .td-tw:disabled { opacity: .42; cursor: not-allowed; }
+    .td-ctl { display: flex; gap: 6px; flex-wrap: wrap; }
+    .td-ctl .btn { padding: 8px 10px; font-size: 13px; flex: 1; justify-content: center; }
+    .td-ctl .btn.on { outline: 2px solid var(--accent); }
+    .td-ups { display: grid; gap: 6px; }
+    .td-up { width: 100%; padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2, #1c2029); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+    .td-up small { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+    .td-up .pr { float: right; color: #ffe14d; font-weight: 700; }
+    .td-up:hover:not(:disabled) { border-color: var(--accent); }
+    .td-up:disabled { opacity: .45; cursor: not-allowed; }
+    .td-pips { letter-spacing: 3px; color: #ffe14d; font-size: 11px; }
+    .td-note { color: var(--muted); font-size: 12px; margin: 0; }
+    .td .panel { max-width: min(780px, 100%); }
+    .td-maps { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 10px; margin-top: 10px; text-align: left; }
+    .td-map { padding: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface-2, #1c2029); color: var(--text); font: inherit; cursor: pointer; text-align: left; }
+    .td-map:hover:not(:disabled) { border-color: var(--accent); }
+    .td-map:disabled { opacity: .45; cursor: not-allowed; }
+    .td-map svg { display: block; width: 100%; height: 92px; }
+    .td-map div { padding: 8px 10px; }
+    .td-map b { display: block; font-size: 14px; }
+    .td-map small { color: var(--muted); font-size: 11px; }
+    .td-map .medals { color: #ffc53d; letter-spacing: 2px; font-size: 12px; }
+    .td-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+    .td-menu { display: grid; gap: 10px; margin: 14px auto 6px; max-width: 320px; }
+    .td-menu .btn { width: 100%; justify-content: center; }
+    @media (max-width: 860px) {
+      .td .stage { flex-direction: column; }
+      .td-side { width: auto; max-height: 38%; }
+      .td-shop { grid-template-columns: repeat(4, 1fr); }
+      .td-tw small { display: none; }
+    }
+  </style>
+</head>
+<body class="game td" data-game="wisp-wardens">
+  <header class="topbar">
+    <a class="back" href="../../index.html">← All games</a>
+    <h1>Wisp Wardens</h1>
+    <div class="stats">
+      <span>Wave<b id="s-wave">–</b></span>
+      <span>Lives<b id="s-lives">–</b></span>
+      <span>Cash<b id="s-cash">–</b></span>
+    </div>
+    <button class="icon-btn" id="mute" type="button">Sound on</button>
+  </header>
+
+  <main class="stage" id="stage">
+    <div class="td-field" id="field"><canvas id="game"></canvas></div>
+    <aside class="td-side" id="side"></aside>
+    <div class="overlay" id="overlay" hidden></div>
+  </main>
+
+  <p class="help">Pick a tower, click to place it, click a tower to upgrade · <kbd>1</kbd>–<kbd>8</kbd> pick tower · <kbd>Space</kbd> start wave · <kbd>F</kbd> speed · <kbd>Esc</kbd> cancel · <kbd>P</kbd> pause</p>
+
+  <script src="../../assets/js/config.js"></script>
+  <script src="../../assets/js/catalog.js?v=20261123"></script>
+  <script src="../../assets/js/arcade.js"></script>
+  <script src="../../assets/js/filter.js"></script>
+  <script src="../../assets/js/friends.js"></script>
+  <script src="../../assets/js/online.js"></script>
+  <script src="../../assets/js/chat.js"></script>
+  <script src="../../assets/js/invites.js"></script>
+  <script src="data.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

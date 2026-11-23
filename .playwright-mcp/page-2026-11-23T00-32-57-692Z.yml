@@ -1,0 +1,28 @@
+- generic [active] [ref=f5e1]:
+  - banner [ref=f5e2]:
+    - link "← All games" [ref=f5e3] [cursor=pointer]:
+      - /url: ../../index.html
+    - heading "Petal Patrol" [level=1] [ref=f5e4]
+    - button "Chat" [ref=f5e6] [cursor=pointer]
+    - button "Sound on" [ref=f5e7] [cursor=pointer]: 🔊Sound on
+  - main [ref=f5e8]:
+    - generic [ref=f5e11]:
+      - heading "How to play" [level=2] [ref=f5e12]
+      - list [ref=f5e13]:
+        - listitem [ref=f5e14]: Click sun as it falls or pops out of Sunbloom (it also drifts to you after a few seconds).
+        - listitem [ref=f5e15]: Pick a seed packet (1–9), then click a square to plant it. Each packet takes time to recharge.
+        - listitem [ref=f5e16]: Mudlings eat your plants. A lawn mower in each lane gives one last sweep, but only once.
+        - listitem [ref=f5e17]: Shovel (S) digs up a plant. Spud Mines need time to arm. Diggers come from behind.
+        - listitem [ref=f5e18]: The Moonlit Lawn has no sky sun, only Sunbloom. The Pond needs a Lily Pad under anything planted on water.
+        - listitem [ref=f5e19]: Clear levels to unlock new plants and bigger seed trays. A Mud Giant ends every world.
+      - button "Got it" [ref=f5e21] [cursor=pointer]
+  - paragraph [ref=f5e22]:
+    - text: Click sun · pick a seed (
+    - generic [ref=f5e23]: "1"
+    - text: –
+    - generic [ref=f5e24]: "9"
+    - text: ) and click the lawn ·
+    - generic [ref=f5e25]: S
+    - text: shovel ·
+    - generic [ref=f5e26]: P
+    - text: pause

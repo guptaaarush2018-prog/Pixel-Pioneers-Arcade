@@ -1,0 +1,29 @@
+- generic [active] [ref=f4e1]:
+  - banner [ref=f4e2]:
+    - link "← All games" [ref=f4e3] [cursor=pointer]:
+      - /url: ../../index.html
+    - heading "Last Lantern" [level=1] [ref=f4e4]
+    - button "Chat" [ref=f4e6] [cursor=pointer]
+    - button "Sound on" [ref=f4e7] [cursor=pointer]: 🔊Sound on
+  - main [ref=f4e8]:
+    - generic [ref=f4e11]:
+      - heading "How to play" [level=2] [ref=f4e12]
+      - list [ref=f4e13]:
+        - listitem [ref=f4e14]: Move with WASD or the arrow keys (drag on a touch screen). Your lantern attacks on its own.
+        - listitem [ref=f4e15]: Collect light gems from fallen foes to level up and pick an upgrade (1 / 2 / 3). You can carry six weapons and six passives.
+        - listitem [ref=f4e16]: Bring a weapon to level 8 while holding its matching passive, then open a boss or elite chest to evolve it.
+        - listitem [ref=f4e17]: Survive 15 minutes until dawn. Bosses come at 5, 10 and 15; swarm rings at 3, 6, 9 and 12.
+        - listitem [ref=f4e18]: Gold you collect is kept even if you fall. Spend it on permanent upgrades and new keepers.
+      - button "Got it" [ref=f4e20] [cursor=pointer]
+  - paragraph [ref=f4e21]:
+    - generic [ref=f4e22]: W
+    - generic [ref=f4e23]: A
+    - generic [ref=f4e24]: S
+    - generic [ref=f4e25]: D
+    - text: / arrows move · your lantern fights on its own ·
+    - generic [ref=f4e26]: "1"
+    - generic [ref=f4e27]: "2"
+    - generic [ref=f4e28]: "3"
+    - text: pick upgrades ·
+    - generic [ref=f4e29]: P
+    - text: pause · on a touch screen, drag to move

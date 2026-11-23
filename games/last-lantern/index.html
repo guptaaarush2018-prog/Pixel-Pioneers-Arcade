@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Last Lantern · Pixel Pioneers Arcade</title>
+  <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../assets/css/arcade.css">
+  <style>
+    .ll .panel { max-width: min(720px, 100%); }
+    .ll-title { font-size: 38px !important; letter-spacing: .06em; color: var(--text) !important; margin: 0 !important; }
+    .ll-note { color: var(--muted); font-size: 13px; margin: 6px 0; }
+    .ll-big { font-size: 22px; font-weight: 800; color: #ffd23f; margin: 0 0 6px; }
+    .ll-menu { display: grid; gap: 10px; max-width: 300px; margin: 14px auto; }
+    .ll-menu .btn { width: 100%; justify-content: center; }
+    .ll-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+    .ll-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .ll-top .btn { padding: 6px 12px; font-size: 13px; }
+    .ll-top span { color: var(--muted); font-size: 13px; }
+    .ll-opts { display: grid; gap: 8px; margin: 10px 0 0; }
+    .ll-opt { position: relative; display: flex; align-items: center; gap: 12px; text-align: left; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2, #1c2029); color: var(--text); font: inherit; cursor: pointer; }
+    .ll-opt:hover { border-color: var(--accent); }
+    .ll-opt b { display: block; font-size: 15px; }
+    .ll-opt small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .ll-opt em { position: absolute; right: 10px; top: 8px; font-style: normal; font-size: 10px; font-weight: 800; color: var(--accent-ink); background: var(--accent); padding: 2px 6px; border-radius: 6px; }
+    .ll-ico { font-size: 28px; width: 38px; text-align: center; }
+    .ll-chest p { font-size: 16px; margin: 8px 0; }
+    .ll-cards, .ll-stages { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; text-align: left; }
+    .ll-card { padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.03); display: flex; flex-direction: column; gap: 4px; }
+    .ll-card.on { border-color: var(--accent); }
+    .ll-card i { width: 26px; height: 26px; border-radius: 50%; border: 2px solid rgba(255,255,255,.6); }
+    .ll-card small, .ll-stage small { color: var(--muted); font-size: 12px; }
+    .ll-card .btn { margin-top: 6px; padding: 6px 10px; font-size: 13px; justify-content: center; }
+    .ll-stage { text-align: left; padding: 14px; border-radius: 10px; border: 1px solid var(--line); border-left: 5px solid var(--c); background: var(--surface-2, #1c2029); color: var(--text); font: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+    .ll-stage:hover:not(:disabled) { border-color: var(--c); }
+    .ll-stage:disabled { opacity: .45; cursor: not-allowed; }
+    .ll-stage b { font-size: 16px; }
+    .ll-ups { display: grid; gap: 8px; text-align: left; }
+    .ll-up { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.03); }
+    .ll-up small { display: block; color: var(--muted); font-size: 12px; }
+    .ll-up .btn { padding: 6px 12px; font-size: 13px; min-width: 70px; justify-content: center; }
+    .ll-pips { color: #ffd23f; font-size: 10px; letter-spacing: 2px; }
+  </style>
+</head>
+<body class="game ll" data-game="last-lantern">
+  <header class="topbar">
+    <a class="back" href="../../index.html">← All games</a>
+    <h1>Last Lantern</h1>
+    <div class="stats"></div>
+    <button class="icon-btn" id="mute" type="button">Sound on</button>
+  </header>
+
+  <main class="stage">
+    <canvas id="game"></canvas>
+    <div class="overlay" id="overlay" hidden></div>
+  </main>
+
+  <p class="help"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / arrows move · your lantern fights on its own · <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> pick upgrades · <kbd>P</kbd> pause · on a touch screen, drag to move</p>
+
+  <script src="../../assets/js/config.js"></script>
+  <script src="../../assets/js/catalog.js?v=20261123"></script>
+  <script src="../../assets/js/arcade.js"></script>
+  <script src="../../assets/js/filter.js"></script>
+  <script src="../../assets/js/friends.js"></script>
+  <script src="../../assets/js/online.js"></script>
+  <script src="../../assets/js/chat.js"></script>
+  <script src="../../assets/js/invites.js"></script>
+  <script src="data.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

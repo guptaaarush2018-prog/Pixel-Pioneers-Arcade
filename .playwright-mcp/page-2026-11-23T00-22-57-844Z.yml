@@ -1,0 +1,41 @@
+- generic [active] [ref=f2e1]:
+  - banner [ref=f2e2]:
+    - link "← All games" [ref=f2e3] [cursor=pointer]:
+      - /url: ../../index.html
+    - heading "Rift Runner" [level=1] [ref=f2e4]
+    - generic [ref=f2e5]:
+      - generic [ref=f2e6]:
+        - text: Level
+        - generic [ref=f2e7]: –
+      - generic [ref=f2e8]:
+        - text: Shards
+        - generic [ref=f2e9]: "0"
+      - generic [ref=f2e10]:
+        - text: Progress
+        - generic [ref=f2e11]: –
+    - button "Chat" [ref=f2e13] [cursor=pointer]
+    - button "Sound on" [ref=f2e15] [cursor=pointer]: 🔊Sound on
+  - main [ref=f2e16]:
+    - generic [ref=f2e20]:
+      - heading "Pixel Pioneers Arcade" [level=2] [ref=f2e21]
+      - heading "RIFT RUNNER" [level=2] [ref=f2e22]
+      - paragraph [ref=f2e23]: Run the tunnel. Take the corners. Close the rift.
+      - generic [ref=f2e24]:
+        - button "Campaign · 0/108 ★" [ref=f2e25] [cursor=pointer]
+        - button "Endless" [ref=f2e26] [cursor=pointer]
+        - button "Daily Run" [ref=f2e27] [cursor=pointer]
+        - button "Runners · 0 shards" [ref=f2e28] [cursor=pointer]
+        - button "How to play" [ref=f2e29] [cursor=pointer]
+  - paragraph [ref=f2e30]:
+    - generic [ref=f2e31]: ←
+    - generic [ref=f2e32]: →
+    - text: /
+    - generic [ref=f2e33]: A
+    - generic [ref=f2e34]: D
+    - text: run sideways, around the corners and up the walls ·
+    - generic [ref=f2e35]: Space
+    - text: /
+    - generic [ref=f2e36]: ↑
+    - text: jump (hold for height) ·
+    - generic [ref=f2e37]: P
+    - text: pause

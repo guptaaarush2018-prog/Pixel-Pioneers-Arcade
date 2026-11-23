@@ -1,0 +1,42 @@
+- generic [active] [ref=f6e1]:
+  - banner [ref=f6e2]:
+    - link "← All games" [ref=f6e3] [cursor=pointer]:
+      - /url: ../../index.html
+    - heading "Speck Spire" [level=1] [ref=f6e4]
+    - generic [ref=f6e5]:
+      - generic [ref=f6e6]:
+        - text: Floor
+        - generic [ref=f6e7]: –
+      - generic [ref=f6e8]:
+        - text: Deaths
+        - generic [ref=f6e9]: "0"
+      - generic [ref=f6e10]:
+        - text: Time
+        - generic [ref=f6e11]: 0:00
+    - button "Chat" [ref=f6e13] [cursor=pointer]
+    - button "Sound on" [ref=f6e14] [cursor=pointer]: 🔊Sound on
+  - main [ref=f6e15]:
+    - generic [ref=f6e18]:
+      - heading "How to play" [level=2] [ref=f6e19]
+      - list [ref=f6e20]:
+        - listitem [ref=f6e21]: Move with ← → or A D. Jump with Space, ↑ or W. Hold to jump higher.
+        - listitem [ref=f6e22]: Reach the right edge of each room to climb to the next floor. Every room is a checkpoint.
+        - listitem [ref=f6e23]: Spikes, saws and lasers kill instantly. Pink pads bounce, amber blocks crumble, pale ice is slippery. R restarts the room.
+        - listitem [ref=f6e24]: "Each zone ends with a boss gauntlet: survive its attacks until the door opens."
+        - listitem [ref=f6e25]: Grab the stars for a higher leaderboard score. Finish the tower fast and with few deaths for a bonus.
+      - button "Got it" [ref=f6e27] [cursor=pointer]
+  - paragraph [ref=f6e28]:
+    - generic [ref=f6e29]: ←
+    - generic [ref=f6e30]: →
+    - text: /
+    - generic [ref=f6e31]: A
+    - generic [ref=f6e32]: D
+    - text: move ·
+    - generic [ref=f6e33]: Space
+    - text: /
+    - generic [ref=f6e34]: ↑
+    - text: jump (hold to go higher) ·
+    - generic [ref=f6e35]: R
+    - text: restart room ·
+    - generic [ref=f6e36]: P
+    - text: pause

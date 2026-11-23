@@ -1,0 +1,41 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - link "← All games" [ref=e3] [cursor=pointer]:
+      - /url: ../../index.html
+    - heading "Rift Runner" [level=1] [ref=e4]
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - text: Level
+        - generic [ref=e7]: –
+      - generic [ref=e8]:
+        - text: Shards
+        - generic [ref=e9]: "0"
+      - generic [ref=e10]:
+        - text: Progress
+        - generic [ref=e11]: –
+    - button "Chat" [ref=e13] [cursor=pointer]
+    - button "Sound on" [ref=e14] [cursor=pointer]: 🔊Sound on
+  - main [ref=e15]:
+    - generic [ref=e19]:
+      - heading "How to play" [level=2] [ref=e20]
+      - list [ref=e21]:
+        - listitem [ref=e22]: Run forward automatically. Steer with ← → or A D.
+        - listitem [ref=e23]: "Jump with Space or ↑. Hold it for height. Tiles are the only ground: fall off and you start from the last checkpoint."
+        - listitem [ref=e24]: The tunnel is a ring. Run past the edge of the floor and you carry on up the wall, along the ceiling and all the way round.
+        - listitem [ref=e25]: Yellow tiles boost, pink tiles bounce, ice is slippery, amber tiles crumble. Hop over striped blocks and stay off the red spikes.
+        - listitem [ref=e26]: Collect shards. 65% earns a second star, 90% a third. Spend shards on new runners.
+        - listitem [ref=e27]: Finish a level to open the next. Six worlds, six levels each. Endless mode and a Daily Run have no end.
+      - button "Got it" [ref=e29] [cursor=pointer]
+  - paragraph [ref=e30]:
+    - generic [ref=e31]: ←
+    - generic [ref=e32]: →
+    - text: /
+    - generic [ref=e33]: A
+    - generic [ref=e34]: D
+    - text: run sideways, around the corners and up the walls ·
+    - generic [ref=e35]: Space
+    - text: /
+    - generic [ref=e36]: ↑
+    - text: jump (hold for height) ·
+    - generic [ref=e37]: P
+    - text: pause

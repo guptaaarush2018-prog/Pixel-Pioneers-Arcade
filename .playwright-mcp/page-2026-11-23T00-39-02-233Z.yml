@@ -1,0 +1,71 @@
+- generic [active] [ref=f7e1]:
+  - banner [ref=f7e2]:
+    - link "← All games" [ref=f7e3] [cursor=pointer]:
+      - /url: ../../index.html
+    - heading "Crown Clash" [level=1] [ref=f7e4]
+    - generic [ref=f7e5]:
+      - generic [ref=f7e6]:
+        - text: P1
+        - generic [ref=f7e7]: –
+      - generic [ref=f7e8]:
+        - text: P2
+        - generic [ref=f7e9]: –
+    - button "Chat" [ref=f7e11] [cursor=pointer]
+    - button "Sound on" [ref=f7e12] [cursor=pointer]: 🔊Sound on
+  - main [ref=f7e13]:
+    - generic [ref=f7e16]:
+      - heading "How to play" [level=2] [ref=f7e17]
+      - generic [ref=f7e18]:
+        - generic [ref=f7e19]:
+          - text: Player 1Move
+          - generic [ref=f7e20]: A
+          - generic [ref=f7e21]: D
+          - text: · Jump
+          - generic [ref=f7e22]: Space
+          - text: /
+          - generic [ref=f7e23]: W
+          - text: Attack
+          - generic [ref=f7e24]: J
+          - text: (hold
+          - generic [ref=f7e25]: W
+          - text: or
+          - generic [ref=f7e26]: S
+          - text: to aim) · Special
+          - generic [ref=f7e27]: K
+          - text: · Shield
+          - generic [ref=f7e28]: L
+          - text: Up + Special = recovery · Shield + Jump + direction = dodge
+        - generic [ref=f7e29]:
+          - text: Player 2Move
+          - generic [ref=f7e30]: ←
+          - generic [ref=f7e31]: →
+          - text: · Jump
+          - generic [ref=f7e32]: ↑
+          - text: Attack
+          - generic [ref=f7e33]: ","
+          - text: · Special
+          - generic [ref=f7e34]: .
+          - text: · Shield
+          - generic [ref=f7e35]: /
+      - list [ref=f7e36]:
+        - listitem [ref=f7e37]: Every hit adds to the victim's %. The higher it climbs, the farther they fly. Knock them past the edge to take a stock.
+        - listitem [ref=f7e38]:
+          - text: Jump again in mid-air. Press
+          - generic [ref=f7e39]: S
+          - text: +Jump on a thin platform to drop through.
+        - listitem [ref=f7e40]: Win the ladder to unlock all six fighters. Beat the Crown Titan at the end.
+      - button "Got it" [ref=f7e42] [cursor=pointer]
+  - paragraph [ref=f7e43]:
+    - generic [ref=f7e44]: A
+    - generic [ref=f7e45]: D
+    - text: move ·
+    - generic [ref=f7e46]: Space
+    - text: jump ·
+    - generic [ref=f7e47]: J
+    - text: attack ·
+    - generic [ref=f7e48]: K
+    - text: special ·
+    - generic [ref=f7e49]: L
+    - text: shield ·
+    - generic [ref=f7e50]: P
+    - text: pause · keyboard required

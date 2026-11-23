@@ -1,0 +1,646 @@
+- generic [active] [ref=f8e1]:
+  - banner [ref=f8e2]:
+    - generic [ref=f8e3]:
+      - link "Pixel Pioneers Arcade" [ref=f8e4] [cursor=pointer]:
+        - /url: index.html
+      - navigation [ref=f8e10]:
+        - link "Games" [ref=f8e11] [cursor=pointer]:
+          - /url: index.html
+        - link "Lobby" [ref=f8e12] [cursor=pointer]:
+          - /url: lobby.html
+        - link "Leaderboards" [ref=f8e13] [cursor=pointer]:
+          - /url: leaderboards.html
+        - link "Profile" [ref=f8e14] [cursor=pointer]:
+          - /url: profile.html
+        - link "🎟 2" [ref=f8e15] [cursor=pointer]:
+          - /url: profile.html#shop
+        - generic [ref=f8e16]: 1 playing now
+  - main [ref=f8e17]:
+    - generic [ref=f8e18]:
+      - link [ref=f8e19] [cursor=pointer]:
+        - /url: games/apex-gp/index.html
+        - img "Apex GP" [ref=f8e20]
+      - generic [ref=f8e21]:
+        - generic [ref=f8e22]: Featured today · Racing
+        - heading "Apex GP" [level=1] [ref=f8e23]
+        - paragraph [ref=f8e24]: Open-wheel Grand Prix racing on twelve circuits. A full season of race weekends with qualifying, plus Time Trial, Elimination, Reverse Sprint and Endurance modes, wet races, six cars to unlock and six AI levels up to Mythic. Draft, boost, manage your tyres and pit when the grip goes.
+        - link "Play now" [ref=f8e25] [cursor=pointer]:
+          - /url: games/apex-gp/index.html
+    - generic [ref=f8e26]:
+      - generic [ref=f8e27]:
+        - heading "Flagship games" [level=2] [ref=f8e28]
+        - generic [ref=f8e29]: Full-length, with campaigns, unlocks and saves
+      - generic [ref=f8e30]:
+        - link "A full 3D tunnel runner Rift Runner A full-length 3D tunnel runner. Run the floating tiles, leap the gaps and keep going up the walls and across the ceiling. 36 campaign levels in six worlds with checkpoints and three-star ratings, an Endless mode, a Daily Run, and six runners to unlock with the shards you collect. Your progress saves. Play now" [ref=f8e31] [cursor=pointer]:
+          - /url: games/rift-runner/index.html
+          - generic [ref=f8e32]:
+            - generic [ref=f8e33]: A full 3D tunnel runner
+            - heading "Rift Runner" [level=3] [ref=f8e34]
+            - paragraph [ref=f8e35]: A full-length 3D tunnel runner. Run the floating tiles, leap the gaps and keep going up the walls and across the ceiling. 36 campaign levels in six worlds with checkpoints and three-star ratings, an Endless mode, a Daily Run, and six runners to unlock with the shards you collect. Your progress saves.
+            - generic [ref=f8e36]: Play now
+        - 'link "Full tower defense Wisp Wardens A full-length tower defense. Glowing wisps march down the road in layers: pop one and the next spills out. Build eight towers with two four-tier upgrade paths each, hold eight maps across Easy, Medium and Hard (up to 80 waves), then push on in Endless. Armoured shades, ghosts and iron wisps, and giant boss waves. Autosaves every wave. Play now" [ref=f8e37] [cursor=pointer]':
+          - /url: games/wisp-wardens/index.html
+          - generic [ref=f8e38]:
+            - generic [ref=f8e39]: Full tower defense
+            - heading "Wisp Wardens" [level=3] [ref=f8e40]
+            - paragraph [ref=f8e41]: "A full-length tower defense. Glowing wisps march down the road in layers: pop one and the next spills out. Build eight towers with two four-tier upgrade paths each, hold eight maps across Easy, Medium and Hard (up to 80 waves), then push on in Endless. Armoured shades, ghosts and iron wisps, and giant boss waves. Autosaves every wave."
+            - generic [ref=f8e42]: Play now
+        - link "Survive the night Last Lantern A survival roguelite. Your lantern fights on its own while you walk, gather light and level up against thousands of creatures. Eight weapons that evolve, eight passives, six keepers, four fifteen-minute stages with bosses, elites and swarm rings, permanent upgrades between runs, and Endless after the dawn. Best 432 · Continue" [ref=f8e43] [cursor=pointer]:
+          - /url: games/last-lantern/index.html
+          - generic [ref=f8e44]:
+            - generic [ref=f8e45]: Survive the night
+            - heading "Last Lantern" [level=3] [ref=f8e46]
+            - paragraph [ref=f8e47]: A survival roguelite. Your lantern fights on its own while you walk, gather light and level up against thousands of creatures. Eight weapons that evolve, eight passives, six keepers, four fifteen-minute stages with bosses, elites and swarm rings, permanent upgrades between runs, and Endless after the dawn.
+            - generic [ref=f8e48]: Best 432 · Continue
+        - link "Lane defense adventure Petal Patrol A full lane-defense adventure. Plant defenders on the lawn, gather sun, and stop the mudlings before they reach the house. 30 levels across the Sunny Lawn, the Moonlit Lawn and the Pond, 13 plants to unlock, hoppers, diggers and brutes, a Mud Giant at the end of every world, and endless Survival. Best 830 · Continue" [ref=f8e49] [cursor=pointer]:
+          - /url: games/petal-patrol/index.html
+          - generic [ref=f8e50]:
+            - generic [ref=f8e51]: Lane defense adventure
+            - heading "Petal Patrol" [level=3] [ref=f8e52]
+            - paragraph [ref=f8e53]: A full lane-defense adventure. Plant defenders on the lawn, gather sun, and stop the mudlings before they reach the house. 30 levels across the Sunny Lawn, the Moonlit Lawn and the Pond, 13 plants to unlock, hoppers, diggers and brutes, a Mud Giant at the end of every world, and endless Survival.
+            - generic [ref=f8e54]: Best 830 · Continue
+        - link "Precision tower climb Speck Spire You are a tiny square and the tower is enormous. Climb 54 rooms across six zones of spikes, saws, lasers, ice, crumbling floors and bounce pads, survive a boss gauntlet at the top of every zone, and chase stars, speed and a low death count. Play now" [ref=f8e55] [cursor=pointer]:
+          - /url: games/speck-spire/index.html
+          - generic [ref=f8e56]:
+            - generic [ref=f8e57]: Precision tower climb
+            - heading "Speck Spire" [level=3] [ref=f8e58]
+            - paragraph [ref=f8e59]: You are a tiny square and the tower is enormous. Climb 54 rooms across six zones of spikes, saws, lasers, ice, crumbling floors and bounce pads, survive a boss gauntlet at the top of every zone, and chase stars, speed and a low death count.
+            - generic [ref=f8e60]: Play now
+        - link "Platform fighter Crown Clash A platform fighter where damage builds a percentage and the higher it climbs, the farther you fly. Six fighters to unlock, five stages, an eight-fight ladder ending at the Crown Titan, an Endless Gauntlet, and local two-player versus. Play now" [ref=f8e61] [cursor=pointer]:
+          - /url: games/crown-clash/index.html
+          - generic [ref=f8e62]:
+            - generic [ref=f8e63]: Platform fighter
+            - heading "Crown Clash" [level=3] [ref=f8e64]
+            - paragraph [ref=f8e65]: A platform fighter where damage builds a percentage and the higher it climbs, the farther you fly. Six fighters to unlock, five stages, an eight-fight ladder ending at the Crown Titan, an Endless Gauntlet, and local two-player versus.
+            - generic [ref=f8e66]: Play now
+    - generic [ref=f8e67]:
+      - generic [ref=f8e68]:
+        - heading "Daily challenges" [level=2] [ref=f8e69]
+        - generic [ref=f8e70]: +5 tickets each, +5 for all three · new ones in 5h
+      - list [ref=f8e71]:
+        - listitem [ref=f8e72]:
+          - link "Score 2,000 in High-Low" [ref=f8e74] [cursor=pointer]:
+            - /url: games/high-low/index.html
+        - listitem [ref=f8e75]:
+          - link "Beat the computer in Fleet Hunt" [ref=f8e77] [cursor=pointer]:
+            - /url: games/fleet-hunt/index.html
+        - listitem [ref=f8e78]:
+          - generic [ref=f8e80]: Play 3 different games
+          - text: (2/3)
+    - generic [ref=f8e81]:
+      - heading "All games (67)" [level=2] [ref=f8e82]
+      - navigation "Filter by genre" [ref=f8e83]:
+        - button "All" [pressed] [ref=f8e84] [cursor=pointer]
+        - button "Fighting" [ref=f8e85] [cursor=pointer]
+        - button "Open World" [ref=f8e86] [cursor=pointer]
+        - button "Sandbox" [ref=f8e87] [cursor=pointer]
+        - button "Shooter" [ref=f8e88] [cursor=pointer]
+        - button "Sports" [ref=f8e89] [cursor=pointer]
+        - button "Racing" [ref=f8e90] [cursor=pointer]
+        - button "Arcade" [ref=f8e91] [cursor=pointer]
+        - button "Trivia" [ref=f8e92] [cursor=pointer]
+        - button "Rhythm" [ref=f8e93] [cursor=pointer]
+        - button "Strategy" [ref=f8e94] [cursor=pointer]
+        - button "Tycoon" [ref=f8e95] [cursor=pointer]
+        - button "Idle" [ref=f8e96] [cursor=pointer]
+        - button "Puzzle" [ref=f8e97] [cursor=pointer]
+        - button "Maze" [ref=f8e98] [cursor=pointer]
+        - button "Typing" [ref=f8e99] [cursor=pointer]
+        - button "Word" [ref=f8e100] [cursor=pointer]
+        - button "Platformer" [ref=f8e101] [cursor=pointer]
+        - button "Runner" [ref=f8e102] [cursor=pointer]
+        - button "Cards" [ref=f8e103] [cursor=pointer]
+        - button "Adventure" [ref=f8e104] [cursor=pointer]
+    - generic [ref=f8e105]:
+      - link "New · Online multiplayer Banner Siege Strategy New" [ref=f8e106] [cursor=pointer]:
+        - /url: games/banner-siege/index.html
+        - generic [ref=f8e107]: New · Online multiplayer
+        - generic [ref=f8e109]:
+          - heading "Banner Siege" [level=3] [ref=f8e110]
+          - generic [ref=f8e111]:
+            - generic [ref=f8e112]: Strategy
+            - generic [ref=f8e113]: New
+      - link "New · Online multiplayer Tide Turner Strategy New" [ref=f8e114] [cursor=pointer]:
+        - /url: games/tide-turner/index.html
+        - generic [ref=f8e115]: New · Online multiplayer
+        - generic [ref=f8e117]:
+          - heading "Tide Turner" [level=3] [ref=f8e118]
+          - generic [ref=f8e119]:
+            - generic [ref=f8e120]: Strategy
+            - generic [ref=f8e121]: New
+      - link "New · Online multiplayer Rush Line Strategy New" [ref=f8e122] [cursor=pointer]:
+        - /url: games/rush-line/index.html
+        - generic [ref=f8e123]: New · Online multiplayer
+        - generic [ref=f8e125]:
+          - heading "Rush Line" [level=3] [ref=f8e126]
+          - generic [ref=f8e127]:
+            - generic [ref=f8e128]: Strategy
+            - generic [ref=f8e129]: New
+      - link "New Rift Runner Arcade New" [ref=f8e130] [cursor=pointer]:
+        - /url: games/rift-runner/index.html
+        - generic [ref=f8e131]: New
+        - generic [ref=f8e133]:
+          - heading "Rift Runner" [level=3] [ref=f8e134]
+          - generic [ref=f8e135]:
+            - generic [ref=f8e136]: Arcade
+            - generic [ref=f8e137]: New
+      - link "New Wisp Wardens Strategy New" [ref=f8e138] [cursor=pointer]:
+        - /url: games/wisp-wardens/index.html
+        - generic [ref=f8e139]: New
+        - generic [ref=f8e141]:
+          - heading "Wisp Wardens" [level=3] [ref=f8e142]
+          - generic [ref=f8e143]:
+            - generic [ref=f8e144]: Strategy
+            - generic [ref=f8e145]: New
+      - link "New Last Lantern Shooter Best 432" [ref=f8e146] [cursor=pointer]:
+        - /url: games/last-lantern/index.html
+        - generic [ref=f8e147]: New
+        - generic [ref=f8e149]:
+          - heading "Last Lantern" [level=3] [ref=f8e150]
+          - generic [ref=f8e151]:
+            - generic [ref=f8e152]: Shooter
+            - generic [ref=f8e153]: Best 432
+      - link "New Petal Patrol Strategy Best 830" [ref=f8e154] [cursor=pointer]:
+        - /url: games/petal-patrol/index.html
+        - generic [ref=f8e155]: New
+        - generic [ref=f8e157]:
+          - heading "Petal Patrol" [level=3] [ref=f8e158]
+          - generic [ref=f8e159]:
+            - generic [ref=f8e160]: Strategy
+            - generic [ref=f8e161]: Best 830
+      - link "New Speck Spire Platformer New" [ref=f8e162] [cursor=pointer]:
+        - /url: games/speck-spire/index.html
+        - generic [ref=f8e163]: New
+        - generic [ref=f8e165]:
+          - heading "Speck Spire" [level=3] [ref=f8e166]
+          - generic [ref=f8e167]:
+            - generic [ref=f8e168]: Platformer
+            - generic [ref=f8e169]: New
+      - link "New Crown Clash Fighting New" [ref=f8e170] [cursor=pointer]:
+        - /url: games/crown-clash/index.html
+        - generic [ref=f8e171]: New
+        - generic [ref=f8e173]:
+          - heading "Crown Clash" [level=3] [ref=f8e174]
+          - generic [ref=f8e175]:
+            - generic [ref=f8e176]: Fighting
+            - generic [ref=f8e177]: New
+      - 'link "Online multiplayer ↗ Stickman Evolution: The 95th Fighting Pixel Pioneers Studios ↗" [ref=f8e178] [cursor=pointer]':
+        - /url: https://pixel-pioneers-studios.github.io/Stickman-Battles/
+        - generic [ref=f8e179]:
+          - generic [ref=f8e180]: Online multiplayer
+          - text: ↗
+        - generic [ref=f8e181]:
+          - 'heading "Stickman Evolution: The 95th" [level=3] [ref=f8e182]'
+          - generic [ref=f8e183]:
+            - generic [ref=f8e184]: Fighting
+            - generic [ref=f8e185]: Pixel Pioneers Studios ↗
+      - link "Online multiplayer ↗ Paintball Arena Fighting plzgimmeaname ↗" [ref=f8e186] [cursor=pointer]:
+        - /url: https://plzgimmeaname.github.io/paintball-web/
+        - generic [ref=f8e187]:
+          - generic [ref=f8e188]: Online multiplayer
+          - text: ↗
+        - generic [ref=f8e189]:
+          - heading "Paintball Arena" [level=3] [ref=f8e190]
+          - generic [ref=f8e191]:
+            - generic [ref=f8e192]: Fighting
+            - generic [ref=f8e193]: plzgimmeaname ↗
+      - link "Getaway City Open World New" [ref=f8e194] [cursor=pointer]:
+        - /url: games/getaway-city/index.html
+        - generic [ref=f8e196]:
+          - heading "Getaway City" [level=3] [ref=f8e197]
+          - generic [ref=f8e198]:
+            - generic [ref=f8e199]: Open World
+            - generic [ref=f8e200]: New
+      - link "Block Frontier Sandbox New" [ref=f8e201] [cursor=pointer]:
+        - /url: games/block-frontier/index.html
+        - generic [ref=f8e203]:
+          - heading "Block Frontier" [level=3] [ref=f8e204]
+          - generic [ref=f8e205]:
+            - generic [ref=f8e206]: Sandbox
+            - generic [ref=f8e207]: New
+      - link "Online duels Zap Arena Shooter New" [ref=f8e208] [cursor=pointer]:
+        - /url: games/zap-arena/index.html
+        - generic [ref=f8e209]: Online duels
+        - generic [ref=f8e211]:
+          - heading "Zap Arena" [level=3] [ref=f8e212]
+          - generic [ref=f8e213]:
+            - generic [ref=f8e214]: Shooter
+            - generic [ref=f8e215]: New
+      - link "Online multiplayer Pixel Pitch Sports New" [ref=f8e216] [cursor=pointer]:
+        - /url: games/pixel-pitch/index.html
+        - generic [ref=f8e217]: Online multiplayer
+        - generic [ref=f8e219]:
+          - heading "Pixel Pitch" [level=3] [ref=f8e220]
+          - generic [ref=f8e221]:
+            - generic [ref=f8e222]: Sports
+            - generic [ref=f8e223]: New
+      - link "Online multiplayer Hoop Duel Sports New" [ref=f8e224] [cursor=pointer]:
+        - /url: games/hoop-duel/index.html
+        - generic [ref=f8e225]: Online multiplayer
+        - generic [ref=f8e227]:
+          - heading "Hoop Duel" [level=3] [ref=f8e228]
+          - generic [ref=f8e229]:
+            - generic [ref=f8e230]: Sports
+            - generic [ref=f8e231]: New
+      - link "Online multiplayer Pocket Racer Racing New" [ref=f8e232] [cursor=pointer]:
+        - /url: games/pocket-racer/index.html
+        - generic [ref=f8e233]: Online multiplayer
+        - generic [ref=f8e235]:
+          - heading "Pocket Racer" [level=3] [ref=f8e236]
+          - generic [ref=f8e237]:
+            - generic [ref=f8e238]: Racing
+            - generic [ref=f8e239]: New
+      - link "Online duels Pixel Gridiron Sports New" [ref=f8e240] [cursor=pointer]:
+        - /url: games/blitz-bowl/index.html
+        - generic [ref=f8e241]: Online duels
+        - generic [ref=f8e243]:
+          - heading "Pixel Gridiron" [level=3] [ref=f8e244]
+          - generic [ref=f8e245]:
+            - generic [ref=f8e246]: Sports
+            - generic [ref=f8e247]: New
+      - link "Online duels Ice Clash Sports New" [ref=f8e248] [cursor=pointer]:
+        - /url: games/ice-clash/index.html
+        - generic [ref=f8e249]: Online duels
+        - generic [ref=f8e251]:
+          - heading "Ice Clash" [level=3] [ref=f8e252]
+          - generic [ref=f8e253]:
+            - generic [ref=f8e254]: Sports
+            - generic [ref=f8e255]: New
+      - link "Online duels Apex GP Racing New" [ref=f8e256] [cursor=pointer]:
+        - /url: games/apex-gp/index.html
+        - generic [ref=f8e257]: Online duels
+        - generic [ref=f8e259]:
+          - heading "Apex GP" [level=3] [ref=f8e260]
+          - generic [ref=f8e261]:
+            - generic [ref=f8e262]: Racing
+            - generic [ref=f8e263]: New
+      - link "Online duels Grand Slam Sports New" [ref=f8e264] [cursor=pointer]:
+        - /url: games/grand-slam/index.html
+        - generic [ref=f8e265]: Online duels
+        - generic [ref=f8e267]:
+          - heading "Grand Slam" [level=3] [ref=f8e268]
+          - generic [ref=f8e269]:
+            - generic [ref=f8e270]: Sports
+            - generic [ref=f8e271]: New
+      - link "Online duels Putt Planet Sports New" [ref=f8e272] [cursor=pointer]:
+        - /url: games/putt-planet/index.html
+        - generic [ref=f8e273]: Online duels
+        - generic [ref=f8e275]:
+          - heading "Putt Planet" [level=3] [ref=f8e276]
+          - generic [ref=f8e277]:
+            - generic [ref=f8e278]: Sports
+            - generic [ref=f8e279]: New
+      - link "Online multiplayer Light Trail Arcade New" [ref=f8e280] [cursor=pointer]:
+        - /url: games/light-trail/index.html
+        - generic [ref=f8e281]: Online multiplayer
+        - generic [ref=f8e283]:
+          - heading "Light Trail" [level=3] [ref=f8e284]
+          - generic [ref=f8e285]:
+            - generic [ref=f8e286]: Arcade
+            - generic [ref=f8e287]: New
+      - link "Online multiplayer Quick Draw Arcade New" [ref=f8e288] [cursor=pointer]:
+        - /url: games/quick-draw/index.html
+        - generic [ref=f8e289]: Online multiplayer
+        - generic [ref=f8e291]:
+          - heading "Quick Draw" [level=3] [ref=f8e292]
+          - generic [ref=f8e293]:
+            - generic [ref=f8e294]: Arcade
+            - generic [ref=f8e295]: New
+      - link "Online multiplayer Buzz Bout Trivia New" [ref=f8e296] [cursor=pointer]:
+        - /url: games/buzz-bout/index.html
+        - generic [ref=f8e297]: Online multiplayer
+        - generic [ref=f8e299]:
+          - heading "Buzz Bout" [level=3] [ref=f8e300]
+          - generic [ref=f8e301]:
+            - generic [ref=f8e302]: Trivia
+            - generic [ref=f8e303]: New
+      - link "Online duels Beat Lane Rhythm New" [ref=f8e304] [cursor=pointer]:
+        - /url: games/beat-lane/index.html
+        - generic [ref=f8e305]: Online duels
+        - generic [ref=f8e307]:
+          - heading "Beat Lane" [level=3] [ref=f8e308]
+          - generic [ref=f8e309]:
+            - generic [ref=f8e310]: Rhythm
+            - generic [ref=f8e311]: New
+      - link "Online multiplayer Rune Rumble Strategy New" [ref=f8e312] [cursor=pointer]:
+        - /url: games/rune-rumble/index.html
+        - generic [ref=f8e313]: Online multiplayer
+        - generic [ref=f8e315]:
+          - heading "Rune Rumble" [level=3] [ref=f8e316]
+          - generic [ref=f8e317]:
+            - generic [ref=f8e318]: Strategy
+            - generic [ref=f8e319]: New
+      - link "Online multiplayer Realm Rivals Strategy New" [ref=f8e320] [cursor=pointer]:
+        - /url: games/realm-rivals/index.html
+        - generic [ref=f8e321]: Online multiplayer
+        - generic [ref=f8e323]:
+          - heading "Realm Rivals" [level=3] [ref=f8e324]
+          - generic [ref=f8e325]:
+            - generic [ref=f8e326]: Strategy
+            - generic [ref=f8e327]: New
+      - link "Online duels Rampart Strategy New" [ref=f8e328] [cursor=pointer]:
+        - /url: games/rampart/index.html
+        - generic [ref=f8e329]: Online duels
+        - generic [ref=f8e331]:
+          - heading "Rampart" [level=3] [ref=f8e332]
+          - generic [ref=f8e333]:
+            - generic [ref=f8e334]: Strategy
+            - generic [ref=f8e335]: New
+      - link "Online duels Dice Delve Strategy New" [ref=f8e336] [cursor=pointer]:
+        - /url: games/dice-delve/index.html
+        - generic [ref=f8e337]: Online duels
+        - generic [ref=f8e339]:
+          - heading "Dice Delve" [level=3] [ref=f8e340]
+          - generic [ref=f8e341]:
+            - generic [ref=f8e342]: Strategy
+            - generic [ref=f8e343]: New
+      - link "Online duels Taco Truck Tycoon Tycoon New" [ref=f8e344] [cursor=pointer]:
+        - /url: games/taco-tycoon/index.html
+        - generic [ref=f8e345]: Online duels
+        - generic [ref=f8e347]:
+          - heading "Taco Truck Tycoon" [level=3] [ref=f8e348]
+          - generic [ref=f8e349]:
+            - generic [ref=f8e350]: Tycoon
+            - generic [ref=f8e351]: New
+      - link "Timber Haul Tycoon New" [ref=f8e352] [cursor=pointer]:
+        - /url: games/timber-haul/index.html
+        - generic [ref=f8e354]:
+          - heading "Timber Haul" [level=3] [ref=f8e355]
+          - generic [ref=f8e356]:
+            - generic [ref=f8e357]: Tycoon
+            - generic [ref=f8e358]: New
+      - link "Sweet Works Idle New" [ref=f8e359] [cursor=pointer]:
+        - /url: games/sweet-works/index.html
+        - generic [ref=f8e361]:
+          - heading "Sweet Works" [level=3] [ref=f8e362]
+          - generic [ref=f8e363]:
+            - generic [ref=f8e364]: Idle
+            - generic [ref=f8e365]: New
+      - link "Gem Mine Idle New" [ref=f8e366] [cursor=pointer]:
+        - /url: games/gem-mine/index.html
+        - generic [ref=f8e368]:
+          - heading "Gem Mine" [level=3] [ref=f8e369]
+          - generic [ref=f8e370]:
+            - generic [ref=f8e371]: Idle
+            - generic [ref=f8e372]: New
+      - link "Pocket Pet Idle New" [ref=f8e373] [cursor=pointer]:
+        - /url: games/pocket-pet/index.html
+        - generic [ref=f8e375]:
+          - heading "Pocket Pet" [level=3] [ref=f8e376]
+          - generic [ref=f8e377]:
+            - generic [ref=f8e378]: Idle
+            - generic [ref=f8e379]: New
+      - link "Online duels Crowd Rush Arcade New" [ref=f8e380] [cursor=pointer]:
+        - /url: games/crowd-rush/index.html
+        - generic [ref=f8e381]: Online duels
+        - generic [ref=f8e383]:
+          - heading "Crowd Rush" [level=3] [ref=f8e384]
+          - generic [ref=f8e385]:
+            - generic [ref=f8e386]: Arcade
+            - generic [ref=f8e387]: New
+      - link "Online duels Lane Rush Racing New" [ref=f8e388] [cursor=pointer]:
+        - /url: games/lane-rush/index.html
+        - generic [ref=f8e389]: Online duels
+        - generic [ref=f8e391]:
+          - heading "Lane Rush" [level=3] [ref=f8e392]
+          - generic [ref=f8e393]:
+            - generic [ref=f8e394]: Racing
+            - generic [ref=f8e395]: New
+      - link "Online multiplayer Box Battle Strategy New" [ref=f8e396] [cursor=pointer]:
+        - /url: games/box-battle/index.html
+        - generic [ref=f8e397]: Online multiplayer
+        - generic [ref=f8e399]:
+          - heading "Box Battle" [level=3] [ref=f8e400]
+          - generic [ref=f8e401]:
+            - generic [ref=f8e402]: Strategy
+            - generic [ref=f8e403]: New
+      - link "Online multiplayer Gravity Four Strategy New" [ref=f8e404] [cursor=pointer]:
+        - /url: games/gravity-four/index.html
+        - generic [ref=f8e405]: Online multiplayer
+        - generic [ref=f8e407]:
+          - heading "Gravity Four" [level=3] [ref=f8e408]
+          - generic [ref=f8e409]:
+            - generic [ref=f8e410]: Strategy
+            - generic [ref=f8e411]: New
+      - link "Online multiplayer Mega Tac-Toe Strategy New" [ref=f8e412] [cursor=pointer]:
+        - /url: games/mega-tac-toe/index.html
+        - generic [ref=f8e413]: Online multiplayer
+        - generic [ref=f8e415]:
+          - heading "Mega Tac-Toe" [level=3] [ref=f8e416]
+          - generic [ref=f8e417]:
+            - generic [ref=f8e418]: Strategy
+            - generic [ref=f8e419]: New
+      - link "Online multiplayer Chess Strategy New" [ref=f8e420] [cursor=pointer]:
+        - /url: games/chess/index.html
+        - generic [ref=f8e421]: Online multiplayer
+        - generic [ref=f8e423]:
+          - heading "Chess" [level=3] [ref=f8e424]
+          - generic [ref=f8e425]:
+            - generic [ref=f8e426]: Strategy
+            - generic [ref=f8e427]: New
+      - link "Online multiplayer Fleet Hunt Strategy New" [ref=f8e428] [cursor=pointer]:
+        - /url: games/fleet-hunt/index.html
+        - generic [ref=f8e429]: Online multiplayer
+        - generic [ref=f8e431]:
+          - heading "Fleet Hunt" [level=3] [ref=f8e432]
+          - generic [ref=f8e433]:
+            - generic [ref=f8e434]: Strategy
+            - generic [ref=f8e435]: New
+      - link "Online duels Neon Noodle Arcade New" [ref=f8e436] [cursor=pointer]:
+        - /url: games/neon-noodle/index.html
+        - generic [ref=f8e437]: Online duels
+        - generic [ref=f8e439]:
+          - heading "Neon Noodle" [level=3] [ref=f8e440]
+          - generic [ref=f8e441]:
+            - generic [ref=f8e442]: Arcade
+            - generic [ref=f8e443]: New
+      - link "Online duels Block Bloom Puzzle New" [ref=f8e444] [cursor=pointer]:
+        - /url: games/block-bloom/index.html
+        - generic [ref=f8e445]: Online duels
+        - generic [ref=f8e447]:
+          - heading "Block Bloom" [level=3] [ref=f8e448]
+          - generic [ref=f8e449]:
+            - generic [ref=f8e450]: Puzzle
+            - generic [ref=f8e451]: New
+      - link "Online duels Crystal Swap Puzzle New" [ref=f8e452] [cursor=pointer]:
+        - /url: games/crystal-swap/index.html
+        - generic [ref=f8e453]: Online duels
+        - generic [ref=f8e455]:
+          - heading "Crystal Swap" [level=3] [ref=f8e456]
+          - generic [ref=f8e457]:
+            - generic [ref=f8e458]: Puzzle
+            - generic [ref=f8e459]: New
+      - link "Online multiplayer Sudoku Siege Puzzle New" [ref=f8e460] [cursor=pointer]:
+        - /url: games/sudoku-siege/index.html
+        - generic [ref=f8e461]: Online multiplayer
+        - generic [ref=f8e463]:
+          - heading "Sudoku Siege" [level=3] [ref=f8e464]
+          - generic [ref=f8e465]:
+            - generic [ref=f8e466]: Puzzle
+            - generic [ref=f8e467]: New
+      - link "Online duels Pixel Reveal Puzzle New" [ref=f8e468] [cursor=pointer]:
+        - /url: games/pixel-reveal/index.html
+        - generic [ref=f8e469]: Online duels
+        - generic [ref=f8e471]:
+          - heading "Pixel Reveal" [level=3] [ref=f8e472]
+          - generic [ref=f8e473]:
+            - generic [ref=f8e474]: Puzzle
+            - generic [ref=f8e475]: New
+      - link "Online duels Lantern Maze Maze New" [ref=f8e476] [cursor=pointer]:
+        - /url: games/lantern-maze/index.html
+        - generic [ref=f8e477]: Online duels
+        - generic [ref=f8e479]:
+          - heading "Lantern Maze" [level=3] [ref=f8e480]
+          - generic [ref=f8e481]:
+            - generic [ref=f8e482]: Maze
+            - generic [ref=f8e483]: New
+      - link "Online duels Brick Burst Arcade New" [ref=f8e484] [cursor=pointer]:
+        - /url: games/brick-burst/index.html
+        - generic [ref=f8e485]: Online duels
+        - generic [ref=f8e487]:
+          - heading "Brick Burst" [level=3] [ref=f8e488]
+          - generic [ref=f8e489]:
+            - generic [ref=f8e490]: Arcade
+            - generic [ref=f8e491]: New
+      - link "Online duels Comet Pinball Arcade New" [ref=f8e492] [cursor=pointer]:
+        - /url: games/comet-pinball/index.html
+        - generic [ref=f8e493]: Online duels
+        - generic [ref=f8e495]:
+          - heading "Comet Pinball" [level=3] [ref=f8e496]
+          - generic [ref=f8e497]:
+            - generic [ref=f8e498]: Arcade
+            - generic [ref=f8e499]: New
+      - link "Online duels Type Storm Typing New" [ref=f8e500] [cursor=pointer]:
+        - /url: games/type-storm/index.html
+        - generic [ref=f8e501]: Online duels
+        - generic [ref=f8e503]:
+          - heading "Type Storm" [level=3] [ref=f8e504]
+          - generic [ref=f8e505]:
+            - generic [ref=f8e506]: Typing
+            - generic [ref=f8e507]: New
+      - link "Online duels Letter Lock Word New" [ref=f8e508] [cursor=pointer]:
+        - /url: games/letter-lock/index.html
+        - generic [ref=f8e509]: Online duels
+        - generic [ref=f8e511]:
+          - heading "Letter Lock" [level=3] [ref=f8e512]
+          - generic [ref=f8e513]:
+            - generic [ref=f8e514]: Word
+            - generic [ref=f8e515]: New
+      - link "Online duels Cloud Climber Platformer New" [ref=f8e516] [cursor=pointer]:
+        - /url: games/cloud-climber/index.html
+        - generic [ref=f8e517]: Online duels
+        - generic [ref=f8e519]:
+          - heading "Cloud Climber" [level=3] [ref=f8e520]
+          - generic [ref=f8e521]:
+            - generic [ref=f8e522]: Platformer
+            - generic [ref=f8e523]: New
+      - link "Online duels Stack Up Arcade New" [ref=f8e524] [cursor=pointer]:
+        - /url: games/stack-up/index.html
+        - generic [ref=f8e525]: Online duels
+        - generic [ref=f8e527]:
+          - heading "Stack Up" [level=3] [ref=f8e528]
+          - generic [ref=f8e529]:
+            - generic [ref=f8e530]: Arcade
+            - generic [ref=f8e531]: New
+      - link "Online duels Polarity Run Runner New" [ref=f8e532] [cursor=pointer]:
+        - /url: games/polarity-run/index.html
+        - generic [ref=f8e533]: Online duels
+        - generic [ref=f8e535]:
+          - heading "Polarity Run" [level=3] [ref=f8e536]
+          - generic [ref=f8e537]:
+            - generic [ref=f8e538]: Runner
+            - generic [ref=f8e539]: New
+      - link "Online duels Nova Barrage Shooter New" [ref=f8e540] [cursor=pointer]:
+        - /url: games/nova-barrage/index.html
+        - generic [ref=f8e541]: Online duels
+        - generic [ref=f8e543]:
+          - heading "Nova Barrage" [level=3] [ref=f8e544]
+          - generic [ref=f8e545]:
+            - generic [ref=f8e546]: Shooter
+            - generic [ref=f8e547]: New
+      - link "Blackjack Cards New" [ref=f8e548] [cursor=pointer]:
+        - /url: games/blackjack/index.html
+        - generic [ref=f8e550]:
+          - heading "Blackjack" [level=3] [ref=f8e551]
+          - generic [ref=f8e552]:
+            - generic [ref=f8e553]: Cards
+            - generic [ref=f8e554]: New
+      - link "Video Poker Cards New" [ref=f8e555] [cursor=pointer]:
+        - /url: games/video-poker/index.html
+        - generic [ref=f8e557]:
+          - heading "Video Poker" [level=3] [ref=f8e558]
+          - generic [ref=f8e559]:
+            - generic [ref=f8e560]: Cards
+            - generic [ref=f8e561]: New
+      - link "High-Low Cards New" [ref=f8e562] [cursor=pointer]:
+        - /url: games/high-low/index.html
+        - generic [ref=f8e564]:
+          - heading "High-Low" [level=3] [ref=f8e565]
+          - generic [ref=f8e566]:
+            - generic [ref=f8e567]: Cards
+            - generic [ref=f8e568]: New
+      - link "Peak Run Cards New" [ref=f8e569] [cursor=pointer]:
+        - /url: games/peak-run/index.html
+        - generic [ref=f8e571]:
+          - heading "Peak Run" [level=3] [ref=f8e572]
+          - generic [ref=f8e573]:
+            - generic [ref=f8e574]: Cards
+            - generic [ref=f8e575]: New
+      - link "Online duels Orbit Weaver Arcade New" [ref=f8e576] [cursor=pointer]:
+        - /url: games/orbit-weaver/index.html
+        - generic [ref=f8e577]: Online duels
+        - generic [ref=f8e579]:
+          - heading "Orbit Weaver" [level=3] [ref=f8e580]
+          - generic [ref=f8e581]:
+            - generic [ref=f8e582]: Arcade
+            - generic [ref=f8e583]: New
+      - link "Online duels Deep Salvage Adventure New" [ref=f8e584] [cursor=pointer]:
+        - /url: games/deep-salvage/index.html
+        - generic [ref=f8e585]: Online duels
+        - generic [ref=f8e587]:
+          - heading "Deep Salvage" [level=3] [ref=f8e588]
+          - generic [ref=f8e589]:
+            - generic [ref=f8e590]: Adventure
+            - generic [ref=f8e591]: New
+      - link "Online duels Market Mayhem Strategy New" [ref=f8e592] [cursor=pointer]:
+        - /url: games/market-mayhem/index.html
+        - generic [ref=f8e593]: Online duels
+        - generic [ref=f8e595]:
+          - heading "Market Mayhem" [level=3] [ref=f8e596]
+          - generic [ref=f8e597]:
+            - generic [ref=f8e598]: Strategy
+            - generic [ref=f8e599]: New
+      - link "Online duels Ricochet Rally Arcade New" [ref=f8e600] [cursor=pointer]:
+        - /url: games/ricochet-rally/index.html
+        - generic [ref=f8e601]: Online duels
+        - generic [ref=f8e603]:
+          - heading "Ricochet Rally" [level=3] [ref=f8e604]
+          - generic [ref=f8e605]:
+            - generic [ref=f8e606]: Arcade
+            - generic [ref=f8e607]: New
+      - link "Online duels Volt Grid Puzzle New" [ref=f8e608] [cursor=pointer]:
+        - /url: games/volt-grid/index.html
+        - generic [ref=f8e609]: Online duels
+        - generic [ref=f8e611]:
+          - heading "Volt Grid" [level=3] [ref=f8e612]
+          - generic [ref=f8e613]:
+            - generic [ref=f8e614]: Puzzle
+            - generic [ref=f8e615]: New
+      - link "Online duels Skipstone Sports New" [ref=f8e616] [cursor=pointer]:
+        - /url: games/skipstone/index.html
+        - generic [ref=f8e617]: Online duels
+        - generic [ref=f8e619]:
+          - heading "Skipstone" [level=3] [ref=f8e620]
+          - generic [ref=f8e621]:
+            - generic [ref=f8e622]: Sports
+            - generic [ref=f8e623]: New
+      - link "Online multiplayer Chroma Burst Strategy New" [ref=f8e624] [cursor=pointer]:
+        - /url: games/chroma-burst/index.html
+        - generic [ref=f8e625]: Online multiplayer
+        - generic [ref=f8e627]:
+          - heading "Chroma Burst" [level=3] [ref=f8e628]
+          - generic [ref=f8e629]:
+            - generic [ref=f8e630]: Strategy
+            - generic [ref=f8e631]: New
+  - contentinfo [ref=f8e632]: Pixel Pioneers Arcade · Free to play · Save your account on the Profile page to play anywhere
+  - button "Chat" [ref=f8e634] [cursor=pointer]

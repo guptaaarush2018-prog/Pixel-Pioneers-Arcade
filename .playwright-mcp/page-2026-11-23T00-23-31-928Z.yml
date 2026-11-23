@@ -1,0 +1,43 @@
+- generic [active] [ref=f3e1]:
+  - banner [ref=f3e2]:
+    - link "← All games" [ref=f3e3] [cursor=pointer]:
+      - /url: ../../index.html
+    - heading "Wisp Wardens" [level=1] [ref=f3e4]
+    - generic [ref=f3e5]:
+      - generic [ref=f3e6]:
+        - text: Wave
+        - generic [ref=f3e7]: –
+      - generic [ref=f3e8]:
+        - text: Lives
+        - generic [ref=f3e9]: –
+      - generic [ref=f3e10]:
+        - text: Cash
+        - generic [ref=f3e11]: –
+    - button "Chat" [ref=f3e13] [cursor=pointer]
+    - button "Sound on" [ref=f3e14] [cursor=pointer]: 🔊Sound on
+  - main [ref=f3e15]:
+    - complementary [ref=f3e18]
+    - generic [ref=f3e20]:
+      - heading "How to play" [level=2] [ref=f3e21]
+      - list [ref=f3e22]:
+        - listitem [ref=f3e23]: Wisps walk the road. If one reaches the end you lose lives equal to the layers it still has.
+        - listitem [ref=f3e24]: "Popping a wisp reveals the one inside: Pink → Gold → Green → Blue → Red. Tougher ones hold two inside."
+        - listitem [ref=f3e25]: Shades shrug off explosions, Ghosts shrug off cold, Iron wisps shrug off sharp shots. Tesla and Hive mixes cover the gaps.
+        - listitem [ref=f3e26]: Each tower has two upgrade paths of four. Take one path all the way and the other only to tier 2.
+        - listitem [ref=f3e27]: Mint Engines pay out after every wave. Sell towers for 70% back. Set targeting to First, Last, Strong or Close.
+        - listitem [ref=f3e28]: Your run saves after every wave. Win to open the next map, then try harder difficulties and Endless.
+      - button "Got it" [ref=f3e30] [cursor=pointer]
+  - paragraph [ref=f3e31]:
+    - text: Pick a tower, click to place it, click a tower to upgrade ·
+    - generic [ref=f3e32]: "1"
+    - text: –
+    - generic [ref=f3e33]: "8"
+    - text: pick tower ·
+    - generic [ref=f3e34]: Space
+    - text: start wave ·
+    - generic [ref=f3e35]: F
+    - text: speed ·
+    - generic [ref=f3e36]: Esc
+    - text: cancel ·
+    - generic [ref=f3e37]: P
+    - text: pause

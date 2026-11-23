@@ -50,6 +50,12 @@ Browser games for students, hosted on GitHub Pages. Plain HTML, CSS, and JavaScr
 | Sudoku Siege | Puzzle (sudoku, races with fog) | Live 1v1 race |
 | Volt Grid | Puzzle (rotate wire tiles to power every bulb; one-solution boards from 4×4 to 9×9 against a clock, par bonus) | Online duel |
 | Pixel Reveal | Puzzle (picture logic, gallery) | Online duel |
+| Rift Runner (flagship) | Arcade | Three.js tunnel runner: 6 worlds of campaign levels, 6 runners, endless mode |
+| Wisp Wardens (flagship) | Strategy | Tower defense: 8 towers with 2 upgrade paths to tier 4, 8 maps, layered wisps, Endless |
+| Last Lantern (flagship) | Shooter | Survivor: 8 weapons with evolutions, 4 stages, 6 keepers, meta upgrades, 15-minute dawn win then Endless |
+| Petal Patrol (flagship) | Strategy | Lane defense: 30 levels in 3 worlds, 13 plants, Mud Giant bosses, Survival |
+| Speck Spire (flagship) | Platformer | Precision climb: 54 rooms in 6 zones, boss gauntlets, stars, speed and death-count bonus |
+| Crown Clash (flagship) | Fighting | Platform fighter: 6 fighters, 5 stages, 8-fight ladder, Endless Gauntlet, local 2P versus |
 | Lantern Maze | Maze chase | Online duel |
 | Brick Burst | Arcade (brick breaker with rally combos, fireball and laser power-ups, bomb bricks) | Online duel |
 | Comet Pinball | Arcade (pinball) | Online duel |

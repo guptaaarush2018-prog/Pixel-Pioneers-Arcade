@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+  <defs>
+    <radialGradient id="l" cx="50%" cy="52%" r="60%"><stop offset="0" stop-color="#3a5a3a"/><stop offset=".55" stop-color="#1c2b1f"/><stop offset="1" stop-color="#05080a"/></radialGradient>
+    <radialGradient id="g" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#ffd23f" stop-opacity=".9"/><stop offset="1" stop-color="#ffd23f" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="320" height="200" fill="url(#l)"/>
+  <circle cx="165" cy="104" r="70" fill="url(#g)" opacity=".5"/>
+  <circle cx="165" cy="104" r="46" fill="none" stroke="#9ff0ff" stroke-width="2" stroke-dasharray="8 8" opacity=".8"/>
+  <g fill="#9ff0ff" stroke="#0a3a4a" stroke-width="1.5"><path d="M165 54 l5 12 l-5 5 l-5 -5z"/><path d="M215 104 l-12 5 l-5 -5 l5 -5z"/><path d="M165 154 l-5 -12 l5 -5 l5 5z"/><path d="M115 104 l12 -5 l5 5 l-5 5z"/></g>
+  <g fill="#6a8f5a" stroke="#0a120a" stroke-width="1.5">
+    <circle cx="40" cy="50" r="12"/><circle cx="64" cy="150" r="14"/><circle cx="262" cy="46" r="13"/><circle cx="276" cy="140" r="16"/><circle cx="230" cy="168" r="11"/><circle cx="96" cy="26" r="10"/>
+  </g>
+  <g fill="#9ad06a" stroke="#0a120a" stroke-width="1.5"><path d="M24 100 l16 -14 l16 14 l-8 16 h-16z"/><path d="M290 96 l12 -12 l12 12 l-6 14 h-12z"/></g>
+  <path d="M120 40 q-14 -14 -30 0 q14 2 18 12z M214 156 q14 14 30 0 q-14 -2 -18 -12z" fill="#7a5ab5"/>
+  <g transform="translate(165 106)"><ellipse cy="14" rx="14" ry="5" fill="#000" opacity=".35"/><path d="M0 -18 L14 12 L-14 12 Z" fill="#ffd23f" stroke="#111" stroke-width="2"/><circle cy="-8" r="7" fill="#ffe9c0" stroke="#111" stroke-width="2"/><circle cx="16" cy="2" r="6" fill="#fff6c8"/><circle cx="16" cy="2" r="12" fill="url(#g)"/></g>
+  <g fill="#ffd23f"><path d="M100 120 l-4 -6 l4 -6 l4 6z"/><path d="M230 84 l-4 -6 l4 -6 l4 6z"/></g>
+  <text x="160" y="190" font-family="system-ui,sans-serif" font-size="22" font-weight="900" fill="#fff6c8" stroke="#05080a" stroke-width="4" paint-order="stroke" text-anchor="middle" letter-spacing="3">LAST LANTERN</text>
+</svg>

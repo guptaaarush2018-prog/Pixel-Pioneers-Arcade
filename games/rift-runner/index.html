@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Rift Runner · Pixel Pioneers Arcade</title>
+  <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../assets/css/arcade.css">
+  <style>
+    .rr .stage { padding: 0; }
+    .rr #view { position: absolute; inset: 0; }
+    .rr #view canvas { width: 100%; height: 100%; border: 0; border-radius: 0; display: block; }
+    .rr .overlay { background: rgba(6, 8, 18, .55); backdrop-filter: blur(3px); }
+    .rr .panel { max-width: min(760px, 100%); }
+    .rr .panel.wide { width: min(760px, 100%); }
+    .rr-hud { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+    .rr-bar { position: absolute; left: 50%; top: 12px; width: min(520px, 62%); height: 8px; transform: translateX(-50%); border-radius: 6px; background: rgba(255,255,255,.14); overflow: visible; }
+    .rr-bar i { display: block; height: 100%; width: 0; border-radius: 6px; background: linear-gradient(90deg, #ffc53d, #fff2b8); }
+    .rr-bar span { position: absolute; top: -3px; width: 3px; height: 14px; margin-left: -1px; border-radius: 2px; background: rgba(255,255,255,.5); }
+    .rr-bar span.hit { background: #7ef2ff; }
+    .rr-bar[hidden] { display: none; }
+    .rr-banner { position: absolute; left: 0; right: 0; top: 26%; text-align: center; color: #fff; text-shadow: 0 2px 18px rgba(0,0,0,.7); opacity: 0; transition: opacity .35s; }
+    .rr-banner.on { opacity: 1; }
+    .rr-banner b { display: block; font-size: clamp(26px, 6vw, 54px); letter-spacing: .04em; }
+    .rr-banner small { display: block; margin-top: 6px; font-size: clamp(12px, 2vw, 16px); letter-spacing: .14em; text-transform: uppercase; opacity: .85; }
+    .rr-combo { position: absolute; right: 16px; top: 28px; color: #ffe14d; font-weight: 800; font-size: 18px; text-shadow: 0 2px 8px rgba(0,0,0,.6); }
+    .rr-title { margin: 0 0 4px; font-size: 34px; letter-spacing: .06em; color: var(--text); }
+    .rr-sub { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
+    .rr-menu { display: grid; gap: 10px; margin: 14px auto 6px; max-width: 320px; }
+    .rr-menu .btn { width: 100%; justify-content: center; }
+    .rr-world { text-align: left; margin: 14px 0 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.03); }
+    .rr-world h3 { margin: 0; font-size: 15px; display: flex; justify-content: space-between; gap: 10px; }
+    .rr-world h3 small { color: var(--muted); font-weight: 500; }
+    .rr-world p { margin: 4px 0 10px; font-size: 12px; color: var(--muted); }
+    .rr-levels { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+    .rr-lv { padding: 8px 2px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2, #1c2029); color: var(--text); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+    .rr-lv small { display: block; font-size: 11px; letter-spacing: 1px; color: #ffc53d; margin-top: 2px; min-height: 14px; }
+    .rr-lv:hover:not(:disabled) { border-color: var(--accent); }
+    .rr-lv:disabled { opacity: .4; cursor: not-allowed; }
+    .rr-runners { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; text-align: left; margin-top: 10px; }
+    .rr-runner { padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.03); }
+    .rr-runner.on { border-color: var(--accent); }
+    .rr-runner svg { width: 56px; height: 56px; float: right; }
+    .rr-runner b { font-size: 15px; }
+    .rr-runner p { font-size: 12px; margin: 6px 0 10px; color: var(--muted); min-height: 48px; }
+    .rr-runner .btn { padding: 6px 12px; font-size: 13px; }
+    .rr-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+    .rr-stars { font-size: 30px; letter-spacing: 6px; color: #ffc53d; margin: 4px 0 8px; }
+    .rr-stars .off { color: #3a3f4c; }
+    .rr-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .rr-top .btn { padding: 6px 12px; font-size: 13px; }
+    .rr-top span { color: var(--muted); font-size: 13px; }
+    .rr .touchpad button#t-jump { flex: 1.4; background: var(--accent); color: var(--accent-ink); }
+  </style>
+</head>
+<body class="game rr" data-game="rift-runner">
+  <header class="topbar">
+    <a class="back" href="../../index.html">← All games</a>
+    <h1>Rift Runner</h1>
+    <div class="stats">
+      <span>Level<b id="s-level">–</b></span>
+      <span>Shards<b id="s-shards">0</b></span>
+      <span>Progress<b id="s-prog">0%</b></span>
+    </div>
+    <button class="icon-btn" id="mute" type="button">Sound on</button>
+  </header>
+
+  <main class="stage" id="stage">
+    <div id="view"></div>
+    <div class="rr-hud">
+      <div class="rr-bar" id="rr-bar" hidden><i id="rr-fill"></i></div>
+      <div class="rr-banner" id="rr-banner"><b></b><small></small></div>
+      <div class="rr-combo" id="rr-combo"></div>
+    </div>
+    <div class="overlay" id="overlay" hidden></div>
+  </main>
+
+  <p class="help"><kbd>←</kbd><kbd>→</kbd> / <kbd>A</kbd><kbd>D</kbd> run sideways, around the corners and up the walls · <kbd>Space</kbd> / <kbd>↑</kbd> jump (hold for height) · <kbd>P</kbd> pause</p>
+  <div class="touchpad">
+    <button id="t-left" type="button">◀</button>
+    <button id="t-jump" type="button">Jump</button>
+    <button id="t-right" type="button">▶</button>
+  </div>
+
+  <script src="../../assets/js/config.js"></script>
+  <script src="../../assets/js/catalog.js?v=20261122"></script>
+  <script src="../../assets/js/arcade.js"></script>
+  <script src="../../assets/js/filter.js"></script>
+  <script src="../../assets/js/friends.js"></script>
+  <script src="../../assets/js/online.js"></script>
+  <script src="../../assets/js/chat.js"></script>
+  <script src="../../assets/js/invites.js"></script>
+  <script src="../../assets/vendor/three.global.js"></script>
+  <script src="data.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

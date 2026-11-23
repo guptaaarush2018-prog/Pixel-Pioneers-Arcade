@@ -70,7 +70,24 @@ function renderFilters() {
   }
 }
 
+// Flagship games: the big, full-length titles get their own shelf above everything else.
+function renderFlagships() {
+  const list = CATALOG.filter(g => g.flagship);
+  const el = document.getElementById('flagships');
+  if (!el || !list.length) return;
+  el.hidden = false;
+  el.innerHTML = `<div class="section-head"><h2>Flagship games</h2><span class="flag-note">Full-length, with campaigns, unlocks and saves</span></div>
+    <div class="flag-row">${list.map(g => {
+      const best = Arcade.getBest(g.id);
+      return `<a class="flag-card" href="${gameUrl(g)}">
+        <img src="${thumbUrl(g)}" alt="">
+        <div class="flag-body"><span class="eyebrow">${g.tagline || g.genre}</span><h3>${g.title}</h3>
+        <p>${g.desc}</p><span class="flag-cta">${best ? `Best ${best.toLocaleString()} · Continue` : 'Play now'}</span></div></a>`;
+    }).join('')}</div>`;
+}
+
 renderFeatured();
+renderFlagships();
 renderFilters();
 renderCards();
 

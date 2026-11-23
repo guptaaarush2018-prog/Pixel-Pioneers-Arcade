@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Crown Clash · Pixel Pioneers Arcade</title>
+  <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../assets/css/arcade.css">
+  <style>
+    .cc .panel { max-width: min(760px, 100%); }
+    .cc-title { font-size: 38px !important; letter-spacing: .08em; color: var(--text) !important; margin: 0 !important; }
+    .cc-note { color: var(--muted); font-size: 13px; margin: 6px 0; }
+    .cc-menu { display: grid; gap: 10px; max-width: 320px; margin: 14px auto; }
+    .cc-menu .btn { width: 100%; justify-content: center; }
+    .cc-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+    .cc-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .cc-top .btn { padding: 6px 12px; font-size: 13px; }
+    .cc-top span { color: var(--muted); font-size: 13px; }
+    .cc h3 { margin: 12px 0 6px; font-size: 14px; text-align: left; }
+    .cc-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; text-align: left; }
+    .cc-card { position: relative; padding: 10px 10px 10px 22px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.03); color: var(--text); font: inherit; display: flex; flex-direction: column; gap: 3px; cursor: pointer; text-align: left; }
+    .cc-card i { position: absolute; left: 0; top: 0; bottom: 0; width: 8px; border-radius: 10px 0 0 10px; }
+    .cc-card small { color: var(--muted); font-size: 12px; }
+    .cc-card.on { border-color: var(--accent); background: rgba(255,197,61,.1); }
+    .cc-card.off, .cc-card:disabled { opacity: .45; cursor: not-allowed; }
+    .cc-keys { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; text-align: left; font-size: 13px; margin-bottom: 8px; }
+    @media (max-width: 600px) { .cc-keys { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body class="game cc" data-game="crown-clash">
+  <header class="topbar">
+    <a class="back" href="../../index.html">← All games</a>
+    <h1>Crown Clash</h1>
+    <div class="stats">
+      <span>P1<b id="s-p1">–</b></span>
+      <span>P2<b id="s-p2">–</b></span>
+    </div>
+    <button class="icon-btn" id="mute" type="button">Sound on</button>
+  </header>
+
+  <main class="stage">
+    <canvas id="game"></canvas>
+    <div class="overlay" id="overlay" hidden></div>
+  </main>
+
+  <p class="help"><kbd>A</kbd><kbd>D</kbd> move · <kbd>Space</kbd> jump · <kbd>J</kbd> attack · <kbd>K</kbd> special · <kbd>L</kbd> shield · <kbd>P</kbd> pause · keyboard required</p>
+
+  <script src="../../assets/js/config.js"></script>
+  <script src="../../assets/js/catalog.js?v=20261123"></script>
+  <script src="../../assets/js/arcade.js"></script>
+  <script src="../../assets/js/filter.js"></script>
+  <script src="../../assets/js/friends.js"></script>
+  <script src="../../assets/js/online.js"></script>
+  <script src="../../assets/js/chat.js"></script>
+  <script src="../../assets/js/invites.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

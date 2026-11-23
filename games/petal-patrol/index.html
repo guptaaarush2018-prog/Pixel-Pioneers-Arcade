@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Petal Patrol · Pixel Pioneers Arcade</title>
+  <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../assets/css/arcade.css">
+  <style>
+    .pp .panel { max-width: min(760px, 100%); }
+    .pp-title { font-size: 38px !important; letter-spacing: .05em; color: var(--text) !important; margin: 0 !important; }
+    .pp-note { color: var(--muted); font-size: 13px; margin: 6px 0; }
+    .pp-menu { display: grid; gap: 10px; max-width: 300px; margin: 14px auto; }
+    .pp-menu .btn { width: 100%; justify-content: center; }
+    .pp-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+    .pp-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .pp-top .btn { padding: 6px 12px; font-size: 13px; }
+    .pp-top span { color: var(--muted); font-size: 13px; }
+    .pp-world { text-align: left; margin-top: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.03); }
+    .pp-world h3 { margin: 0 0 8px; font-size: 14px; }
+    .pp-lvs { display: grid; grid-template-columns: repeat(10, 1fr); gap: 6px; }
+    .pp-lv { padding: 8px 0; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2, #1c2029); color: var(--text); font: inherit; font-weight: 700; cursor: pointer; }
+    .pp-lv small { display: block; font-size: 10px; color: #7be36a; min-height: 12px; }
+    .pp-lv.done { border-color: #3f7a46; }
+    .pp-lv:hover:not(:disabled) { border-color: var(--accent); }
+    .pp-lv:disabled { opacity: .4; cursor: not-allowed; }
+    .pp-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; text-align: left; }
+    .pp-card { padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.03); color: var(--text); font: inherit; display: flex; flex-direction: column; gap: 3px; text-align: left; }
+    button.pp-card { cursor: pointer; }
+    .pp-card.on { border-color: var(--accent); background: rgba(255,197,61,.1); }
+    .pp-card.off { opacity: .45; }
+    .pp-card small { color: var(--muted); font-size: 12px; }
+    .pp-card span { color: #ffd23f; font-size: 12px; font-weight: 700; }
+    @media (max-width: 600px) { .pp-lvs { grid-template-columns: repeat(5, 1fr); } }
+  </style>
+</head>
+<body class="game pp" data-game="petal-patrol">
+  <header class="topbar">
+    <a class="back" href="../../index.html">← All games</a>
+    <h1>Petal Patrol</h1>
+    <div class="stats"></div>
+    <button class="icon-btn" id="mute" type="button">Sound on</button>
+  </header>
+
+  <main class="stage">
+    <canvas id="game"></canvas>
+    <div class="overlay" id="overlay" hidden></div>
+  </main>
+
+  <p class="help">Click sun · pick a seed (<kbd>1</kbd>–<kbd>9</kbd>) and click the lawn · <kbd>S</kbd> shovel · <kbd>P</kbd> pause</p>
+
+  <script src="../../assets/js/config.js"></script>
+  <script src="../../assets/js/catalog.js?v=20261123"></script>
+  <script src="../../assets/js/arcade.js"></script>
+  <script src="../../assets/js/filter.js"></script>
+  <script src="../../assets/js/friends.js"></script>
+  <script src="../../assets/js/online.js"></script>
+  <script src="../../assets/js/chat.js"></script>
+  <script src="../../assets/js/invites.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

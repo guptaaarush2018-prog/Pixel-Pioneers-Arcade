@@ -1258,3 +1258,16 @@ html.fluid .filters .chip[aria-pressed="true"] { background: transparent; border
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; transition-duration: .01ms !important; }
 }
+
+/* Flagship shelf on the hub */
+.flagships { margin: 22px 0 8px; }
+.flag-note { color: var(--muted); font-size: 13px; }
+.flag-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+.flag-card { display: grid; grid-template-columns: 42% 1fr; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: linear-gradient(135deg, var(--surface), #1b2036); color: inherit; text-decoration: none; transition: transform .2s, border-color .2s; }
+.flag-card:hover, .flag-card:focus-visible { transform: translateY(-3px); border-color: var(--accent); }
+.flag-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.flag-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; }
+.flag-body h3 { margin: 0; font-size: 22px; }
+.flag-body p { margin: 0; font-size: 13px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.flag-cta { margin-top: auto; font-weight: 700; color: var(--accent); font-size: 14px; }
+@media (max-width: 520px) { .flag-row { grid-template-columns: 1fr; } .flag-card { grid-template-columns: 1fr; } }

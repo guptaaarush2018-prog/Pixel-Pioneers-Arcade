@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Speck Spire · Pixel Pioneers Arcade</title>
+  <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../assets/css/arcade.css">
+  <style>
+    .ss .panel { max-width: min(720px, 100%); }
+    .ss-title { font-size: 38px !important; letter-spacing: .08em; color: var(--text) !important; margin: 0 !important; }
+    .ss-note { color: var(--muted); font-size: 13px; margin: 6px 0; }
+    .ss-menu { display: grid; gap: 10px; max-width: 300px; margin: 14px auto; }
+    .ss-menu .btn { width: 100%; justify-content: center; }
+    .ss-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+    .ss-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .ss-top .btn { padding: 6px 12px; font-size: 13px; }
+    .ss-top span { color: var(--muted); font-size: 13px; }
+    .ss-zone { text-align: left; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,.03); }
+    .ss-zone h3 { margin: 0 0 8px; font-size: 14px; }
+    .ss-rms { display: grid; grid-template-columns: repeat(9, 1fr); gap: 6px; }
+    .ss-rm { padding: 8px 0; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2, #1c2029); color: var(--text); font: inherit; font-weight: 700; cursor: pointer; }
+    .ss-rm.boss { color: #ffd23f; }
+    .ss-rm:hover:not(:disabled) { border-color: var(--accent); }
+    .ss-rm:disabled { opacity: .4; cursor: not-allowed; }
+    .ss .touchpad button#t-jump { flex: 1.4; background: var(--accent); color: var(--accent-ink); }
+  </style>
+</head>
+<body class="game ss" data-game="speck-spire">
+  <header class="topbar">
+    <a class="back" href="../../index.html">← All games</a>
+    <h1>Speck Spire</h1>
+    <div class="stats">
+      <span>Floor<b id="s-room">–</b></span>
+      <span>Deaths<b id="s-deaths">0</b></span>
+      <span>Time<b id="s-time">0:00</b></span>
+    </div>
+    <button class="icon-btn" id="mute" type="button">Sound on</button>
+  </header>
+
+  <main class="stage">
+    <canvas id="game"></canvas>
+    <div class="overlay" id="overlay" hidden></div>
+  </main>
+
+  <p class="help"><kbd>←</kbd><kbd>→</kbd> / <kbd>A</kbd><kbd>D</kbd> move · <kbd>Space</kbd> / <kbd>↑</kbd> jump (hold to go higher) · <kbd>R</kbd> restart room · <kbd>P</kbd> pause</p>
+  <div class="touchpad">
+    <button id="t-left" type="button">◀</button>
+    <button id="t-jump" type="button">Jump</button>
+    <button id="t-right" type="button">▶</button>
+  </div>
+
+  <script src="../../assets/js/config.js"></script>
+  <script src="../../assets/js/catalog.js?v=20261123"></script>
+  <script src="../../assets/js/arcade.js"></script>
+  <script src="../../assets/js/filter.js"></script>
+  <script src="../../assets/js/friends.js"></script>
+  <script src="../../assets/js/online.js"></script>
+  <script src="../../assets/js/chat.js"></script>
+  <script src="../../assets/js/invites.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
