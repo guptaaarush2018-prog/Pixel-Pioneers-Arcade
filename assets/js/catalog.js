@@ -1105,9 +1105,10 @@ window.CATALOG = [
     id: 'tankfield',
     title: 'Tankfield',
     genre: 'Shooter',
-    desc: 'A tank arena. Shoot shapes to level up, spend points on seven stats, pick new turrets at levels 10 and 20, and outgrow the rival tanks before they come for you. Auto-aim on by default.',
+    desc: 'A tank arena. Shoot shapes to level up, spend points on seven stats, pick new turrets at levels 10 and 20, and outgrow the rival tanks before they come for you, or take on a real player in a live 1v1. Auto-aim on by default.',
     goals: [1000, 4000, 12000],
     online: 'duel',
+    relay: 'tank',
     extras: [
       { id: 'tankfield-kill', title: 'Tankfield: Scrap Metal', desc: 'Destroy a rival tank.' },
       { id: 'tankfield-five', title: 'Tankfield: Tank Buster', desc: 'Destroy five rival tanks in one game.' },
@@ -1115,6 +1116,7 @@ window.CATALOG = [
       { id: 'tankfield-final', title: 'Tankfield: Final Form', desc: 'Pick a level 20 turret.' },
       { id: 'tankfield-hexagon', title: 'Tankfield: Hex Breaker', desc: 'Destroy a giant hexagon.' },
       { id: 'tankfield-25', title: 'Tankfield: Heavy Armor', desc: 'Reach level 25.' },
+      { id: 'tankfield-online-win', title: 'Tankfield: Top Tank', desc: 'Win a live 1v1 against a real player.' },
     ],
   },
   {

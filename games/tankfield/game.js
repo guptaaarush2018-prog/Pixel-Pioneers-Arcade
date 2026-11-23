@@ -1,12 +1,15 @@
 /* Tankfield: a top-down tank arena. Shoot the drifting shapes for experience, level up, put
    points into your tank's stats (keys 1-7), and pick a new turret at levels 10 and 20. Rival
    tanks are doing the same, and they'll come for you once they're strong enough. One life; the
-   score is all the experience you earned. Auto-aim is on by default (Q switches to the mouse). */
+   score is all the experience you earned. Auto-aim is on by default (Q switches to the mouse).
+   Live 1v1 (live.js) drops the bots: two players share one arena of shapes, first to
+   LIVE_KILLS kills (or the most when the clock runs out). */
 (() => {
   const ID = 'tankfield';
   const W = 960, H = 540, TAU = Math.PI * 2;
   const AW = 2600, AH = 1800;
   const RIVALS = 6, SHAPES = 70;
+  const LIVE_KILLS = 3, LIVE_TIME = 300;
   const canvas = document.getElementById('game');
   const ctx = Arcade.setupCanvas(canvas, W, H);
   const overlayEl = document.getElementById('overlay');
@@ -52,7 +55,7 @@
   const xpFor = lv => Math.round(20 * Math.pow(lv, 1.75));   // total xp needed to reach level lv+1
 
   let tanks = [], shapes = [], shots = [], me = null, state = 'menu', cam = { x: AW / 2, y: AH / 2 }, time = 0, aimMode = Arcade.load('tank:aim', 'auto');
-  let mouse = { x: W / 2, y: H / 2, down: false }, kills = 0, picking = null;
+  let mouse = { x: W / 2, y: H / 2, down: false }, kills = 0, picking = null, shapeId = 0;
 
   // ---------- Tanks ----------
 
@@ -126,7 +129,9 @@
         const bx = t.x + ca * len * sc - sa * side * sc, by = t.y + sa * len * sc + ca * side * sc;
         for (let p = 0; p < (tur.pellets || 1); p++) {
           const aa = a + R(-1, 1) * tur.spread, sp = shotSpeed(t) * (tur.pellets ? R(0.8, 1.1) : 1);
-          shots.push({ x: bx, y: by, vx: Math.cos(aa) * sp + t.vx * 0.3, vy: Math.sin(aa) * sp + t.vy * 0.3, r: wid * 0.42 * sc, dmg: shotDamage(t), life: 1.3 * (tur.range || 1), owner: t, pierce: tur.pierce || 1, color: t.color });
+          const shot = { x: bx, y: by, vx: Math.cos(aa) * sp + t.vx * 0.3, vy: Math.sin(aa) * sp + t.vy * 0.3, r: wid * 0.42 * sc, dmg: shotDamage(t), life: 1.3 * (tur.range || 1), owner: t, pierce: tur.pierce || 1, color: t.color };
+          shots.push(shot);
+          if (t === me && netMode === 'live') liveShots.push([shot.x, shot.y, shot.vx, shot.vy, shot.r, shot.dmg, shot.life, shot.pierce].map(v => Math.round(v * 10) / 10));
         }
         // Recoil (forward thrust for the Thruster's back barrels).
         const k = tur.thrust && Math.abs(angDiff(a, t.a)) > 1 ? -28 : 9;
@@ -139,6 +144,11 @@
   }
 
   function damage(target, n, by) {
+    if (target.shield > 0 || target.dead || target.alive === false) return;
+    // Live: each machine owns its own tank, so damage to the other player only happens over
+    // there (they report it). Our hits on shared shapes are sent to them too.
+    if (target.remote) return;
+    if (netMode === 'live' && target.sides && by === me) liveHits.push([target.id, Math.round(n * 10) / 10]);
     target.hp -= n;
     target.hitT = 0.1;
     target.regenT = 0;
@@ -152,6 +162,7 @@
 
   function killShape(s, by) {
     s.dead = true;
+    if (netMode === 'live') goneShapes.add(s.id);
     fx.burst(10, () => ({ x: s.x, y: s.y, vx: R(-120, 120), vy: R(-120, 120), life: R(0.3, 0.6), size: R(2, 5), color: s.k.color, drag: 3, shape: 'square', spin: R(-10, 10) }));
     if (by && by.alive !== undefined) {
       gainXp(by, s.k.xp);
@@ -164,6 +175,7 @@
     t.alive = false;
     fx.burst(40, () => { const a = R(0, TAU), v = R(60, 260); return { x: t.x, y: t.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: R(0.5, 1), size: R(3, 7), color: t.color, drag: 2.5, shape: 'square', spin: R(-8, 8) }; });
     Arcade.tone({ freq: 150, to: 40, dur: 0.5, type: 'sawtooth', vol: 0.06 });
+    if (t === me && netMode === 'live') { shake.add(0.8); return liveDied(by); }
     if (t === me) { shake.add(0.8); setTimeout(gameOver, 1000); return; }
     if (by) {
       gainXp(by, Math.round(t.xp * 0.5) + 50);
@@ -186,7 +198,10 @@
     // Pentagons and the rare big hexagon gather in the middle.
     const mid = k.sides >= 5;
     const x = mid ? AW / 2 + R(-450, 450) : 60 + Math.random() * (AW - 120), y = mid ? AH / 2 + R(-300, 300) : 60 + Math.random() * (AH - 120);
-    shapes.push({ k, sides: k.sides, x, y, vx: 0, vy: 0, a: R(0, TAU), spin: R(-0.6, 0.6), hp: k.hp, max: k.hp, r: k.r, hitT: 0, drift: R(0, TAU) });
+    shapes.push(makeShape(k, x, y, ++shapeId));
+  }
+  function makeShape(k, x, y, id) {
+    return { id, k, sides: k.sides, x, y, vx: 0, vy: 0, a: R(0, TAU), spin: R(-0.6, 0.6), hp: k.hp, max: k.hp, r: k.r, hitT: 0, drift: R(0, TAU) };
   }
 
   // ---------- Bots ----------
@@ -237,6 +252,7 @@
   // ---------- Flow ----------
 
   function start() {
+    netMode = null; rival = null;
     tanks = []; shapes = []; shots = []; fx.clear();
     me = makeTank('You', '#4f8cff', false);
     tanks.push(me);
@@ -269,6 +285,16 @@
 
   function update(dt) {
     time += dt;
+    if (netMode === 'live') {
+      matchT -= dt;
+      // The host's clock ends the match.
+      if (matchT <= 0) {
+        matchT = 0;
+        if (live.host) { live.send('end', liveTotals()); return endLive(); }
+      }
+      if (!me.alive) { liveRespawnT -= dt; if (liveRespawnT <= 0) liveRespawn(); }
+      me.shield = Math.max(0, (me.shield || 0) - dt);
+    }
     // You.
     if (me.alive) {
       let mx = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0);
@@ -283,7 +309,7 @@
           if (o === me || !o.alive) continue;
           const d = Math.hypot(o.x - me.x, o.y - me.y);
           // Only tanks that are after you, or right on top of you: auto-aim shouldn't start fights.
-          const hostile = (o.ai?.mode === 'fight' && o.ai.target === me) || d < 260;
+          const hostile = o.remote || (o.ai?.mode === 'fight' && o.ai.target === me) || d < 260;
           if (hostile && d < bd) { bs = 1e9 - d; auto = o; bd = d; }
         }
         if (!auto) for (const s of shapes) { const d = Math.hypot(s.x - me.x, s.y - me.y); if (d > 460) continue; const sc = s.k.xp / (d + 60); if (sc > bs) { bs = sc; auto = s; } }
@@ -292,7 +318,9 @@
       me.a += angDiff(want, me.a) * Math.min(1, dt * (aimMode === 'mouse' ? 30 : 12));
       if (mouse.down || keys.has('Space') || (aimMode === 'auto' && auto && autoFire)) fire(me);
     }
+    if (netMode === 'live') updateLive(dt);
     for (const t of tanks) {
+      if (t.remote) continue;
       if (!t.alive) {
         if (t.bot) { t.respawnT -= dt; if (t.respawnT <= 0) respawnBot(t); }
         continue;
@@ -311,14 +339,15 @@
       if (s.life <= 0) continue;
       for (const sh of shapes) {
         if (sh.dead || Math.hypot(sh.x - s.x, sh.y - s.y) > sh.r + s.r) continue;
-        damage(sh, s.dmg, s.owner);
+        // The other player's shots only knock shapes about here; their machine sends the damage.
+        if (!s.owner.remote) damage(sh, s.dmg, s.owner);
         sh.hitT = 0.08;
         sh.vx += s.vx * 0.02; sh.vy += s.vy * 0.02;
         if (--s.pierce <= 0) { s.life = 0; break; }
       }
       if (s.life <= 0) continue;
       for (const t of tanks) {
-        if (t === s.owner || !t.alive || Math.hypot(t.x - s.x, t.y - s.y) > radius(t) + s.r) continue;
+        if (t === s.owner || !t.alive || t.shield > 0 || Math.hypot(t.x - s.x, t.y - s.y) > radius(t) + s.r) continue;
         damage(t, s.dmg, s.owner);
         fx.burst(3, () => ({ x: s.x, y: s.y, vx: R(-80, 80), vy: R(-80, 80), life: 0.25, size: 2, color: '#fff', shape: 'spark' }));
         if (--s.pierce <= 0) { s.life = 0; break; }
@@ -333,8 +362,10 @@
       sh.x = clamp(sh.x + sh.vx * dt, sh.r, AW - sh.r); sh.y = clamp(sh.y + sh.vy * dt, sh.r, AH - sh.r);
       sh.a += sh.spin * dt;
       sh.hitT = Math.max(0, sh.hitT - dt);
+      // Live guest: ease toward where the host says the shape is.
+      if (sh.tx !== undefined) { const k = Math.min(1, dt * 3); sh.x += (sh.tx - sh.x) * k; sh.y += (sh.ty - sh.y) * k; }
       for (const t of tanks) {
-        if (!t.alive) continue;
+        if (!t.alive || t.remote) continue;
         const dx = sh.x - t.x, dy = sh.y - t.y, d = Math.hypot(dx, dy), min = sh.r + radius(t);
         if (d >= min || d === 0) continue;
         const nx = dx / d, ny = dy / d;
@@ -344,7 +375,8 @@
       }
     }
     shapes = shapes.filter(s => !s.dead);
-    while (shapes.length < SHAPES) spawnShape();
+    // Online, only the host makes new shapes (the guest gets them in the host's snapshots).
+    if (netMode !== 'live' || live.host) while (shapes.length < SHAPES) spawnShape();
     // Tanks ramming tanks.
     for (let i = 0; i < tanks.length; i++) for (let j = i + 1; j < tanks.length; j++) {
       const a = tanks[i], b = tanks[j];
@@ -352,8 +384,9 @@
       const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy), min = radius(a) + radius(b);
       if (d >= min || d === 0) continue;
       const nx = dx / d, ny = dy / d;
-      a.vx -= nx * 200; a.vy -= ny * 200; b.vx += nx * 200; b.vy += ny * 200;
-      damage(a, 6 + b.stats.ram * 5, b); damage(b, 6 + a.stats.ram * 5, a);
+      // Live: only our own side of a bump (the other player's machine does theirs).
+      if (!a.remote) { a.vx -= nx * 200; a.vy -= ny * 200; damage(a, 6 + b.stats.ram * 5, b); }
+      if (!b.remote) { b.vx += nx * 200; b.vy += ny * 200; damage(b, 6 + a.stats.ram * 5, a); }
     }
     cam.x = Gfx.approach(cam.x, me.x, 6, dt);
     cam.y = Gfx.approach(cam.y, me.y, 6, dt);
@@ -413,6 +446,7 @@
   });
   addEventListener('pointerup', () => { mouse.down = false; });
   function pause() {
+    if (state === 'play' && netMode === 'live') return livePause();
     if (state !== 'play' || (typeof Versus !== 'undefined' && Versus.active())) return;
     state = 'paused';
     ui.show({ title: 'Paused', html: `<p>Level ${me.level} ${T(me).name}</p>`, button: 'Resume', onAction: () => { state = 'play'; ui.hide(); } });
@@ -450,6 +484,10 @@
     ctx.beginPath(); ctx.arc(0, 0, r * 0.82, 0, TAU); ctx.fill();
     ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.beginPath(); ctx.arc(0, 0, r * 0.38, 0, TAU); ctx.fill();
     ctx.restore();
+    if (t.shield > 0) {
+      ctx.strokeStyle = `rgba(126,240,255,${0.4 + 0.3 * Math.sin(time * 12)})`; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(t.x, t.y, r + 8, 0, TAU); ctx.stroke();
+    }
     if (t.hp < t.max) Gfx.bar(ctx, t.x - r, t.y + r + 8, r * 2, 5, Math.max(0, t.hp) / t.max, t === me ? '#3ccf8e' : '#ff5c5c');
     if (t !== me) Gfx.text(ctx, `${t.name} · ${t.level}`, t.x, t.y - r - 14, { size: 12, color: '#fff', width: 3 });
   }
@@ -521,6 +559,12 @@
     Gfx.card(ctx, W - 182, 10, 170, 22 + top.length * 17);
     Gfx.text(ctx, 'Top tanks', W - 97, 21, { size: 11, stroke: null, color: '#cfd8dc' });
     top.forEach((t, i) => Gfx.text(ctx, `${i + 1}. ${t.name}  ${Math.floor(t.xp).toLocaleString()}`, W - 172, 38 + i * 17, { size: 11, align: 'left', stroke: null, color: t === me ? '#ffd23f' : t.color }));
+    if (netMode === 'live' && rival) {
+      Gfx.card(ctx, W / 2 - 150, 10, 300, 40);
+      Gfx.text(ctx, `You ${kills}  –  ${rival.kills} ${rival.name}`, W / 2, 25, { size: 15, stroke: null, color: '#fff' });
+      Gfx.text(ctx, `First to ${LIVE_KILLS} · ${Math.floor(matchT / 60)}:${String(Math.floor(matchT % 60)).padStart(2, '0')}`, W / 2, 42, { size: 11, stroke: null, color: '#cfd8dc' });
+      if (!me.alive) Gfx.text(ctx, `Back in ${Math.ceil(liveRespawnT)}…`, W / 2, H / 2 - 40, { size: 22 });
+    }
     Gfx.text(ctx, `${aimMode === 'auto' ? 'Auto-aim' : 'Mouse aim'} (Q)${autoFire || aimMode === 'mouse' ? '' : ' · auto-fire off (E)'}`, 14, 20, { size: 11, align: 'left', color: '#2b2f3a', stroke: 'rgba(255,255,255,0.6)', width: 3 });
     // Turret choice.
     if (picking) {
@@ -555,25 +599,278 @@
   function frame(now) {
     const dt = Math.min(0.033, (now - last) / 1000);
     last = now;
-    if (state === 'play' && (overlayEl.hidden || (typeof Versus !== 'undefined' && Versus.active()))) update(dt);
+    if (state === 'play' && (overlayEl.hidden || netMode === 'live' || (typeof Versus !== 'undefined' && Versus.active()))) update(dt);
     else { fx.update(dt); floats.update(dt); shake.update(dt); }
     draw();
     requestAnimationFrame(frame);
   }
 
-  for (let i = 0; i < SHAPES; i++) spawnShape();
-  updateHud();
-  Versus.attach({
-    ui, start, score: () => (me ? Math.floor(me.xp) : 0),
-    intro: {
-      title: '🛡️ Tankfield',
-      html: `<p>Shoot shapes for experience, level up, and outgrow the rival tanks before they come for you. One life.</p>
+  // ---------- Live 1v1 (live.js) ----------
+  // Each machine drives its own tank and streams where it is. Shots are sent as they're fired and
+  // flown on both machines, but only the tank that gets hit takes the damage (it sees itself where
+  // it really is), and it tells the other side when it's destroyed, so both agree on the kills.
+  // Shapes are shared: the host owns them and sends a snapshot twice a second; both sides send
+  // the damage they do to them. The host's clock ends the match.
+
+  let netMode = null, rival = null, matchT = 0, liveError = '', liveShots = [], liveHits = [];
+  let sendT = 0, flushT = 0, snapT = 0, liveRespawnT = 0, lost = 0, goneShapes = new Set();
+  const live = Live.create({
+    ui,
+    tag: 'tank',
+    label: '1v1',
+    title: 'The 1v1',
+    onReady: host => { if (host) hostStart(); },
+    onEvent: onLive,
+    onState: st => {
+      if (!rival) return;
+      rival.net = { ...st, at: performance.now() };
+      if (!live.host && typeof st.t === 'number' && state === 'play') matchT = st.t;
+    },
+    onRematch: hostStart,
+    onGone: gone => liveGone(gone),
+    onCancel: msg => { liveError = msg ? Online.escape(msg) : ''; showMenu(); },
+  });
+
+  function hostStart() {
+    live.send('start', {});
+    startLive();
+  }
+
+  function startLive() {
+    netMode = 'live';
+    tanks = []; shots = []; fx.clear(); goneShapes = new Set();
+    me = makeTank('You', '#4f8cff', false);
+    rival = makeTank(live.them, '#ff5a5f', false);
+    rival.remote = true; rival.net = null; rival.kills = 0; rival.deaths = 0;
+    tanks.push(me, rival);
+    // Opposite sides of the arena.
+    const left = { x: AW * 0.2, y: AH / 2 }, right = { x: AW * 0.8, y: AH / 2 };
+    Object.assign(me, live.host ? left : right);
+    Object.assign(rival, live.host ? right : left);
+    me.a = live.host ? 0 : Math.PI;
+    me.shield = 3; me.deaths = 0;
+    // The host makes the shapes; the guest waits for its first snapshot.
+    shapes = [];
+    if (live.host) { for (let i = 0; i < SHAPES; i++) spawnShape(); sendShapes(); }
+    kills = 0; lost = 0; time = 0; picking = null; matchT = LIVE_TIME;
+    liveShots = []; liveHits = []; sendT = 0; flushT = 0; snapT = 0;
+    cam.x = me.x; cam.y = me.y;
+    floats.add(`1v1 vs ${rival.name} · first to ${LIVE_KILLS}`, me.x, me.y - 60, { color: '#fff', size: 18 });
+    state = 'play';
+    ui.hide();
+    updateHud();
+  }
+
+  function sendShapes() {
+    live.send('shapes', shapes.map(sh => [sh.id, SHAPE_KINDS.indexOf(sh.k), Math.round(sh.x), Math.round(sh.y), Math.ceil(sh.hp)]));
+  }
+
+  function applyShapes(list) {
+    if (!Array.isArray(list)) return;
+    const byId = new Map(shapes.map(sh => [sh.id, sh]));
+    const next = [];
+    for (const row of list.slice(0, SHAPES * 2)) {
+      const [id, ki, x, y, hp] = row;
+      const k = SHAPE_KINDS[ki];
+      if (!k || goneShapes.has(id) || !isFinite(x) || !isFinite(y)) continue;
+      let sh = byId.get(id);
+      if (!sh) { sh = makeShape(k, clamp(x, 0, AW), clamp(y, 0, AH), id); sh.hp = clamp(+hp || k.hp, 1, k.hp); }
+      else sh.hp = Math.min(sh.hp, clamp(+hp || k.hp, 1, k.hp));
+      sh.tx = clamp(x, 0, AW); sh.ty = clamp(y, 0, AH);
+      next.push(sh);
+    }
+    shapes = next;
+  }
+
+  const liveTotals = () => ({ a: kills, b: rival.kills, xa: Math.floor(me.xp), xb: Math.floor(rival.xp) });
+
+  function onLive(name, d) {
+    if (name === 'hello') { if (rival) rival.name = live.them; return; }
+    if (name === 'start' && !live.host) return startLive();
+    if (!rival || state !== 'play' || netMode !== 'live') return;
+    if (name === 'shapes') { if (!live.host) applyShapes(d); return; }
+    if (name === 'f') {
+      // Their shots, flown here too, and the damage they did to shapes.
+      for (const v of (Array.isArray(d?.s) ? d.s : []).slice(0, 40)) {
+        const [x, y, vx, vy, r, dmg, life, pierce] = v.map(Number);
+        if (![x, y, vx, vy].every(isFinite)) continue;
+        shots.push({ x, y, vx, vy, r: clamp(r, 1, 12), dmg: clamp(dmg, 0, 80), life: clamp(life, 0, 3), owner: rival, pierce: clamp(pierce | 0, 1, 3), color: rival.color });
+      }
+      for (const [id, n] of (Array.isArray(d?.h) ? d.h : []).slice(0, 60)) {
+        const sh = shapes.find(x => x.id === id);
+        if (!sh || sh.dead) continue;
+        sh.hitT = 0.08;
+        sh.hp -= clamp(+n || 0, 0, 200);
+        if (sh.hp <= 0) killShape(sh, null);
+      }
+      return;
+    }
+    if (name === 'dead') {
+      // They were destroyed. k: whether it was us (rather than a shape) that did it.
+      rival.deaths++;
+      rival.alive = false;
+      fx.burst(40, () => { const a = R(0, TAU), v = R(60, 260); return { x: rival.x, y: rival.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: R(0.5, 1), size: R(3, 7), color: rival.color, drag: 2.5, shape: 'square', spin: R(-8, 8) }; });
+      Arcade.tone({ freq: 150, to: 40, dur: 0.5, type: 'sawtooth', vol: 0.06 });
+      if (!d?.k) return;
+      kills = Math.max(kills + 1, d.n | 0);
+      const xp = Math.round(rival.xp * 0.25) + 50;
+      gainXp(me, xp);
+      floats.add(`${rival.name} destroyed! +${xp}`, rival.x, rival.y - 30, { color: '#ffd23f', size: 18 });
+      shake.add(0.3);
+      Arcade.flag('tankfield-kill');
+      if (kills >= LIVE_KILLS) { live.send('end', liveTotals()); endLive(); }
+      return;
+    }
+    if (name === 'end') {
+      // Their totals, from their side: a = theirs, b = ours.
+      rival.kills = Math.max(rival.kills, d?.a | 0);
+      kills = Math.max(kills, d?.b | 0);
+      if (isFinite(d?.xa)) rival.xp = Math.max(rival.xp, +d.xa);
+      endLive();
+    }
+  }
+
+  function liveDied(by) {
+    me.alive = false;
+    me.deaths++;
+    const k = by === rival;
+    if (k) { lost++; rival.kills = Math.max(rival.kills, lost); }
+    live.send('dead', { k: k ? 1 : 0, n: lost });
+    liveRespawnT = 3;
+    if (k && rival.kills >= LIVE_KILLS) { live.send('end', liveTotals()); endLive(); }
+  }
+
+  function liveRespawn() {
+    // Back with everything you'd earned, as far from them as the arena allows, shielded for a moment.
+    me.alive = true; me.vx = me.vy = 0;
+    me.max = maxHp(me); me.hp = me.max;
+    me.x = rival.x < AW / 2 ? AW - 200 : 200;
+    me.y = clamp(AH - rival.y, 200, AH - 200);
+    me.shield = 3;
+  }
+
+  function updateLive(dt) {
+    sendT -= dt; flushT -= dt; snapT -= dt;
+    if (sendT <= 0) {
+      sendT = 0.05;
+      const r = v => Math.round(v * 10) / 10;
+      live.state({ x: r(me.x), y: r(me.y), vx: r(me.vx), vy: r(me.vy), a: Math.round(me.a * 100) / 100, h: Math.round(Math.max(0, me.hp)), m: Math.round(me.max), l: me.level, u: me.turret, p: Math.floor(me.xp), rm: me.stats.ram, al: me.alive ? 1 : 0, d: me.deaths, sh: me.shield > 0 ? 1 : 0, k: kills, t: live.host ? r(matchT) : undefined });
+    }
+    if (flushT <= 0 && (liveShots.length || liveHits.length)) {
+      flushT = 0.05;
+      live.send('f', { s: liveShots, h: liveHits });
+      liveShots = []; liveHits = [];
+    }
+    if (live.host && snapT <= 0) { snapT = 0.5; sendShapes(); }
+    // Their tank: move toward where it should be by now.
+    const st = rival.net;
+    if (!st) return;
+    const lag = Math.min(0.15, (performance.now() - st.at) / 1000);
+    const tx = st.x + st.vx * lag, ty = st.y + st.vy * lag;
+    const wasAlive = rival.alive;
+    // A state sent before their 'dead' arrived mustn't bring them back.
+    rival.alive = !!st.al && (st.d | 0) >= rival.deaths;
+    if ((!wasAlive && rival.alive) || Math.hypot(tx - rival.x, ty - rival.y) > 200) { rival.x = tx; rival.y = ty; }
+    else { rival.x = Gfx.approach(rival.x, tx, 14, dt); rival.y = Gfx.approach(rival.y, ty, 14, dt); }
+    rival.x = clamp(rival.x, 0, AW); rival.y = clamp(rival.y, 0, AH);
+    rival.vx = st.vx; rival.vy = st.vy;
+    rival.a += angDiff(+st.a || 0, rival.a) * Math.min(1, dt * 20);
+    rival.level = clamp(st.l | 0, 1, 45);
+    rival.max = Math.max(1, st.m | 0); rival.hp = clamp(st.h | 0, 0, rival.max);
+    if (TURRETS[st.u]) rival.turret = st.u;
+    rival.xp = Math.max(0, st.p | 0);
+    rival.stats.ram = clamp(st.rm | 0, 0, MAX_STAT);
+    rival.shield = st.sh ? 1 : 0;
+    rival.kills = Math.max(rival.kills, st.k | 0);
+  }
+
+  function livePause() {
+    ui.show({
+      title: 'Menu',
+      html: `<p>The match keeps going while this is open.</p><p>${kills} – ${rival.kills} · ${Math.ceil(matchT)} s left</p>
+        <div class="menu"><button class="btn secondary" type="button" data-quit>Leave match (counts as a loss)</button></div>`,
+      button: 'Back in',
+      onAction: () => ui.hide(),
+      onRender: p => p.querySelector('[data-quit]').addEventListener('click', () => {
+        Relay.result('l');
+        showMenu();
+      }),
+    });
+  }
+
+  function endLive() {
+    if (state !== 'play' || netMode !== 'live') return;
+    state = 'over';
+    const mx = Math.floor(me.xp), tx = Math.floor(rival.xp);
+    const won = kills > rival.kills || (kills === rival.kills && mx > tx);
+    const draw = kills === rival.kills && mx === tx;
+    Arcade.countPlay();
+    Arcade.flag('online-match');
+    Relay.result(draw ? 'd' : won ? 'w' : 'l');
+    if (won) Arcade.flag('tankfield-online-win');
+    const them = Online.escape(rival.name);
+    ui.show({
+      title: draw ? "It's a draw" : won ? 'You win! 🛡️' : `${them} wins`,
+      html: `<p class="big">${kills} – ${rival.kills}</p>
+        <p>You vs ${them} · Level ${me.level} ${T(me).name}${kills === rival.kills ? ` · tie broken on xp: ${mx.toLocaleString()} to ${tx.toLocaleString()}` : ''}</p>
+        <div class="menu"><button class="btn secondary" type="button" data-leave>Leave</button></div>${live.waitNote}`,
+      button: 'Rematch',
+      delay: 600,
+      onAction: () => live.rematch(),
+      onRender: p => p.querySelector('[data-leave]').addEventListener('click', showMenu),
+    });
+  }
+
+  function liveGone(connLost) {
+    const wasPlaying = state === 'play' && netMode === 'live';
+    const name = rival?.name || 'Your opponent';
+    if (wasPlaying) {
+      state = 'over';
+      netMode = null;
+      if (connLost) return ui.show({ title: 'Connection lost', html: "<p>Lost the connection to the game server, so this match doesn't count.</p>", button: 'Back to menu', onAction: showMenu });
+      Arcade.countPlay();
+      Arcade.flag('online-match');
+      Arcade.flag('tankfield-online-win');
+      Relay.result('w');
+      return ui.show({ title: `${Online.escape(name)} left`, html: '<p>You win by forfeit.</p>', button: 'Back to menu', onAction: showMenu });
+    }
+    if (state === 'over' && netMode === 'live') {
+      const w = document.querySelector('[data-live-wait]');
+      if (w) { w.textContent = `${name} left.`; return; }
+    }
+    liveError = connLost ? 'Lost the connection to the game server.' : `${Online.escape(name)} left.`;
+    showMenu();
+  }
+
+  // ---------- Menu ----------
+
+  const INTRO_HTML = `<p>Shoot shapes for experience, level up, and outgrow the rival tanks before they come for you. One life.</p>
         <ul style="text-align:left;font-size:14px"><li><b>WASD</b> or arrows to drive. <b>Auto-aim</b> fires at the nearest target by itself (<b>Q</b> switches to aiming and firing with the mouse; <b>E</b> turns auto-fire off).</li>
         <li>Each level gives a point: press <b>1-7</b> to upgrade Armor, Repair, Ram, Shot speed, Shot power, Reload or Engine.</li>
-        <li>At levels 10 and 20 you pick a new turret. Big purple shapes in the middle are worth the most.</li></ul>`,
+        <li>At levels 10 and 20 you pick a new turret. Big purple shapes in the middle are worth the most.</li></ul>`;
+  const attachOpts = {
+    ui, start, score: () => (me && netMode !== 'live' ? Math.floor(me.xp) : 0),
+    intro: {
+      title: '🛡️ Tankfield',
+      get html() { return `${INTRO_HTML}${live.html(`Live 1v1 against a real player: same arena, no bots, first to ${LIVE_KILLS} kills`)}<p class="error" data-live-error>${liveError}</p>`; },
       button: 'Roll out',
       onAction: start,
+      onRender: p => { live.wire(p); liveError = ''; },
     },
-  });
+  };
+  function showMenu() {
+    state = 'menu';
+    netMode = null;
+    rival = null;
+    live.leave();
+    tanks = []; shots = [];
+    Versus.attach(attachOpts);
+  }
+
+  for (let i = 0; i < SHAPES; i++) spawnShape();
+  updateHud();
+  const liveInvite = Live.invite('tank');
+  Versus.attach(attachOpts);
+  if (liveInvite) live.connect('public', liveInvite);
   requestAnimationFrame(frame);
 })();
