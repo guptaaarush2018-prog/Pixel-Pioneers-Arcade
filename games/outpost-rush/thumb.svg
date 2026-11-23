@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+<rect width="320" height="200" fill="#5b8f45"/>
+<g fill="#3f7a35"><circle cx="40" cy="30" r="7"/><circle cx="290" cy="170" r="8"/><circle cx="150" cy="180" r="6"/><circle cx="260" cy="40" r="6"/></g>
+<path d="M85 130L235 70" stroke="#9fc4ff" stroke-width="2" stroke-dasharray="5 6"/>
+<g><ellipse cx="80" cy="140" rx="34" ry="26" fill="#2a4f9c"/><ellipse cx="80" cy="134" rx="34" ry="26" fill="#4f8cff"/><ellipse cx="80" cy="133" rx="21" ry="16" fill="#3d73d6"/><rect x="72" y="104" width="16" height="22" fill="#2a4f9c"/><path d="M80 104v-18l14 4-14 4" fill="#4f8cff" stroke="#3a2a1a" stroke-width="1.5"/><text x="80" y="140" text-anchor="middle" font-family="system-ui,sans-serif" font-size="16" font-weight="900" fill="#fff">42</text></g>
+<g><ellipse cx="240" cy="72" rx="28" ry="21" fill="#9c2a2e"/><ellipse cx="240" cy="67" rx="28" ry="21" fill="#ff5a5f"/><ellipse cx="240" cy="66" rx="17" ry="13" fill="#d84a4f"/><text x="240" y="72" text-anchor="middle" font-family="system-ui,sans-serif" font-size="14" font-weight="900" fill="#fff">18</text></g>
+<g><ellipse cx="190" cy="150" rx="22" ry="16" fill="#5c6475"/><ellipse cx="190" cy="146" rx="22" ry="16" fill="#9aa3b5"/><text x="190" y="151" text-anchor="middle" font-family="system-ui,sans-serif" font-size="13" font-weight="900" fill="#fff">12</text></g>
+<g fill="#4f8cff" stroke="#2a4f9c" stroke-width="1"><circle cx="150" cy="104" r="3.5"/><circle cx="156" cy="100" r="3.5"/><circle cx="144" cy="108" r="3.5"/><circle cx="160" cy="106" r="3.5"/><circle cx="154" cy="112" r="3.5"/></g>
+<text x="16" y="30" font-family="system-ui,sans-serif" font-size="20" font-weight="900" fill="#fff" stroke="#2d4a24" stroke-width=".8">OUTPOST RUSH</text>
+</svg>

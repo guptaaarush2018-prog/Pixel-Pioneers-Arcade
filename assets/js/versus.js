@@ -76,7 +76,11 @@ const Versus = (() => {
         panel.querySelectorAll('[data-net]').forEach(b => b.addEventListener('click', () => connect(b.dataset.net, code.value)));
         code.addEventListener('keydown', e => { if (e.key === 'Enter') connect('join', code.value); });
         panel.querySelector('[data-back]').addEventListener('click', showIntro);
-        Relay.showWaiting(panel.querySelector('[data-waiting]'), room => connect('public', room));
+        Relay.showWaiting(panel.querySelector('[data-waiting]'), room => {
+          // Games with a live mode too (live.js) list those rooms here as well; hand them over.
+          if (room.startsWith(`pp-${tag()}-`)) connect('public', room);
+          else location.href = `${location.pathname}?join=${encodeURIComponent(room)}`;
+        });
       },
     });
   }

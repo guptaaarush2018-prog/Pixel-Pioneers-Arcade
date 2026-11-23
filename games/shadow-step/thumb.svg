@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+<rect width="320" height="200" fill="#363f61"/>
+<g fill="#323a5a"><rect x="0" y="0" width="32" height="32"/><rect x="64" y="0" width="32" height="32"/><rect x="128" y="0" width="32" height="32"/><rect x="192" y="0" width="32" height="32"/><rect x="256" y="0" width="32" height="32"/><rect x="32" y="32" width="32" height="32"/><rect x="96" y="32" width="32" height="32"/><rect x="160" y="32" width="32" height="32"/><rect x="224" y="32" width="32" height="32"/><rect x="288" y="32" width="32" height="32"/></g>
+<g fill="#4a5170"><rect x="0" y="0" width="320" height="22"/><rect x="0" y="178" width="320" height="22"/><rect x="140" y="22" width="20" height="80"/></g>
+<rect x="20" y="110" width="96" height="68" fill="rgba(2,3,10,.78)"/>
+<path d="M230 120L120 60L120 170Z" fill="rgba(255,230,150,.28)"/>
+<g transform="translate(232 120) rotate(180)"><rect x="-8" y="-9" width="16" height="18" rx="6" fill="#3a5fb0"/><circle cx="2" cy="0" r="6" fill="#e8c39e"/><path d="M1 -6.5a6.5 6.5 0 0 0 0 13z" fill="#1b2a4a"/><rect x="8" y="3" width="7" height="4" fill="#ffe9a8"/></g>
+<text x="232" y="100" text-anchor="middle" font-family="system-ui,sans-serif" font-size="18" font-weight="900" fill="#ffd23f">?</text>
+<g transform="translate(70 145)" opacity=".7"><rect x="-7" y="-8" width="14" height="16" rx="6" fill="#6b3fa0"/><circle cx="1" cy="0" r="6" fill="#4a2a78"/><rect x="4" y="-3" width="2" height="2" fill="#fff"/><rect x="4" y="1" width="2" height="2" fill="#fff"/></g>
+<path d="M290 80l9 10-9 10-9-10z" fill="#7ef0ff"/>
+<rect x="276" y="134" width="30" height="30" fill="#3ccf8e" opacity=".75"/><text x="291" y="153" text-anchor="middle" font-family="system-ui,sans-serif" font-size="8" font-weight="900" fill="#0b2a1c">EXIT</text>
+<text x="14" y="16" font-family="system-ui,sans-serif" font-size="14" font-weight="900" fill="#cfe9ff">SHADOW STEP</text>
+</svg>

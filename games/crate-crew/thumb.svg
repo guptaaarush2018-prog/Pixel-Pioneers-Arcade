@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+<rect width="320" height="200" fill="#1b1f2e"/>
+<rect x="40" y="30" width="240" height="150" fill="#c9b89a"/>
+<g fill="#6b7189"><rect x="40" y="30" width="240" height="26"/><rect x="40" y="154" width="240" height="26"/><rect x="40" y="56" width="26" height="98"/><rect x="254" y="56" width="26" height="98"/><rect x="146" y="56" width="26" height="40"/></g>
+<rect x="200" y="110" width="34" height="34" fill="rgba(126,240,176,.5)" stroke="#3ca06e" stroke-width="2" stroke-dasharray="5 3"/>
+<rect x="80" y="70" width="34" height="34" fill="rgba(126,240,176,.5)" stroke="#3ca06e" stroke-width="2" stroke-dasharray="5 3"/>
+<g><rect x="80" y="70" width="34" height="34" rx="4" fill="#e8b04a"/><path d="M85 75l24 24M109 75l-24 24" stroke="#7a4a1a" stroke-width="3"/><rect x="85" y="75" width="24" height="24" fill="none" stroke="#7a4a1a" stroke-width="3"/></g>
+<g><rect x="150" y="112" width="34" height="34" rx="4" fill="#c98b46"/><path d="M155 117l24 24M179 117l-24 24" stroke="#6b3e15" stroke-width="3"/><rect x="155" y="117" width="24" height="24" fill="none" stroke="#6b3e15" stroke-width="3"/></g>
+<g transform="translate(130 128)"><rect x="-11" y="-2" width="22" height="18" rx="6" fill="#2f6fd6"/><circle cy="-8" r="9" fill="#ffcf9e"/><path d="M-10 -11a10 10 0 0 1 20 0z" fill="#ffd23f"/><rect x="-11" y="-12" width="22" height="3" fill="#ffd23f"/></g>
+<text x="14" y="22" font-family="system-ui,sans-serif" font-size="18" font-weight="900" fill="#ffd23f">CRATE CREW</text>
+</svg>

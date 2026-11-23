@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+<defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6a65a"/><stop offset="1" stop-color="#ffd9a0"/></linearGradient><linearGradient id="w" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3f8fbf"/><stop offset="1" stop-color="#0f3550"/></linearGradient></defs>
+<rect width="320" height="100" fill="url(#s)"/>
+<circle cx="250" cy="66" r="20" fill="#fff3c4"/>
+<path d="M0 100Q80 70 160 88T320 84V100H0Z" fill="#3c6a52"/>
+<rect y="100" width="320" height="100" fill="url(#w)"/>
+<rect x="0" y="92" width="80" height="8" fill="#9a6a3a"/><rect x="20" y="100" width="6" height="60" fill="#6b4a2b"/><rect x="60" y="100" width="6" height="60" fill="#6b4a2b"/>
+<rect x="40" y="62" width="14" height="22" rx="4" fill="#2f6fd6"/><circle cx="47" cy="56" r="7" fill="#ffcf9e"/><ellipse cx="47" cy="51" rx="11" ry="3" fill="#e0a040"/>
+<path d="M54 70Q80 30 110 40" fill="none" stroke="#3a2614" stroke-width="3"/>
+<path d="M110 40Q170 60 196 100L196 150" fill="none" stroke="#fff" stroke-width="1.2" opacity=".85"/>
+<circle cx="196" cy="100" r="4" fill="#ff4d4d"/>
+<g transform="translate(205 150)"><path d="M-30 0q15 -14 34 -6l10 -8v28l-10 -8q-19 8 -34 -6z" fill="#ffb02e"/><circle cx="-22" cy="-2" r="2.5" fill="#111"/></g>
+<g transform="translate(110 172) scale(.7)"><path d="M-30 0q15 -14 34 -6l10 -8v28l-10 -8q-19 8 -34 -6z" fill="#e8a0b4"/></g>
+<text x="196" y="88" text-anchor="middle" font-family="system-ui,sans-serif" font-size="22" font-weight="900" fill="#ffd23f" stroke="#5a3a10" stroke-width="1">!</text>
+<text x="14" y="28" font-family="system-ui,sans-serif" font-size="20" font-weight="900" fill="#fff" stroke="#8a4a1a" stroke-width=".8">LAZY LAKE</text>
+</svg>

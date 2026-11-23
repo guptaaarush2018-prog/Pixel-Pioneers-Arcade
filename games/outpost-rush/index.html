@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Outpost Rush · Pixel Pioneers Arcade</title>
+  <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../assets/css/arcade.css">
+</head>
+<body class="game" data-game="outpost-rush">
+  <header class="topbar">
+    <a class="back" href="../../index.html">← All games</a>
+    <h1>Outpost Rush</h1>
+    <div class="stats">
+      <span>Level<b id="level">-</b></span>
+      <span>Outposts<b id="posts">0</b></span>
+      <span>Best<b id="best">0</b></span>
+    </div>
+    <button class="icon-btn" id="mute" type="button">Sound on</button>
+  </header>
+
+  <main class="stage">
+    <canvas id="game"></canvas>
+    <div class="overlay" id="overlay" hidden></div>
+  </main>
+
+  <p class="help">Click your outpost, then a target (or drag) to send half its troops · <kbd>Shift</kbd> or <kbd>T</kbd> sends all · <kbd>A</kbd> picks all yours · <kbd>P</kbd> pause</p>
+
+  <script src="../../assets/js/config.js"></script>
+  <script src="../../assets/js/catalog.js"></script>
+  <script src="../../assets/js/arcade.js"></script>
+  <script src="../../assets/js/gfx.js"></script>
+  <script src="../../assets/js/filter.js"></script>
+  <script src="../../assets/js/friends.js"></script>
+  <script src="../../assets/js/online.js"></script>
+  <script src="../../assets/js/chat.js"></script>
+  <script src="../../assets/js/invites.js"></script>
+  <script src="../../assets/js/relay.js"></script>
+  <script src="../../assets/js/versus.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

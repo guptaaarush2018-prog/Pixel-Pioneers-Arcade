@@ -156,6 +156,17 @@
           }
         }
       }
+    },
+    "oddball": {
+      "$day": {
+        ".read": true,
+        "$prompt": {
+          "$player": {
+            ".write": "auth != null && auth.uid === $player && !data.exists()",
+            ".validate": "$day.matches(/^20[0-9][0-9]-[01][0-9]-[0-3][0-9]$/) && $prompt.matches(/^[0-9]{1,4}$/) && newData.isString() && newData.val().length > 0 && newData.val().length <= 32 && newData.val().matches(/^[a-z0-9]+$/)"
+          }
+        }
+      }
     }
   }
 }

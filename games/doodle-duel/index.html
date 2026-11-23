@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Doodle Duel · Pixel Pioneers Arcade</title>
+  <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../assets/css/arcade.css">
+  <style>
+    .dd { width: min(1000px, 100%); max-height: 100%; display: grid; grid-template-columns: 1fr 260px; gap: 12px; padding: 4px; }
+    .dd-left { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+    .dd-top { display: flex; align-items: center; gap: 12px; }
+    .dd-word { flex: 1; font-size: 22px; font-weight: 800; letter-spacing: 6px; text-align: center; font-variant-numeric: tabular-nums; min-height: 1.3em; }
+    .dd-word small { display: block; font-size: 11px; letter-spacing: 0; color: var(--muted); font-weight: 600; }
+    .dd-timer { width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 18px; background: conic-gradient(var(--accent) var(--p, 100%), var(--line) 0); position: relative; }
+    .dd-timer::before { content: ''; position: absolute; inset: 6px; border-radius: 50%; background: var(--surface); }
+    .dd-timer span { position: relative; }
+    .dd-paper { position: relative; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,.45); background: #fffdf7; aspect-ratio: 16 / 10; }
+    .dd-paper canvas { width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
+    .dd-paper.watch canvas { cursor: default; }
+    .dd-paper .dd-banner { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; font-size: 22px; font-weight: 800; color: #2a2a3a; background: rgba(255,253,247,.85); padding: 20px; }
+    .dd-paper .dd-banner[hidden] { display: none; }
+    .dd-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .dd-tools[hidden] { display: none; }
+    .dd-tools button { width: 30px; height: 30px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0; }
+    .dd-tools button.on { border-color: var(--text); transform: scale(1.12); }
+    .dd-tools .size { background: var(--surface-2); color: var(--text); display: grid; place-items: center; }
+    .dd-tools .size i { display: block; background: var(--text); border-radius: 50%; }
+    .dd-tools .wide { width: auto; padding: 0 10px; border-radius: 15px; background: var(--surface-2); color: var(--text); font-weight: 700; font-size: 12px; }
+    .dd-right { display: flex; flex-direction: column; gap: 8px; min-height: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; }
+    .dd-scores { display: grid; gap: 6px; }
+    .dd-score { display: flex; justify-content: space-between; padding: 6px 10px; border-radius: 8px; background: var(--surface-2); font-weight: 700; border-left: 4px solid var(--c); }
+    .dd-score.drawing::after { content: '✏️'; }
+    .dd-log { flex: 1; overflow-y: auto; font-size: 13px; display: flex; flex-direction: column; gap: 3px; min-height: 120px; max-height: 300px; }
+    .dd-log p { margin: 0; padding: 3px 6px; border-radius: 6px; }
+    .dd-log .ok { background: #173d27; color: #9be37a; font-weight: 700; }
+    .dd-log .close { color: #ffd23f; }
+    .dd-log .sys { color: var(--muted); font-style: italic; }
+    .dd-guess { display: flex; gap: 6px; }
+    .dd-guess input { flex: 1; min-width: 0; font-size: 15px; padding: 8px 10px; border-radius: 8px; border: 2px solid var(--line); background: var(--surface-2); color: var(--text); font-family: var(--font); }
+    .dd-guess input:focus { outline: none; border-color: var(--accent); }
+    .dd-guess input:disabled { opacity: .5; }
+    .dd-picks { display: grid; gap: 8px; }
+    @media (max-width: 720px) { .dd { grid-template-columns: 1fr; } .dd-log { max-height: 120px; min-height: 60px; } }
+  </style>
+</head>
+<body class="game" data-game="doodle-duel">
+  <header class="topbar">
+    <a class="back" href="../../index.html">← All games</a>
+    <h1>Doodle Duel</h1>
+    <div class="stats">
+      <span>Round<b id="round">-</b></span>
+      <span>You<b id="mine">0</b></span>
+      <span>Best<b id="best">0</b></span>
+    </div>
+    <button class="icon-btn" id="mute" type="button">Sound on</button>
+  </header>
+
+  <main class="stage">
+    <div class="dd" id="dd">
+      <div class="dd-left">
+        <div class="dd-top"><div class="dd-word" id="word"></div><div class="dd-timer" id="timer"><span id="secs">-</span></div></div>
+        <div class="dd-paper" id="paper"><canvas id="game"></canvas><div class="dd-banner" id="banner" hidden></div></div>
+        <div class="dd-tools" id="tools" hidden></div>
+      </div>
+      <div class="dd-right">
+        <div class="dd-scores" id="scores"></div>
+        <div class="dd-log" id="log"></div>
+        <form class="dd-guess" id="guess" autocomplete="off"><input id="guessIn" maxlength="30" placeholder="Type your guess…" aria-label="Your guess" spellcheck="false"><button class="btn" type="submit">Guess</button></form>
+      </div>
+    </div>
+    <div class="overlay" id="overlay" hidden></div>
+  </main>
+
+  <p class="help">Draw with the mouse or a finger · <kbd>Z</kbd> undo · guessers type and press <kbd>Enter</kbd> · the faster the guess, the more you both score</p>
+
+  <script src="../../assets/js/config.js"></script>
+  <script src="../../assets/js/catalog.js"></script>
+  <script src="../../assets/js/arcade.js"></script>
+  <script src="../../assets/js/gfx.js"></script>
+  <script src="../../assets/js/filter.js"></script>
+  <script src="../../assets/js/friends.js"></script>
+  <script src="../../assets/js/online.js"></script>
+  <script src="../../assets/js/chat.js"></script>
+  <script src="../../assets/js/invites.js"></script>
+  <script src="../../assets/js/relay.js"></script>
+  <script src="../../assets/js/live.js"></script>
+  <script src="words.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

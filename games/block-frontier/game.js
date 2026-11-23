@@ -393,6 +393,7 @@
     world[idx(x, y, z)] = id;
     edits.set(idx(x, y, z), id);
     rebuildAround(x, z);
+    if (coop) outEdits.push(idx(x, y, z), id);
   }
 
   // Clouds: one flat mesh of white slabs, drifting.
@@ -433,7 +434,7 @@
     }
     s.spawn = [sx + 0.5, Math.max(heights[sz * SX + sx], SEA) + 1.01, sz + 0.5];
     s.pos = [...s.spawn];
-    if (mode === 'creative') s.inv = [1, 2, 3, 8, 6, 16, 17, 18, 21].map(id => ({ id, n: 1 }));
+    if (mode === 'creative') s.inv = CREATIVE_KIT.map(id => ({ id, n: 1 }));
     buildAll();
     placePlayer();
     save();
@@ -451,6 +452,12 @@
   }
   function save() {
     if (!s) return;
+    // Visiting someone else's world: only your own backpack and points for it are kept.
+    if (visiting) {
+      Arcade.save(VISIT_KEY, { seed: s.seed, inv: s.inv, crafted: s.crafted, mined: s.mined, pts: s.pts, popped: s.popped || 0, placed: s.placed || 0 });
+      if (s.mode === 'survival') { Arcade.submitScore(ID, s.pts); Arcade.dailyScore?.(s.pts); }
+      return;
+    }
     s.pos = [player.x, player.y, player.z];
     s.yaw = player.yaw;
     s.pitch = player.pitch;
@@ -573,23 +580,33 @@
     GL3D.box(out, -0.47, 0.6, -0.47, 0.47, 0.82, 0.47, GL3D.hex('#9a6cf5'), { skip: 'b' });
     return G.mesh(out);
   })();
+  let gloomId = 0;
+  // Who glooms can chase: you, plus your co-op partner when you're the host.
+  const targets = () => (coop && coop.host && peer.net ? [player, peer] : [player]);
   function spawnGloom() {
+    const list = targets(), near = list[Math.floor(Math.random() * list.length)];
     for (let k = 0; k < 12; k++) {
       const a = Math.random() * Math.PI * 2, d = 16 + Math.random() * 20;
-      const x = Math.floor(player.x + Math.cos(a) * d), z = Math.floor(player.z + Math.sin(a) * d);
+      const x = Math.floor(near.x + Math.cos(a) * d), z = Math.floor(near.z + Math.sin(a) * d);
       if (x < 1 || z < 1 || x >= SX - 1 || z >= SZ - 1) continue;
       let y = SY - 2;
       while (y > 1 && !solidAt(x, y, z)) y--;
       if (waterAt(x, y + 1, z) || get(x, y, z) === 7) continue;
-      glooms.push({ x: x + 0.5, y: y + 1, z: z + 0.5, vx: 0, vy: 0, vz: 0, hp: 4, hopT: Math.random(), hitT: 0, yaw: 0, melt: 0, flash: 0 });
+      glooms.push({ id: ++gloomId, x: x + 0.5, y: y + 1, z: z + 0.5, vx: 0, vy: 0, vz: 0, hp: 4, hopT: Math.random(), hitT: 0, yaw: 0, melt: 0, flash: 0 });
       return;
     }
   }
   function updateGlooms(dt, night) {
-    if (s.mode === 'survival' && night && glooms.length < 6 && Math.random() < dt * 0.25) spawnGloom();
+    // A co-op guest just shows the host's glooms (see the co-op section).
+    if (coop && !coop.host) return smoothGlooms(dt);
+    const cap = coop ? 9 : 6;
+    if (s.mode === 'survival' && night && glooms.length < cap && Math.random() < dt * (coop ? 0.35 : 0.25)) spawnGloom();
+    const list = targets();
     for (let i = glooms.length - 1; i >= 0; i--) {
       const g = glooms[i];
-      const dx = player.x - g.x, dz = player.z - g.z, d = Math.hypot(dx, dz);
+      let tgt = player, best = Infinity;
+      for (const t of list) { const dd = Math.hypot(t.x - g.x, t.z - g.z); if (dd < best) { best = dd; tgt = t; } }
+      const dx = tgt.x - g.x, dz = tgt.z - g.z, d = Math.hypot(dx, dz);
       g.yaw = Math.atan2(dx, -dz);
       g.vy -= 24 * dt;
       g.hopT -= dt;
@@ -604,11 +621,13 @@
       moveBody(g, dt, 0.4, 0.8);
       g.hitT -= dt;
       g.flash = Math.max(0, g.flash - dt);
-      const dy = player.y - g.y;
+      const dy = tgt.y - g.y;
       if (d < 0.9 && dy > -1 && dy < 1.6 && g.hitT <= 0) {
         g.hitT = 1;
-        damagePlayer(3, 'a gloom');
-        player.vx += dx / (d || 1) * 7; player.vz += dz / (d || 1) * 7; player.vy = 5;
+        if (tgt === player) {
+          damagePlayer(3, 'a gloom');
+          player.vx += dx / (d || 1) * 7; player.vz += dz / (d || 1) * 7; player.vy = 5;
+        } else live.send('hurt', { n: 3, dx: Math.round(dx / (d || 1) * 100) / 100, dz: Math.round(dz / (d || 1) * 100) / 100 });
       }
       // Sunlight melts them.
       if (!night) g.melt += dt;
@@ -655,7 +674,7 @@
 
   // ---------- Input ----------
 
-  const keys = new Set();
+  const keys = new Set(), heldKeys = keys, NO_KEYS = new Set();
   let mouseL = false, mining = null, notes = [], lastSpace = 0;
   const look = GL3D.mouseLook(glCanvas, (mx, my) => {
     player.yaw += mx * 0.0024;
@@ -701,22 +720,34 @@
     if (gm && (!bl || gm.t < bl.t)) {
       const it = held(), dmg = it && ITEMS[it.id] && ITEMS[it.id].tool === 'sword' ? ITEMS[it.id].dmg : 1;
       const g = gm.g;
-      g.hp -= dmg;
       g.flash = 0.2;
       const [dx, , dz] = GL3D.lookDir(player.yaw, 0);
+      if (coop && !coop.host) {
+        // The host owns the glooms: ask it to take the hit.
+        live.send('gh', { id: g.id, dmg, dx: Math.round(dx * 100) / 100, dz: Math.round(dz * 100) / 100 });
+        Arcade.tone({ freq: 400, to: 250, dur: 0.08, type: 'square', vol: 0.04 });
+        mining = null;
+        return;
+      }
+      g.hp -= dmg;
       g.vx = dx * 6; g.vz = dz * 6; g.vy = 4;
       Arcade.tone({ freq: 400, to: 250, dur: 0.08, type: 'square', vol: 0.04 });
       if (g.hp <= 0) {
         glooms.splice(glooms.indexOf(g), 1);
-        burst(g.x, g.y + 0.4, g.z, [0.55, 0.35, 0.95], 14);
-        give(105, 1 + (Math.random() < 0.5 ? 1 : 0));
-        addPts(15, 'gloom popped');
-        s.popped = (s.popped || 0) + 1;
-        if (s.popped >= 10) Arcade.flag('block-frontier-glooms');
+        gloomPopped(g);
+        if (coop) live.send('gp', { id: g.id, you: 0 });
       }
       mining = null;
     }
   }
+  function gloomPopped(g) {
+    burst(g.x, g.y + 0.4, g.z, [0.55, 0.35, 0.95], 14);
+    give(105, 1 + (Math.random() < 0.5 ? 1 : 0));
+    addPts(15, 'gloom popped');
+    s.popped = (s.popped || 0) + 1;
+    if (s.popped >= 10) Arcade.flag('block-frontier-glooms');
+  }
+
   // Right click: eat, or place the held block against the face you're looking at.
   function use() {
     const it = held();
@@ -737,6 +768,7 @@
     // Not inside yourself (or a gloom).
     const overlaps = (ox, oy, oz, w, h) => x + 1 > ox - w && x < ox + w && y + 1 > oy && y < oy + h && z + 1 > oz - w && z < oz + w;
     if (overlaps(player.x, player.y, player.z, PW, PH) || glooms.some(g => overlaps(g.x, g.y, g.z, 0.4, 0.8))) return;
+    if (coop && peer.net && overlaps(peer.x, peer.y, peer.z, PW, PH)) return;
     setBlock(x, y, z, it.id);
     if (s.mode !== 'creative') take(it.id, 1);
     player.swing = 0.2;
@@ -859,12 +891,16 @@
     ui.show({
       title: 'Paused',
       html: `<p>${s.mode === 'survival' ? `${s.pts.toLocaleString()} expedition points · day ${s.day}` : 'Creative world'}</p>
-        <div class="menu"><button class="btn secondary" type="button" data-inv>Inventory and crafting (E)</button><button class="btn secondary" type="button" data-new>New world…</button></div>`,
+        ${coop ? `<p style="color:#80deea">${coop.host ? `${Online.escape(live.them)} is in your world. The world keeps going while this is open.` : `Visiting ${Online.escape(live.them)}'s world. Your own world is saved and waiting.`}</p>` : ''}
+        <div class="menu"><button class="btn secondary" type="button" data-inv>Inventory and crafting (E)</button>${coop ? '<button class="btn secondary" type="button" data-leave>Leave co-op</button>' : '<button class="btn secondary" type="button" data-new>New world…</button>'}</div>
+        ${coop ? '' : coopHtml()}`,
       button: 'Resume',
       onAction: resume,
       onRender: p => {
         p.querySelector('[data-inv]').addEventListener('click', () => inventoryPanel());
-        p.querySelector('[data-new]').addEventListener('click', () => newWorldMenu(true));
+        p.querySelector('[data-new]')?.addEventListener('click', () => newWorldMenu(true));
+        p.querySelector('[data-leave]')?.addEventListener('click', () => endCoop(coop.host ? 'You closed your world to visitors.' : 'You left. Back in your own world.'));
+        live.wire(p);
       },
     });
   }
@@ -894,6 +930,236 @@
   }
   function pause2() { state = 'play'; pause(); }
 
+  // ---------- Co-op (live.js) ----------
+  // Two players in one world. Whoever opens the room first hosts their saved world: the guest
+  // gets its seed and every edit, then both sides send each block they change. The host runs
+  // the clock and the glooms (the guest sees copies and asks the host to take its hits). The
+  // guest's own world stays saved; for the visit they get a separate backpack, kept per world.
+
+  const VISIT_KEY = 'frontier:visit';
+  const CREATIVE_KIT = [1, 2, 3, 8, 6, 16, 17, 18, 21];
+  const EDIT_CHUNK = 16000;
+  const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
+  let coop = null, visiting = false, outEdits = [], coopError = '', sendT = 0, incoming = null, netGlooms = [];
+  const peer = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0, swing: 0, step: 0, net: null };
+
+  const live = Live.create({
+    ui,
+    tag: 'frontier',
+    label: 'Co-op',
+    title: 'Co-op',
+    onReady: host => {
+      if (host) hostWorld();
+      else ui.show({ title: 'Joining…', html: '<p>Loading their world…</p>', button: null });
+    },
+    onEvent: onCoop,
+    onState: onPeerState,
+    onGone: lost => endCoop(lost ? 'Lost the connection to the game server.' : `${live.them} left the world.`),
+    onCancel: msg => { coopError = msg || ''; state = 'play'; pause(); },
+  });
+
+  function coopHtml() {
+    if (!live.enabled()) return '';
+    const err = coopError;
+    coopError = '';
+    return `<p class="bf-label" style="margin-top:12px">Play together</p>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 6px;text-align:left">Bring a friend into this world, or visit theirs. Whoever opens the room first hosts their world. Your own world is never overwritten.</p>
+      ${live.html()}<p class="error">${Online.escape(err)}</p>`;
+  }
+
+  function hostWorld() {
+    save();
+    coop = { host: true };
+    peer.net = null;
+    outEdits = [];
+    const flat = [];
+    for (const [k, v] of edits) flat.push(k, v);
+    live.send('world', { seed: s.seed, mode: s.mode, time: s.time, day: s.day, spawn: s.spawn, pos: [player.x, player.y, player.z] });
+    for (let i = 0; i < flat.length; i += EDIT_CHUNK) live.send('edits', { e: flat.slice(i, i + EDIT_CHUNK) });
+    live.send('go', {});
+    note('A friend is joining your world', '#80deea');
+    resume();
+  }
+
+  function enterVisit(w) {
+    save();                       // your own world, before it's swapped out
+    visiting = true;
+    coop = { host: false };
+    const bag = Arcade.load(VISIT_KEY, null);
+    const same = bag && bag.seed === w.seed;
+    s = {
+      seed: w.seed, mode: w.mode === 'creative' ? 'creative' : 'survival', day: w.day | 0 || 1, time: +w.time || 0.3,
+      pts: same ? bag.pts | 0 : 0, inv: same ? bag.inv || [] : w.mode === 'creative' ? CREATIVE_KIT.map(id => ({ id, n: 1 })) : [],
+      crafted: same ? bag.crafted || {} : {}, mined: same ? bag.mined || {} : {}, popped: same ? bag.popped | 0 : 0, placed: same ? bag.placed | 0 : 0,
+      hp: 20, nights: 0, spawn: w.spawn, pos: [w.pos[0], w.pos[1] + 0.05, w.pos[2]], yaw: 0, pitch: 0,
+    };
+    heights = generate(w.seed);
+    edits = new Map();
+    const e = w.e || [];
+    for (let k = 0; k + 1 < e.length; k += 2) {
+      const i = e[k] | 0, id = e[k + 1] | 0;
+      if (i < 0 || i >= world.length || (id && !B[id])) continue;
+      world[i] = id;
+      edits.set(i, id);
+    }
+    buildAll();
+    placePlayer();
+    outEdits = [];
+    netGlooms = [];
+    note(`Visiting ${live.them}'s world. Yours is saved.`, '#80deea');
+    resume();
+  }
+
+  // lost or left: back to solo. A guest goes home to their own world.
+  function endCoop(msg) {
+    const wasVisiting = visiting;
+    live.leave();
+    if (wasVisiting) save();
+    coop = null;
+    visiting = false;
+    peer.net = null;
+    outEdits = [];
+    if (wasVisiting) {
+      if (!loadWorld()) newWorld('survival');
+      placePlayer();
+    }
+    if (msg) note(msg, '#80deea');
+    if (state === 'play' && overlayEl.hidden) return;
+    state = 'play';
+    pause();
+  }
+
+  function applyEdits(e) {
+    const touched = new Set();
+    for (let k = 0; k + 1 < e.length; k += 2) {
+      const i = e[k] | 0, id = e[k + 1] | 0;
+      if (i < 0 || i >= world.length || (id && !B[id])) continue;
+      world[i] = id;
+      edits.set(i, id);
+      touched.add(i % SX + ',' + Math.floor(i / SX) % SZ);
+    }
+    for (const k of touched) { const [x, z] = k.split(',').map(Number); rebuildAround(x, z); }
+  }
+
+  function onCoop(name, d) {
+    if (!d) d = {};
+    if (name === 'hello') { if (coop?.host) note(`${live.them} joined your world`, '#80deea'); return; }
+    if (name === 'world' && !live.host) incoming = { ...d, e: [] };
+    else if (name === 'edits' && incoming && Array.isArray(d.e)) { for (const v of d.e) incoming.e.push(v); }
+    else if (name === 'go' && incoming) { enterVisit(incoming); incoming = null; }
+    else if (!coop) return;
+    else if (name === 'b' && Array.isArray(d.e)) applyEdits(d.e);
+    else if (name === 'gh' && coop.host) {
+      // The guest hit one of our glooms.
+      const g = glooms.find(x => x.id === d.id);
+      if (!g) return;
+      g.hp -= Math.min(6, Math.max(1, +d.dmg || 1));
+      g.flash = 0.2;
+      g.vx = (+d.dx || 0) * 6; g.vz = (+d.dz || 0) * 6; g.vy = 4;
+      if (g.hp <= 0) {
+        glooms.splice(glooms.indexOf(g), 1);
+        burst(g.x, g.y + 0.4, g.z, [0.55, 0.35, 0.95], 14);
+        live.send('gp', { id: g.id, you: 1 });
+      }
+    } else if (name === 'gp' && !coop.host) {
+      const g = glooms.find(x => x.id === d.id);
+      if (g) glooms.splice(glooms.indexOf(g), 1);
+      netGlooms = netGlooms.filter(x => x[0] !== d.id);
+      if (d.you) gloomPopped(g || { x: player.x, y: player.y, z: player.z });
+      else if (g) burst(g.x, g.y + 0.4, g.z, [0.55, 0.35, 0.95], 14);
+    } else if (name === 'hurt' && !coop.host) {
+      damagePlayer(Math.min(6, +d.n || 3), 'a gloom');
+      player.vx += (+d.dx || 0) * 7; player.vz += (+d.dz || 0) * 7; player.vy = 5;
+    }
+  }
+
+  function onPeerState(d) {
+    if (!coop || !d) return;
+    peer.net = { ...d, at: performance.now() };
+    if (!coop.host) {
+      if (typeof d.t === 'number') s.time = d.t;
+      if ((d.day | 0) > s.day) { s.day = d.day | 0; nightSurvived(); }
+      if (Array.isArray(d.g)) netGlooms = d.g;
+    }
+  }
+
+  // The guest's copies of the host's glooms, eased toward the latest positions.
+  function smoothGlooms(dt) {
+    const byId = new Map(glooms.map(g => [g.id, g]));
+    const next = [];
+    for (const [id, x, y, z, yaw, fl, melt, vy] of netGlooms) {
+      let g = byId.get(id);
+      if (!g) g = { id, x, y, z, yaw, flash: 0, melt, vy, hp: 4 };
+      g.x = Gfx.approach(g.x, x, 14, dt);
+      g.y = Gfx.approach(g.y, y, 14, dt);
+      g.z = Gfx.approach(g.z, z, 14, dt);
+      g.yaw = yaw; g.melt = melt; g.vy = vy;
+      g.flash = fl ? Math.max(g.flash, 0.1) : Math.max(0, g.flash - dt);
+      next.push(g);
+    }
+    glooms.length = 0;
+    glooms.push(...next);
+  }
+
+  function updateCoop(dt) {
+    if (outEdits.length) { live.send('b', { e: outEdits }); outEdits = []; }
+    sendT -= dt;
+    if (sendT <= 0) {
+      sendT = 1 / 15;
+      const r = v => Math.round(v * 100) / 100;
+      const msg = { x: r(player.x), y: r(player.y), z: r(player.z), vx: r(player.vx), vy: r(player.vy), vz: r(player.vz), yaw: r(player.yaw), p: r(player.pitch), sw: player.swing > 0 ? 1 : 0 };
+      if (coop.host) {
+        msg.t = Math.round(s.time * 10000) / 10000;
+        msg.day = s.day;
+        msg.g = glooms.map(g => [g.id, r(g.x), r(g.y), r(g.z), r(g.yaw), g.flash > 0 ? 1 : 0, r(g.melt), r(g.vy)]);
+      }
+      live.state(msg);
+    }
+    const n = peer.net;
+    if (!n) return;
+    const lag = Math.min(0.2, (performance.now() - n.at) / 1000);
+    const tx = n.x + n.vx * lag, ty = n.y, tz = n.z + n.vz * lag;
+    if (Math.hypot(tx - peer.x, tz - peer.z) > 6) { peer.x = tx; peer.y = ty; peer.z = tz; }
+    else {
+      peer.x = Gfx.approach(peer.x, tx, 16, dt);
+      peer.y = Gfx.approach(peer.y, ty, 16, dt);
+      peer.z = Gfx.approach(peer.z, tz, 16, dt);
+    }
+    peer.yaw += angDiff(n.yaw, peer.yaw) * Math.min(1, dt * 18);
+    peer.step += Math.hypot(n.vx, n.vz) * dt;
+    peer.swing = n.sw ? 0.25 : Math.max(0, peer.swing - dt);
+  }
+
+  // Your partner: a blocky explorer in a teal shirt.
+  const peerMesh = (() => {
+    const hx = GL3D.hex, body = [], leg = [], arm = [];
+    GL3D.box(body, -0.3, 0.75, -0.17, 0.3, 1.42, 0.17, hx('#2fb7c9'));
+    GL3D.box(body, -0.25, 1.42, -0.25, 0.25, 1.92, 0.25, hx('#e9b98a'));
+    GL3D.box(body, -0.265, 1.76, -0.265, 0.265, 1.95, 0.265, hx('#4a3220'));
+    GL3D.box(body, -0.16, 1.6, -0.27, -0.07, 1.67, -0.25, [0.08, 0.08, 0.12]);
+    GL3D.box(body, 0.07, 1.6, -0.27, 0.16, 1.67, -0.25, [0.08, 0.08, 0.12]);
+    GL3D.box(body, -0.46, 0.8, -0.12, -0.3, 1.42, 0.12, hx('#2fb7c9'));
+    GL3D.box(arm, -0.08, -0.62, -0.08, 0.08, 0, 0.08, hx('#e9b98a'));
+    GL3D.box(leg, -0.13, 0, -0.14, 0.13, 0.75, 0.14, hx('#33415c'));
+    return { body: G.mesh(body), leg: G.mesh(leg), arm: G.mesh(arm) };
+  })();
+  function drawPeer() {
+    const m = GL3D.mat4, model2 = m.create();
+    m.trs(model2, peer.x, peer.y, peer.z, -peer.yaw);
+    G.draw(peerMesh.body, model2);
+    const swing = Math.sin(peer.step * 2.2) * 0.3, c = Math.cos(-peer.yaw), sn = Math.sin(-peer.yaw);
+    for (const side of [-1, 1]) {
+      const lx = peer.x + c * side * 0.15, lz = peer.z - sn * side * 0.15;
+      m.trs(model2, lx + Math.sin(peer.yaw) * swing * side * 0.25, peer.y, lz - Math.cos(peer.yaw) * swing * side * 0.25, -peer.yaw);
+      G.draw(peerMesh.leg, model2);
+    }
+    // Right arm, reaching forward while they mine or build.
+    const reach = Math.sin((peer.swing / 0.25) * Math.PI) * 0.35 + (peer.swing > 0 ? 0.3 : 0);
+    const ax = peer.x + c * 0.38, az = peer.z - sn * 0.38;
+    m.trs(model2, ax + Math.sin(peer.yaw) * reach, peer.y + 1.4, az - Math.cos(peer.yaw) * reach, -peer.yaw);
+    G.draw(peerMesh.arm, model2);
+  }
+
   // ---------- Update ----------
 
   const notesMax = 4;
@@ -915,14 +1181,22 @@
 
   const dayLength = 600;
   const isNight = () => s.time > 0.75 || s.time < 0.22;
+  function nightSurvived() {
+    if (s.mode === 'survival') { addPts(25, 'survived the night'); s.nights = (s.nights || 0) + 1; if (s.nights >= 3) Arcade.flag('block-frontier-nights'); }
+  }
   function update(dt) {
-    // Day and night.
-    const wasNight = isNight();
-    s.time = (s.time + dt / dayLength) % 1;
-    if (wasNight && !isNight()) {
-      s.day++;
-      if (s.mode === 'survival') { addPts(25, 'survived the night'); s.nights = (s.nights || 0) + 1; if (s.nights >= 3) Arcade.flag('block-frontier-nights'); }
+    // Day and night (a co-op guest follows the host's clock instead).
+    if (!coop || coop.host) {
+      const wasNight = isNight();
+      s.time = (s.time + dt / dayLength) % 1;
+      if (wasNight && !isNight()) {
+        s.day++;
+        nightSurvived();
+      }
     }
+    if (coop) updateCoop(dt);
+    // In co-op the world keeps running behind menus, but you stand still.
+    const keys = overlayEl.hidden ? heldKeys : NO_KEYS;
     // Movement.
     const fwd = (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
     const strafe = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0);
@@ -964,7 +1238,7 @@
     player.hurtT = Math.max(0, player.hurtT - dt);
     player.swing = Math.max(0, player.swing - dt);
 
-    updateMining(dt);
+    if (overlayEl.hidden) updateMining(dt);
     updateGlooms(dt, isNight());
     for (let i = bits.length - 1; i >= 0; i--) {
       const b = bits[i];
@@ -1015,6 +1289,7 @@
       G.draw(gloomMesh, model);
       if (g.flash > 0) G.tint(0, 0, 0, 0);
     }
+    if (coop && peer.net) drawPeer();
     // Block bits.
     if (bits.length) {
       const out = [];
@@ -1067,6 +1342,10 @@
     }
     if (underwater) { hud.fillStyle = 'rgba(30,80,160,0.25)'; hud.fillRect(0, 0, W, H); }
     if (player.hurtT > 0) { hud.fillStyle = `rgba(255,40,40,${player.hurtT * 0.5})`; hud.fillRect(0, 0, W, H); }
+    if (coop && peer.net) {
+      const p = project(peer.x, peer.y + 2.25, peer.z);
+      if (p && Math.hypot(peer.x - player.x, peer.z - player.z) < 60) Gfx.text(hud, live.them, p[0], p[1], { size: 13, color: '#80deea', width: 3 });
+    }
     if (state !== 'play') return;
     // Crosshair and mining progress.
     hud.fillStyle = 'rgba(255,255,255,0.85)';
@@ -1141,7 +1420,7 @@
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
-    if (state === 'play' && overlayEl.hidden) {
+    if (state === 'play' && (overlayEl.hidden || coop)) {
       update(dt);
       saveT += dt;
       if (saveT > 10) { saveT = 0; save(); }
@@ -1159,9 +1438,11 @@
     ui.show({
       title: '⛏️ Block Frontier',
       html: `<p>Welcome back! ${s.mode === 'survival' ? `${s.pts.toLocaleString()} expedition points, day ${s.day}.` : 'Your creative world is waiting.'}</p>
-        <p style="font-size:13px;color:var(--muted)">Click the world to look around. WASD to move, Space to jump, hold left click to mine, right click to place, E for inventory and crafting.</p>`,
+        <p style="font-size:13px;color:var(--muted)">Click the world to look around. WASD to move, Space to jump, hold left click to mine, right click to place, E for inventory and crafting.</p>
+        ${coopHtml()}`,
       button: 'Play',
       onAction: resume,
+      onRender: p => live.wire(p),
     });
     state = 'paused';
   } else {
@@ -1169,5 +1450,7 @@
     newWorld('survival');
     newWorldMenu(false);
   }
+  const coopInvite = Live.invite('frontier');
+  if (coopInvite) live.connect('public', coopInvite);
   requestAnimationFrame(frame);
 })();

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Byte Bot · Pixel Pioneers Arcade</title>
+  <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../assets/css/arcade.css">
+  <style>
+    .bb { width: min(1040px, 100%); max-height: 100%; display: grid; grid-template-columns: 1fr 330px; gap: 12px; padding: 4px; }
+    .bb-board { position: relative; border-radius: var(--radius); overflow: hidden; background: radial-gradient(120% 100% at 50% 0%, #2a3358, #141829); aspect-ratio: 16 / 11; min-width: 0; }
+    .bb-board canvas { width: 100%; height: 100%; display: block; }
+    .bb-tip { position: absolute; left: 10px; right: 10px; bottom: 10px; text-align: center; font-size: 13px; color: #cfe9ff; background: rgba(10,14,28,.7); border-radius: 8px; padding: 6px 10px; }
+    .bb-tip:empty { display: none; }
+    .bb-side { display: flex; flex-direction: column; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; overflow-y: auto; }
+    .bb-title { display: flex; justify-content: space-between; align-items: baseline; font-weight: 800; }
+    .bb-title small { color: var(--muted); font-weight: 600; font-size: 12px; }
+    .bb-fn { border: 2px solid var(--line); border-radius: 10px; padding: 6px; cursor: pointer; }
+    .bb-fn.on { border-color: var(--accent); }
+    .bb-fn.off { display: none; }
+    .bb-fn h3 { margin: 0 0 4px; font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; }
+    .bb-slots { display: flex; flex-wrap: wrap; gap: 4px; }
+    .bb-slot { width: 34px; height: 34px; border-radius: 7px; border: 1px dashed var(--line); display: grid; place-items: center; font-size: 17px; font-weight: 800; background: transparent; color: var(--text); padding: 0; }
+    .bb-slot.full { border-style: solid; cursor: pointer; }
+    .bb-slot.now { box-shadow: 0 0 0 3px #ffd23f; }
+    .bb-pal { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .bb-pal button { padding: 8px 4px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); color: var(--text); font-weight: 800; font-size: 13px; display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; }
+    .bb-pal button span { font-size: 18px; }
+    .bb-pal button kbd { font-size: 10px; }
+    .bb-pal button:disabled { opacity: .35; cursor: default; }
+    .bb-run { display: flex; gap: 6px; }
+    .bb-run .btn { flex: 1; }
+    .c-F { background: #2e6fd6 !important; } .c-L, .c-R { background: #7b4fd6 !important; } .c-X { background: #2fa96a !important; } .c-1 { background: #d6702e !important; } .c-2 { background: #c2187a !important; }
+    @media (max-width: 760px) { .bb { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body class="game" data-game="byte-bot">
+  <header class="topbar">
+    <a class="back" href="../../index.html">← All games</a>
+    <h1>Byte Bot</h1>
+    <div class="stats">
+      <span>Level<b id="level">-</b></span>
+      <span>Stars<b id="stars">0</b></span>
+      <span>Score<b id="total">0</b></span>
+    </div>
+    <button class="icon-btn" id="mute" type="button">Sound on</button>
+  </header>
+
+  <main class="stage">
+    <div class="bb">
+      <div class="bb-board"><canvas id="game"></canvas><div class="bb-tip" id="tip"></div></div>
+      <div class="bb-side" id="side"></div>
+    </div>
+    <div class="overlay" id="overlay" hidden></div>
+  </main>
+
+  <p class="help"><kbd>↑</kbd> forward · <kbd>←</kbd>/<kbd>→</kbd> turn · <kbd>Space</kbd> light · <kbd>1</kbd>/<kbd>2</kbd> call P1/P2 · <kbd>Tab</kbd> switch row · <kbd>Backspace</kbd> delete · <kbd>Enter</kbd> run</p>
+
+  <script src="../../assets/js/config.js"></script>
+  <script src="../../assets/js/catalog.js"></script>
+  <script src="../../assets/js/arcade.js"></script>
+  <script src="../../assets/js/gfx.js"></script>
+  <script src="../../assets/js/filter.js"></script>
+  <script src="../../assets/js/friends.js"></script>
+  <script src="../../assets/js/online.js"></script>
+  <script src="../../assets/js/chat.js"></script>
+  <script src="../../assets/js/invites.js"></script>
+  <script src="core.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

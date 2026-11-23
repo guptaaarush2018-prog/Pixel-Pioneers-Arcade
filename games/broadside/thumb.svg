@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+<rect width="320" height="200" fill="#1f6f9a"/>
+<g stroke="#fff" stroke-opacity=".14" stroke-width="2" fill="none"><path d="M20 40 q10 -4 20 0"/><path d="M240 30 q12 -4 24 0"/><path d="M60 160 q10 -4 20 0"/><path d="M200 176 q12 -4 24 0"/><path d="M280 120 q10 -4 20 0"/></g>
+<ellipse cx="268" cy="54" rx="56" ry="40" fill="#78d2dc" opacity=".35"/>
+<ellipse cx="268" cy="54" rx="46" ry="32" fill="#e8d49a"/>
+<ellipse cx="270" cy="52" rx="34" ry="22" fill="#5ea34a"/>
+<g fill="#2f7a2a"><ellipse cx="262" cy="48" rx="10" ry="4"/><ellipse cx="262" cy="48" rx="4" ry="10"/><ellipse cx="282" cy="58" rx="9" ry="3.5"/><ellipse cx="282" cy="58" rx="3.5" ry="9"/></g>
+<g transform="translate(118 116) rotate(-12)">
+<ellipse cx="4" cy="5" rx="50" ry="17" fill="#000" opacity=".25"/>
+<path d="M50 0 Q28 -18 -8 -16 L-48 -13 L-48 13 L-8 16 Q28 18 50 0Z" fill="#6e4524"/>
+<path d="M42 0 Q24 -13 -6 -12 L-40 -10 L-40 10 L-6 12 Q24 13 42 0Z" fill="#b07b48"/>
+<g fill="#1e1e1e"><rect x="-22" y="-19" width="4" height="5"/><rect x="-2" y="-19" width="4" height="5"/><rect x="18" y="-18" width="4" height="5"/><rect x="-22" y="14" width="4" height="5"/><rect x="-2" y="14" width="4" height="5"/><rect x="18" y="13" width="4" height="5"/></g>
+<path d="M-12 -14 Q2 0 -12 14Z" fill="#f4efe2"/><path d="M16 -14 Q30 0 16 14Z" fill="#f4efe2"/>
+<path d="M-46 -1 L-34 -4 L-34 3 L-46 2Z" fill="#4fc3ff"/></g>
+<g fill="#ebebeb" opacity=".85"><circle cx="112" cy="84" r="9"/><circle cx="130" cy="78" r="8"/><circle cx="96" cy="88" r="7"/></g>
+<g fill="#222"><circle cx="150" cy="62" r="3.5"/><circle cx="170" cy="54" r="3.5"/><circle cx="188" cy="50" r="3.5"/></g>
+<g transform="translate(214 40) rotate(170)">
+<path d="M36 0 Q20 -13 -6 -12 L-34 -10 L-34 10 L-6 12 Q20 13 36 0Z" fill="#4a3220"/>
+<path d="M0 -11 Q11 0 0 11Z" fill="#3a3a3a"/><path d="M-34 -1 L-24 -3 L-24 2Z" fill="#111"/></g>
+<g fill="#ffb02e"><circle cx="206" cy="46" r="6"/></g><g fill="#fff3b0"><circle cx="206" cy="46" r="3"/></g>
+<g transform="translate(48 168)"><rect x="-9" y="-7" width="18" height="13" rx="3" fill="#7a4f22"/><rect x="-9" y="-2" width="18" height="3" fill="#ffd23f"/></g>
+<text x="14" y="190" font-family="Georgia,serif" font-size="24" font-weight="900" fill="#ffd23f" stroke="#3a2614" stroke-width="1">BROADSIDE</text>
+</svg>

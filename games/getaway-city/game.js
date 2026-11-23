@@ -1,4 +1,4 @@
-/* Getaway City: a top-down open-world city. Walk or take any car, run heists and escape the
+/* Getaway City: an open-world city, in 3D with a chase camera or top-down (Classic view). Walk or take any car, run heists and escape the
    police, drive taxi fares and pizza runs, race checkpoints, hit stunt ramps and hunt hidden
    packages. Cash buys faster cars and perks. Progress saves; the score is lifetime earnings.
    Nobody gets hurt: there are no weapons, and pedestrians always dive out of the way. */
@@ -13,7 +13,8 @@
   const LANE = 23;
 
   const canvas = document.getElementById('game');
-  const ctx = Arcade.setupCanvas(canvas, W, H);
+  const ctx2d = Arcade.setupCanvas(canvas, W, H);
+  let ctx = ctx2d;            // the 2D canvas in Classic view, the HUD layer over WebGL in 3D
   const overlayEl = document.getElementById('overlay');
   const ui = Arcade.overlay(overlayEl);
   const $ = id => document.getElementById(id);
@@ -50,14 +51,17 @@
     '13,12': { kind: 'heist', heist: 4, name: 'Golden Mile Casino', color: '#ef5350', icon: '🎰' },
     '1,1': { kind: 'heist', heist: 5, name: 'Airport Hangar', color: '#ef5350', icon: '✈️' },
   };
+  // crack: seconds standing in the circle. alarm: stars when the alarm trips halfway through (0 =
+  // silent). rest: minutes before the place can be hit again. Each heist needs the one before it.
   const HEISTS = [
-    { name: 'Corner Store Safe', reward: 900, stars: 2, crack: 3, need: 0 },
-    { name: 'Jewel Box Display', reward: 2500, stars: 3, crack: 4, need: 1 },
-    { name: 'Gold Depot', reward: 6000, stars: 4, crack: 5, need: 2 },
-    { name: 'City Bank Vault', reward: 15000, stars: 5, crack: 7, need: 3 },
-    { name: 'Casino High Roller Cage', reward: 30000, stars: 6, crack: 9, need: 4 },
-    { name: 'Airport Bullion Run', reward: 50000, stars: 7, crack: 11, need: 5 },
+    { name: 'Corner Store Safe', reward: 900, stars: 2, crack: 4, alarm: 0, rest: 4 },
+    { name: 'Jewel Box Display', reward: 2500, stars: 3, crack: 6, alarm: 1, rest: 8 },
+    { name: 'Gold Depot', reward: 6000, stars: 4, crack: 9, alarm: 2, rest: 12 },
+    { name: 'City Bank Vault', reward: 15000, stars: 5, crack: 12, alarm: 3, rest: 20 },
+    { name: 'Casino High Roller Cage', reward: 30000, stars: 6, crack: 14, alarm: 4, rest: 25 },
+    { name: 'Airport Bullion Run', reward: 50000, stars: 7, crack: 16, alarm: 5, rest: 30 },
   ];
+  const DROP_MIN = 1800;     // the fence's drop point is at least this far from the job
 
   const PALETTES = {
     downtown: ['#5c7a99', '#6d8fb3', '#4f6d8a', '#7f97b0', '#5a6a7a', '#3f5f7f'],
@@ -353,7 +357,7 @@
 
   let s;
   function fresh() {
-    return { cash: 200, lifetime: 0, owned: ['compact'], perks: { engine: 0, armor: 0, nitro: 0, scanner: 0 }, heists: 0, heistDone: [0, 0, 0, 0, 0, 0],
+    return { cash: 200, lifetime: 0, owned: ['compact'], perks: { engine: 0, armor: 0, nitro: 0, scanner: 0 }, heists: 0, heistDone: [0, 0, 0, 0, 0, 0], heistNext: [0, 0, 0, 0, 0, 0], raceMedal: 3,
       fares: 0, bestFares: 0, deliveries: 0, raceBest: 0, medal: 0, pkgs: [], stunts: [], intro: false, maxStars: 0, map: N };
   }
   function loadSave() {
@@ -361,6 +365,7 @@
     // The city grew: packages and ramps moved, so an old save starts those collections again.
     if (raw && raw.map !== N) { raw.pkgs = []; raw.stunts = []; }
     s = raw ? { ...fresh(), ...raw, perks: { ...fresh().perks, ...(raw.perks || {}) } } : fresh();
+    if (!Array.isArray(s.heistNext)) s.heistNext = [0, 0, 0, 0, 0, 0];
   }
   const score = () => Math.floor(s.lifetime);
   function persist() {
@@ -452,6 +457,7 @@
   function spawnAtHideout() {
     player.x = hideout.x;
     player.y = hideout.y + 48;
+    player.a = Math.PI / 2;      // facing the street
     player.car = null;
   }
 
@@ -481,7 +487,7 @@
       const a = iPos(pi, pj), b = iPos(i, j), f = Arcade.rand(0.25, 0.75), o = laneOff(d);
       const x = a.x + (b.x - a.x) * f + o.x, y = a.y + (b.y - a.y) * f + o.y;
       const dp = Math.hypot(x - camX(), y - camY());
-      if (dp < 640 || dp > 1300) continue;
+      if (view3d ? dp < 950 || dp > 1450 : dp < 640 || dp > 1300) continue;
       if (cars.some(c => Math.hypot(c.x - x, c.y - y) < 70)) continue;
       const car = makeCar(Arcade.pick(TRAFFIC), x, y, Math.atan2(dy, dx), 'traffic');
       car.ai = { i, j, d, nd: d, phase: 'go', speed: Arcade.rand(150, 200), wait: 0, stuck: 0 };
@@ -497,7 +503,7 @@
     for (let tries = 0; tries < 24; tries++) {
       const i = Arcade.randInt(0, N), j = Arcade.randInt(0, N);
       const p = iPos(i, j), d = Math.hypot(p.x - player.x, p.y - player.y);
-      if (d < near || d > 1300) continue;
+      if (d < (view3d ? 850 : near) || d > 1300) continue;
       const car = makeCar(type, p.x, p.y, Math.atan2(player.y - p.y, player.x - p.x), 'cop');
       car.nav = null;
       return;
@@ -515,7 +521,7 @@
       const pts = [[x1 + (x2 - x1) * f, y1], [x2, y1 + (y2 - y1) * f], [x2 - (x2 - x1) * f, y2], [x1, y2 - (y2 - y1) * f]];
       const [x, y] = pts[side];
       const dp = Math.hypot(x - camX(), y - camY());
-      if (dp < 560 || dp > 1100) continue;
+      if (dp < (view3d ? 750 : 560) || dp > 1100) continue;
       peds.push({ x, y, blk, dir: Math.random() < 0.5 ? 1 : -1, speed: Arcade.rand(35, 55), color: Arcade.pick(PED_COLORS), skin: Arcade.pick(['#ffe0bd', '#f1c27d', '#c68642', '#8d5524']), dive: 0, dvx: 0, dvy: 0, flee: 0, step: Math.random() * 10 });
       return;
     }
@@ -662,7 +668,7 @@
   // ---------- Driving ----------
 
   function drive(car, throttle, steer, brake, nitro, dt) {
-    const T = car.T, mul = car === player.car ? engineMul() : car.role === 'cop' ? 1 + stars * 0.04 : 1;
+    const T = car.T, mul = car === player.car ? engineMul() : car.role === 'cop' ? 1 + stars * 0.055 : 1;
     const nitroOn = nitro && car === player.car && player.nitro > 0 && throttle > 0;
     const max = T.max * mul * (nitroOn ? 1.35 : 1), accel = T.accel * mul * (nitroOn ? 1.9 : 1);
     const fx_ = Math.cos(car.a), fy = Math.sin(car.a), rx = -fy, ry = fx_;
@@ -739,10 +745,11 @@
     const st = car.stunt;
     car.stunt = null;
     const air = time - st.start, far = Math.hypot(car.x - st.x, car.y - st.y);
-    const pay = Math.round(far * 1.2 + air * 300);
-    earn(pay, car.x, car.y - 40, 'Stunt!');
-    say(`STUNT JUMP · ${Math.round(far / 10)} m`, `${air.toFixed(1)} s of air`, 1.8, '#ffd54f');
-    if (!s.stunts.includes(st.id)) {
+    const first = !s.stunts.includes(st.id);
+    const pay = Math.round((far * 1.2 + air * 300) * (first ? 1 : 0.1));
+    earn(pay, car.x, car.y - 40, first ? 'New stunt!' : 'Stunt');
+    say(`STUNT JUMP · ${Math.round(far / 10)} m`, first ? `${air.toFixed(1)} s of air` : 'Already landed this one: find a new ramp for full pay', 1.8, '#ffd54f');
+    if (first) {
       s.stunts.push(st.id);
       if (s.stunts.length >= 5) Arcade.flag('getaway-stunt');
     }
@@ -807,8 +814,8 @@
   function startMission(m) {
     if (m.kind === 'heist') {
       const h = HEISTS[m.heist];
-      mission = { kind: 'heist', h, idx: m.heist, stage: 'crack', crack: 0, target: m, label: h.name };
-      say(h.name, `Stay in the red circle to crack it (${h.crack} s)`, 2.6, '#ff8a80');
+      mission = { kind: 'heist', h, idx: m.heist, stage: 'crack', crack: 0, alarmed: false, target: m, label: h.name };
+      say(h.name, `Stay in the red circle to crack it (${h.crack} s)${h.alarm ? ' · the alarm trips halfway' : ''}`, 2.6, '#ff8a80');
     } else if (m.kind === 'taxi') {
       mission = { kind: 'taxi', needsCar: true, fares: 0, earned: 0, label: 'Taxi shift' };
       nextFare();
@@ -846,6 +853,7 @@
   function updateMission(dt) {
     const m = mission;
     if (!m) return;
+    if (m.kind === 'duel') return updateDuel(dt);
     const pc = player.car, here = pc || player, slow = !pc || speedOf(pc) < 70;
     if (m.needsCar && !pc) return failMission('You need a car');
     if (m.kind === 'heist') {
@@ -854,26 +862,37 @@
         if (d < 46 && slow) {
           m.crack += dt;
           if (Gfx.rand() < dt * 10) Arcade.tone({ freq: 1200 + m.crack * 100, dur: 0.03, type: 'square', vol: 0.02 });
+          if (m.h.alarm && !m.alarmed && m.crack >= m.h.crack / 2) {
+            m.alarmed = true;
+            addStars(m.h.alarm, 'ALARM!');
+            say('The alarm went off!', 'Keep cracking: the cops are on their way', 2.2, '#ff5252');
+            for (let k = 0; k < m.h.alarm; k++) spawnCop();
+          }
           if (m.crack >= m.h.crack) {
             m.stage = 'escape';
+            m.drop = randomSidewalk(DROP_MIN, 3400, m.target);
+            s.heistNext[m.idx] = Date.now() + m.h.rest * 60000;
             addStars(m.h.stars);
-            say('Got the loot!', 'Lose the cops or get it to the hideout', 2.6, '#ffd54f');
+            say('Got the loot!', 'Lose every cop, then meet the fence at the drop point', 3, '#ffd54f');
             sfx.good();
             for (let k = 0; k < m.h.stars * 2; k++) spawnCop();
           }
         } else m.crack = Math.max(0, m.crack - dt * 0.5);
-      } else if (Math.hypot(here.x - hideout.x, here.y - hideout.y) < 50) {
-        earn(m.h.reward, hideout.x, hideout.y - 50, m.h.name);
-        s.heists++;
-        s.heistDone[m.idx] = (s.heistDone[m.idx] || 0) + 1;
-        Arcade.flag('getaway-heist');
-        if (m.idx === 3) Arcade.flag('getaway-bank');
-        clearStars(null);
-        say('Heist complete!', `${money(m.h.reward)} stashed at the hideout`, 3, '#9be37a');
-        sfx.good();
-        mission = null;
-        persist();
-      }
+      } else if (Math.hypot(here.x - m.drop.x, here.y - m.drop.y) < 50 && slow) {
+        if (stars > 0) {
+          if (!m.warned) { say('The fence won\'t show with cops after you', 'Lose your wanted level first', 2.2, '#ff8a80'); m.warned = true; }
+        } else {
+          earn(m.h.reward, m.drop.x, m.drop.y - 50, m.h.name);
+          s.heists++;
+          s.heistDone[m.idx] = (s.heistDone[m.idx] || 0) + 1;
+          Arcade.flag('getaway-heist');
+          if (m.idx === 3) Arcade.flag('getaway-bank');
+          say('Heist complete!', `The fence paid ${money(m.h.reward)}`, 3, '#9be37a');
+          sfx.good();
+          mission = null;
+          persist();
+        }
+      } else if (m.warned) m.warned = false;
     } else if (m.kind === 'taxi') {
       m.timer -= dt;
       if (m.timer <= 0) return failMission(m.stage === 'pickup' ? 'The passenger gave up' : 'Too slow!');
@@ -932,8 +951,10 @@
         if (m.cp === RACE.length) {
           const medal = RACE_MEDALS.findIndex(t => m.t <= t);
           const names = ['Gold', 'Silver', 'Bronze'];
-          const pay = medal >= 0 ? [1200, 700, 350][medal] : 120;
-          earn(pay, pc.x, pc.y - 40, medal >= 0 ? names[medal] : 'Finished');
+          const rank = medal >= 0 ? medal : 3, better = rank < (s.raceMedal ?? 3);
+          const pay = Math.round((medal >= 0 ? [1200, 700, 350][medal] : 120) * (better ? 1 : 0.2));
+          if (better) s.raceMedal = rank;
+          earn(pay, pc.x, pc.y - 40, medal >= 0 ? names[medal] + (better ? ' (new best)' : '') : 'Finished');
           if (!s.raceBest || m.t < s.raceBest) s.raceBest = m.t;
           if (medal === 0) Arcade.flag('getaway-race');
           say(medal >= 0 ? `${names[medal]} medal!` : 'Race finished', `${m.t.toFixed(2)} s · best ${s.raceBest.toFixed(2)} s`, 3, medal === 0 ? '#ffd54f' : '#ffffff');
@@ -948,19 +969,25 @@
   function missionTarget() {
     const m = mission;
     if (!m) return null;
-    if (m.kind === 'heist') return m.stage === 'crack' ? { x: m.target.x, y: m.target.y, color: '#ff5252' } : { x: hideout.x, y: hideout.y, color: '#b388ff' };
+    if (m.kind === 'heist') return m.stage === 'crack' ? { x: m.target.x, y: m.target.y, color: '#ff5252' } : { x: m.drop.x, y: m.drop.y, color: '#b388ff' };
     if (m.kind === 'taxi') return { ...(m.stage === 'pickup' ? m.pick : m.drop), color: '#fdd835' };
     if (m.kind === 'pizza') return { ...m.drops[m.done], color: '#ff7043' };
     if (m.kind === 'race') return { ...RACE[m.cp % RACE.length], color: '#ffffff' };
+    if (m.kind === 'duel') return { ...m.dest, color: '#69f0ae' };
     return null;
   }
   function objectiveText() {
     const m = mission;
     if (!m) return stars ? 'Lose the cops: get out of sight, or hit a 🎨 Spray Shop' : '';
-    if (m.kind === 'heist') return m.stage === 'crack' ? `Crack the ${m.h.name}: stay in the circle` : 'Get the loot to the 🏠 Hideout';
+    if (m.kind === 'heist') return m.stage === 'crack' ? `Crack the ${m.h.name}: stay in the circle` : stars ? `Lose the cops (${'★'.repeat(stars)}), then get the loot to the drop` : 'Get the loot to the purple drop point';
     if (m.kind === 'taxi') return `${m.stage === 'pickup' ? 'Pick up the passenger' : 'Drop them off'} · ${Math.ceil(m.timer)} s · fares ${m.fares}`;
     if (m.kind === 'pizza') return `Deliver pizza ${m.done + 1}/${m.drops.length} · ${Math.ceil(m.timer)} s`;
     if (m.kind === 'race') return m.countdown > 0 ? `Get ready… ${Math.ceil(m.countdown)}` : `Checkpoint ${m.cp}/${RACE.length} · ${m.t.toFixed(1)} s`;
+    if (m.kind === 'duel') {
+      if (m.countdown > 0) return `Race vs ${live.them} · ${Math.ceil(m.countdown)}…`;
+      const mine = Math.hypot((player.car || player).x - m.dest.x, (player.car || player).y - m.dest.y), theirs = Math.hypot(friend.x - m.dest.x, friend.y - m.dest.y);
+      return `Race vs ${live.them} · ${m.t.toFixed(1)} s · ${mine <= theirs ? 'you lead' : 'they lead'} by ${Math.round(Math.abs(mine - theirs) / 10)} m`;
+    }
     return '';
   }
 
@@ -982,7 +1009,7 @@
       html: `<p class="gc-cash">${money(s.cash)}</p>
         <div class="gc-tabs"><button class="btn ${tab === 'garage' ? '' : 'secondary'}" type="button" data-tab="garage">Garage</button><button class="btn ${tab === 'perks' ? '' : 'secondary'}" type="button" data-tab="perks">Perks</button></div>
         <div class="gc-list">${tab === 'garage' ? garage : perks}</div>
-        <p style="font-size:12px;color:var(--muted)">Wanted level cleared. Buy more cars at the 🚗 Car Dealer.</p>`,
+        <p style="font-size:12px;color:var(--muted)">Buy more cars at the 🚗 Car Dealer.</p>`,
       button: 'Back to the streets',
       onAction: () => ui.hide(),
       onRender: panel => {
@@ -1035,8 +1062,11 @@
   function missionPanel(m) {
     const info = {
       heist: () => {
-        const h = HEISTS[m.heist], locked = s.heists < h.need;
-        return { title: `💼 ${h.name}`, html: locked ? `<p>Pull off ${h.need} heist${h.need > 1 ? 's' : ''} first to be trusted with this one.</p>` : `<p>Crack it in ${h.crack} seconds, then get the loot back to the 🏠 Hideout with <b>${'★'.repeat(h.stars)}</b> on your tail.</p><p class="gc-cash">${money(h.reward)}</p>`, ok: !locked };
+        const h = HEISTS[m.heist], prev = HEISTS[m.heist - 1], locked = prev && !s.heistDone[m.heist - 1];
+        const wait = (s.heistNext[m.heist] || 0) - Date.now();
+        if (locked) return { title: `💼 ${h.name}`, html: `<p>Pull off the ${prev.name} first to be trusted with this one.</p>`, ok: false };
+        if (wait > 0) return { title: `💼 ${h.name}`, html: `<p>Security is still on high alert after your last visit. Come back in <b>${Math.floor(Math.ceil(wait / 1000) / 60)}:${String(Math.ceil(wait / 1000) % 60).padStart(2, '0')}</b>.</p>`, ok: false };
+        return { title: `💼 ${h.name}`, html: `<p>Stand in the circle for ${h.crack} seconds to crack it${h.alarm ? `; the alarm trips halfway and brings <b>${'★'.repeat(h.alarm)}</b>` : ''}. Then escape <b>${'★'.repeat(h.stars)}</b>, lose every cop, and meet the fence at a drop point across town.</p><p class="gc-cash">${money(h.reward)}</p>`, ok: true };
       },
       taxi: () => ({ title: '🚕 Taxi shift', html: '<p>Pick up passengers and drive them across town before the meter runs out. Fast, careful driving earns tips. The shift goes on until you miss one.</p>', ok: true }),
       pizza: () => ({ title: '🍕 Pizza run', html: '<p>Four hot pizzas, 100 seconds. Every second left over is a bonus.</p>', ok: true }),
@@ -1052,9 +1082,10 @@
   }
 
   function busted() {
-    const fine = Math.min(5000, Math.round(s.cash * 0.1));
+    const fine = Math.min(10000, Math.round(s.cash * 0.15));
     s.cash -= fine;
     if (player.car) { player.car.role = 'parked'; player.car = null; }
+    const lostLoot = mission && mission.kind === 'heist' && mission.stage === 'escape';
     if (mission) { mission = null; }
     clearStars(null);
     for (let i = cars.length - 1; i >= 0; i--) if (cars[i].role === 'leaving') cars.splice(i, 1);
@@ -1062,7 +1093,7 @@
     player.y = policeHQ.y + 50;
     sfx.bad();
     persist();
-    ui.show({ title: '🚔 Busted!', html: `<p>The police caught you. You paid a ${money(fine)} fine.</p>`, button: 'Back to the streets', onAction: () => ui.hide() });
+    ui.show({ title: '🚔 Busted!', html: `<p>The police caught you. You paid a ${money(fine)} fine${lostLoot ? ' and the loot was taken' : ''}.</p>`, button: 'Back to the streets', onAction: () => ui.hide() });
   }
 
   // ---------- Input ----------
@@ -1076,6 +1107,7 @@
       if (player.car) exitCar(false); else enterNearest();
     }
     if (e.code === 'KeyM') mapOpen = !mapOpen;
+    if (e.code === 'KeyV') toggleView();
     if (e.code === 'KeyH' && player.car) { sfx.horn(); player.car.honk = 0.3; }
     if (e.code === 'KeyP' || e.code === 'Escape') pause();
   });
@@ -1085,10 +1117,10 @@
 
   // Touch: drag anywhere to steer (and drive toward the drag); tap the buttons in the corner.
   let joy = null;
-  const toCanvas = e => { const r = canvas.getBoundingClientRect(); return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height }; };
+  const toCanvas = e => { const r = e.currentTarget.getBoundingClientRect(); return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height }; };
   const TOUCH_BTNS = [{ id: 'enter', x: W - 70, y: H - 150, r: 32, label: 'E' }, { id: 'brake', x: W - 150, y: H - 70, r: 32, label: '⏸' }];
   let touchBrake = false;
-  canvas.addEventListener('pointerdown', e => {
+  const onDown = e => {
     const p = toCanvas(e);
     if (e.pointerType !== 'mouse') {
       const b = TOUCH_BTNS.find(b => Math.hypot(p.x - b.x, p.y - b.y) < b.r);
@@ -1099,12 +1131,16 @@
       }
     }
     joy = { id: e.pointerId, sx: p.x, sy: p.y, x: p.x, y: p.y };
-    try { canvas.setPointerCapture(e.pointerId); } catch {}
-  });
-  canvas.addEventListener('pointermove', e => { if (joy && joy.id === e.pointerId) { const p = toCanvas(e); joy.x = p.x; joy.y = p.y; } });
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch {}
+  };
+  const onMove = e => { if (joy && joy.id === e.pointerId) { const p = toCanvas(e); joy.x = p.x; joy.y = p.y; } };
   const endPtr = e => { if (joy && joy.id === e.pointerId) joy = null; if (touchBrake === e.pointerId) touchBrake = false; };
-  canvas.addEventListener('pointerup', endPtr);
-  canvas.addEventListener('pointercancel', endPtr);
+  for (const el of [canvas, document.getElementById('game3d')]) {
+    el.addEventListener('pointerdown', onDown);
+    el.addEventListener('pointermove', onMove);
+    el.addEventListener('pointerup', endPtr);
+    el.addEventListener('pointercancel', endPtr);
+  }
 
   function controls() {
     let x = 0, y = 0;
@@ -1123,7 +1159,7 @@
   function pause() {
     if (!overlayEl.hidden) return;
     persist();
-    ui.show({ title: 'Paused', html: `<p>${money(s.cash)} · lifetime ${money(s.lifetime)}</p>`, button: 'Resume', onAction: () => ui.hide() });
+    ui.show({ title: 'Paused', html: `<p>${money(s.cash)} · lifetime ${money(s.lifetime)}</p>${live.on ? '<p class="muted-note">Your friend keeps playing while you\'re paused.</p>' : ''}${onlineHtml()}`, button: 'Resume', onAction: () => ui.hide(), onRender: p => { viewButton(p, () => { ui.hide(); pause(); }); wireOnline(p, () => { ui.hide(); pause(); }); } });
   }
   Arcade.onBlur(pause);
 
@@ -1137,7 +1173,11 @@
     if (player.car) {
       const car = player.car;
       let throttle = -c.y, steer = c.x;
-      if (c.stick) {
+      if (c.stick && view3d) {
+        // Touch in 3D: the stick is a wheel and pedals (up to drive, sideways to steer).
+        steer = clamp(c.stick.x * 1.5, -1, 1);
+        throttle = -c.stick.y * c.stick.m;
+      } else if (c.stick) {
         // Touch: point the stick where you want to go.
         const want = Math.atan2(c.stick.y, c.stick.x), d = angDiff(want, car.a);
         steer = clamp(d * 2, -1, 1);
@@ -1146,6 +1186,18 @@
       drive(car, throttle, steer, c.brake, c.boost, dt);
       if (!c.boost && player.nitro < nitroCap()) player.nitro = Math.min(nitroCap(), player.nitro + dt * 0.25);
       player.x = car.x; player.y = car.y;
+    } else if (view3d) {
+      // On foot in 3D: turn with left/right, walk with up/down; the camera follows behind.
+      let turn = c.x, move = -c.y;
+      if (c.stick) { turn = c.stick.x * c.stick.m; move = -c.stick.y * c.stick.m; }
+      player.a += turn * 3.2 * dt;
+      const sp = (c.boost ? 210 : 130) * (move < 0 ? 0.6 : 1) * move;
+      player.vx = Math.cos(player.a) * sp;
+      player.vy = Math.sin(player.a) * sp;
+      if (move || turn) player.walk += dt * (c.boost ? 14 : 9);
+      player.x += player.vx * dt;
+      player.y += player.vy * dt;
+      collideWorld(player, o => [[o.x, o.y]], 8);
     } else {
       let mx = c.x, my = c.y;
       if (c.stick) { mx = c.stick.x * c.stick.m; my = c.stick.y * c.stick.m; }
@@ -1269,10 +1321,10 @@
       if (c === player.car) continue;
       const d = Math.hypot(c.x - px, c.y - py);
       const keepOwned = c.role === 'parked' && s.owned.includes(c.type) && d < 2600;
-      if ((d > 1500 && !keepOwned) || (c.role === 'leaving' && d > 700) || (c.role === 'wreck' && d > 1000)) cars.splice(i, 1);
+      if ((d > (view3d ? 1700 : 1500) && !keepOwned) || (c.role === 'leaving' && d > 700) || (c.role === 'wreck' && d > 1000)) cars.splice(i, 1);
     }
     const traffic = cars.filter(c => c.role === 'traffic').length;
-    if (traffic < 44) spawnTraffic();
+    if (traffic < (view3d ? 34 : 44)) spawnTraffic();
     const cops = cars.filter(c => c.role === 'cop').length;
     if (cops < [0, 1, 2, 3, 4, 6, 8, 10, 12][stars] && Math.random() < dt * 1.5) spawnCop();
   }
@@ -1368,11 +1420,12 @@
     for (const m of markers) if (Math.hypot(m.x - here.x, m.y - here.y) < 40 && (!player.car || speedOf(player.car) < 120)) on = m;
     if (on && on !== inMarker) {
       if (on.kind === 'hideout') {
-        if (stars > 0) clearStars('Laid low at the hideout');
-        if (!mission) { if (player.car) player.car.vx = player.car.vy = 0; hideoutPanel(); }
+        if (stars > 0) say('Not with cops on your tail!', 'Lose them first: the hideout stays secret', 2, '#ff8a80');
+        else if (!mission) { if (player.car) player.car.vx = player.car.vy = 0; hideoutPanel(); }
       } else if (on.kind === 'paint') {
-        if (stars > 0 && player.car) {
-          const cost = 100 * stars;
+        if (stars > 0 && player.car && seen) say('They saw you pull in!', 'Get out of sight before a respray', 2, '#ff8a80');
+        else if (stars > 0 && player.car) {
+          const cost = 400 * stars;
           if (s.cash >= cost) {
             s.cash -= cost;
             player.car.color = Arcade.pick(['#e53935', '#43a047', '#1e88e5', '#fdd835', '#8e24aa', '#fb8c00', '#00acc1', '#f06292']);
@@ -1393,6 +1446,7 @@
     time += dt;
     dayT = (dayT + dt / 480) % 1;
     updatePlayer(dt);
+    updateOnline(dt);
     updateCars(dt);
     updatePeds(dt);
     updateWanted(dt);
@@ -1684,6 +1738,7 @@
     if (!player.car) drawPerson(player.x, player.y, player.a, '#7c4dff', '#ffe0bd', player.walk, false);
     const air = [];
     for (const c of cars) { if (!vis(c.x, c.y)) continue; if (c.z > 2) air.push(c); else drawCar(c); }
+    if (online() && vis(friend.x, friend.y)) drawFriend2d();
     fx.draw(ctx);
     // Buildings and trees, far ones first so near ones overlap them.
     const cxw = x0 + vw / 2, cyw = y0 + vh / 2;
@@ -1792,6 +1847,7 @@
     }
     if (big) for (const p of packages) if (!s.pkgs.includes(p.id) && s.pkgs.length >= 10) dot(p.x, p.y, '#a1887f', 2.5);
     for (const c of cars) if (c.role === 'cop') dot(c.x, c.y, Math.floor(time * 6) % 2 ? '#ff1744' : '#2979ff', big ? 4 : 2.5);
+    if (online()) dot(friend.x, friend.y, FRIEND_COLOR, big ? 6 : 3.5);
     const tg = missionTarget();
     if (tg) dot(tg.x, tg.y, tg.color, big ? 7 : 4);
     if (mission && mission.kind === 'race') RACE.forEach((p, i) => { if (i >= mission.cp % RACE.length) dot(p.x, p.y, 'rgba(255,255,255,0.5)', 2); });
@@ -1844,8 +1900,9 @@
       for (const c of cars) { const d = Math.hypot(c.x - player.x, c.y - player.y); if (d < bd && !c.broken) { bd = d; near = c; } }
       if (near) Gfx.text(ctx, `Press E to take the ${near.T.name}`, W / 2, H - 40, { size: 15 });
     }
-    if (!mapOpen) drawMap(false);
-    drawArrow();
+    if (mission && mission.kind === 'heist' && mission.stage === 'crack' && mission.crack > 0) Gfx.bar(ctx, W / 2 - 90, 50, 180, 8, mission.crack / mission.h.crack, '#ffd54f');
+    if (view3d) { if (!mapOpen) drawRadar(); drawArrows3d(); }
+    else { if (!mapOpen) drawMap(false); drawArrow(); friendArrow2d(); }
     if (banner) {
       const a = clamp(banner.t / 0.4, 0, 1);
       ctx.globalAlpha = a;
@@ -1877,20 +1934,997 @@
     for (const k in vals) if (shown[k] !== vals[k]) { $(k).textContent = vals[k]; shown[k] = vals[k]; }
   }
 
+  // ---------- 3D view ----------
+  // The same city and the same simulation, drawn in WebGL behind a chase camera. The 2D world's
+  // (x, y) is the 3D world's (x, z), with y pointing up; one unit is about 10 cm. Classic (the
+  // top-down drawing above) is the fallback when WebGL is missing or too slow, and V switches.
+
+  const glWrap = $('glwrap'), glCanvas = $('game3d'), hudCanvas = $('hud');
+  const VIEW_KEY = 'getaway:view';
+  let viewPref = Arcade.load(VIEW_KEY, 'auto');      // auto · 3d · classic · auto-classic (fell back for speed)
+  let view3d = false, G3 = null, city3d = null;
+  const HS = 1.6, CURB = 1.5;                         // building height stretch, sidewalk height
+  const hex = h => GL3D.hex(h);
+  const M4 = typeof GL3D !== 'undefined' ? GL3D.mat4 : null;
+  const model = M4 ? M4.create() : null, PV = M4 ? M4.create() : null;
+  const mulCol = (c, k) => c.map(v => v * k);
+
+  function init3d() {
+    if (G3 !== null) return !!G3;
+    if (typeof GL3D === 'undefined') { G3 = false; return false; }
+    try {
+      G3 = GL3D.setup(glCanvas, hudCanvas, W, H) || false;
+      if (G3) buildCity3d();
+    } catch (e) {
+      console.error(e);
+      G3 = false;
+    }
+    return !!G3;
+  }
+  function setView(want3d, save) {
+    if (want3d && !init3d()) want3d = false;
+    view3d = want3d;
+    canvas.hidden = want3d;
+    glWrap.hidden = !want3d;
+    ctx = want3d ? G3.hud : ctx2d;
+    cam3.ready = false;
+    if (save) { viewPref = want3d ? '3d' : 'classic'; Arcade.save(VIEW_KEY, viewPref); }
+  }
+  function toggleView() {
+    if (!view3d && !init3d()) { say('3D view unavailable', 'This browser has WebGL turned off', 2.4, '#ff8a80'); return; }
+    setView(!view3d, true);
+    say(view3d ? '3D view' : 'Classic view', 'Press V to switch', 1.4, '#80deea');
+  }
+  function viewButton(panel, reshow) {
+    if (G3 === false) return;
+    panel.insertAdjacentHTML('beforeend', `<div class="menu" style="margin-top:8px"><button class="btn secondary" type="button" data-view>${view3d ? 'Switch to Classic (top-down) view' : 'Switch to 3D view'}</button></div>`);
+    panel.querySelector('[data-view]').addEventListener('click', () => {
+      if (!view3d && !init3d()) return;
+      setView(!view3d, true);
+      reshow();
+    });
+  }
+
+  // Slow computers: if the first few seconds of 3D run under 24 fps, drop to Classic once.
+  const perf = { warm: 0, t: 0, n: 0, done: false };
+  function checkSpeed(raw) {
+    if (perf.done || viewPref !== 'auto' || !overlayEl.hidden || raw > 0.5) return;
+    if ((perf.warm += raw) < 2) return;
+    perf.t += raw;
+    perf.n++;
+    if (perf.t < 6) return;
+    perf.done = true;
+    if (perf.n / perf.t < 24) {
+      setView(false, false);
+      viewPref = 'auto-classic';
+      Arcade.save(VIEW_KEY, viewPref);
+      say('Switched to Classic view', '3D was running slowly here. Press V to try it again.', 4, '#80deea');
+    }
+  }
+
+  // ---------- 3D geometry helpers ----------
+
+  // A convex polygon as a triangle fan, wound so its front faces along n.
+  function poly(out, pts, col, n, glow = false) {
+    const [a, b, c] = pts;
+    const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+    const d = (uy * vz - uz * vy) * n[0] + (uz * vx - ux * vz) * n[1] + (ux * vy - uy * vx) * n[2];
+    const p = d < 0 ? [...pts].reverse() : pts;
+    const r = col[0] + (glow ? 2 : 0);
+    for (let i = 1; i < p.length - 1; i++) for (const q of [p[0], p[i], p[i + 1]]) out.push(q[0], q[1], q[2], r, col[1], col[2], -1, -1);
+  }
+  const flat = (out, x0, z0, x1, z1, y, col, glow = false) => GL3D.box(out, x0, y, z0, x1, y, z1, col, { skip: 'bewsn', glow });
+  // Big flat areas are cut into tiles: fog is worked out per vertex, so one huge quad would come
+  // out fogged all over.
+  function tiled(out, x0, z0, x1, z1, y, col, step) {
+    for (let x = x0; x < x1; x += step) for (let z = z0; z < z1; z += step) flat(out, x, z, Math.min(x1, x + step), Math.min(z1, z + step), y, col);
+  }
+  const ring = (n, r, cx, cz, y) => Array.from({ length: n }, (_, i) => [cx + Math.cos(i / n * TAU) * r, y, cz + Math.sin(i / n * TAU) * r]);
+  // A flat rectangle on the ground, turned to angle a; tex gives it 0..1 texture coordinates.
+  function rect3(out, x, z, y, hl, hw, a, col, tex = false) {
+    const ca = Math.cos(a), sa = Math.sin(a);
+    const P = (l, w) => [x + ca * l - sa * w, z + sa * l + ca * w];
+    const pts = [P(-hl, -hw), P(-hl, hw), P(hl, hw), P(hl, -hw)], uv = [[0, 0], [0, 1], [1, 1], [1, 0]];
+    for (const i of [0, 1, 2, 0, 2, 3]) out.push(pts[i][0], y, pts[i][1], col[0] + 2, col[1], col[2], tex ? uv[i][0] : -1, tex ? uv[i][1] : -1);
+  }
+  // An open tube from (a, ra) to (b, rb): beacons and the helicopter's spotlight.
+  function tube(out, ax, ay, az, ra, bx, by, bz, rb, col, n = 12) {
+    for (let i = 0; i < n; i++) {
+      const c0 = Math.cos(i / n * TAU), s0 = Math.sin(i / n * TAU), c1 = Math.cos((i + 1) / n * TAU), s1 = Math.sin((i + 1) / n * TAU);
+      const p = [[ax + c0 * ra, ay, az + s0 * ra], [ax + c1 * ra, ay, az + s1 * ra], [bx + c1 * rb, by, bz + s1 * rb], [bx + c0 * rb, by, bz + s0 * rb]];
+      for (const k of [0, 1, 2, 0, 2, 3]) out.push(p[k][0], p[k][1], p[k][2], col[0] + 2, col[1], col[2], -1, -1);
+    }
+  }
+  // A flat ring on the ground (marker outlines).
+  function flatRing(out, x, z, y, r0, r1, col, n = 20) {
+    for (let i = 0; i < n; i++) {
+      const c0 = Math.cos(i / n * TAU), s0 = Math.sin(i / n * TAU), c1 = Math.cos((i + 1) / n * TAU), s1 = Math.sin((i + 1) / n * TAU);
+      poly(out, [[x + c0 * r0, y, z + s0 * r0], [x + c1 * r0, y, z + s1 * r0], [x + c1 * r1, y, z + s1 * r1], [x + c0 * r1, y, z + s0 * r1]], col, [0, 1, 0], true);
+    }
+  }
+  const groundAt = (x, y) => { const b = blockAt(x, y); return b && x >= b.x1 && x <= b.x2 && y >= b.y1 && y <= b.y2 ? CURB : 0; };
+  const solidAt = (x, y) => { const b = blockAt(x, y); return !!b && b.buildings.some(q => x > q.x1 - 3 && x < q.x2 + 3 && y > q.y1 - 3 && y < q.y2 + 3); };
+
+  // Rows of windows on one wall of a building: one quad with a repeating window texture, set just
+  // off the wall. Its texels are see-through between panes, so the wall shows there. The quad is
+  // marked as glowing so lit windows shine at night; by day it is tinted to look like glass.
+  const WIN_CELLS = 8;
+  function windows(out, x0, z0, x1, z1, y0, y1, face, cw, ch, seed) {
+    if (y1 - y0 < ch * 0.7) return;
+    const o = 0.5, off = (seed % WIN_CELLS) / WIN_CELLS;
+    const pts = {
+      s: [[x0, y0, z1 + o], [x1, y0, z1 + o], [x1, y1, z1 + o], [x0, y1, z1 + o]],
+      n: [[x0, y0, z0 - o], [x0, y1, z0 - o], [x1, y1, z0 - o], [x1, y0, z0 - o]],
+      e: [[x1 + o, y0, z0], [x1 + o, y1, z0], [x1 + o, y1, z1], [x1 + o, y0, z1]],
+      w: [[x0 - o, y0, z0], [x0 - o, y0, z1], [x0 - o, y1, z1], [x0 - o, y1, z0]],
+    }[face];
+    const ns = face === 'n' || face === 's';
+    const uv = ([x, y, z]) => [off + (ns ? x - x0 : z - z0) / cw / WIN_CELLS, (Math.floor(seed / 8) % WIN_CELLS) / WIN_CELLS + (y1 - y) / ch / WIN_CELLS];
+    for (const i of [0, 1, 2, 0, 2, 3]) { const p = pts[i], [u, v] = uv(p); out.push(p[0], p[1], p[2], 3, 1, 1, u, v); }
+  }
+  function windowTexture() {
+    const c = document.createElement('canvas');
+    c.width = c.height = 16 * WIN_CELLS;
+    const g = c.getContext('2d'), r = Gfx.rng(77);
+    for (let i = 0; i < WIN_CELLS; i++) for (let j = 0; j < WIN_CELLS; j++) {
+      const lit = r() < 0.45;
+      g.fillStyle = lit ? (r() < 0.7 ? '#ffe39a' : '#fff6dc') : '#3e4c63';
+      g.fillRect(i * 16 + 3, j * 16 + 3, 10, 10);
+      g.fillStyle = lit ? 'rgba(255,190,90,0.6)' : 'rgba(120,150,190,0.5)';
+      g.fillRect(i * 16 + 3, j * 16 + 8, 10, 1);
+    }
+    return c;
+  }
+  // A soft white spot on black: light pools (added on) and soft shadows (multiplied in).
+  function spotTexture() {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d');
+    g.fillStyle = '#000';
+    g.fillRect(0, 0, 64, 64);
+    const rg = g.createRadialGradient(32, 32, 2, 32, 32, 31);
+    rg.addColorStop(0, '#fff'); rg.addColorStop(0.5, '#888'); rg.addColorStop(1, '#000');
+    g.fillStyle = rg;
+    g.fillRect(0, 0, 64, 64);
+    return c;
+  }
+
+  // ---------- The city mesh (built once) ----------
+
+  function building3d(out, night, b, land) {
+    const x0 = b.x1, z0 = b.y1, x1 = b.x2, z1 = b.y2, base = CURB, top = CURB + b.h * HS;
+    const col = hex(b.color), r = Gfx.rng(Math.round(b.x1 * 7 + b.y1 * 13) || 1);
+    const seed = Math.floor(r() * 4096);
+    const xm = (x0 + x1) / 2, zm = (z0 + z1) / 2;
+    const allWin = (ya, yb, cw, ch, bx0 = x0, bz0 = z0, bx1 = x1, bz1 = z1) => {
+      let k = 0;
+      for (const f of 'nsew') windows(night, bx0, bz0, bx1, bz1, ya, yb, f, cw, ch, seed + 37 * k++);
+    };
+    if (b.style === 'house') {
+      const wallTop = base + b.h * HS * 0.62, roof = mulCol(col, 0.55), ov = 3;
+      GL3D.box(out, x0, base, z0, x1, wallTop, z1, col, { skip: 'bt' });
+      if (x1 - x0 >= z1 - z0) {
+        poly(out, [[x0 - ov, wallTop, z0 - ov], [x1 + ov, wallTop, z0 - ov], [x1 + ov, top, zm], [x0 - ov, top, zm]], mulCol(roof, 0.82), [0, 1, -1]);
+        poly(out, [[x0 - ov, wallTop, z1 + ov], [x1 + ov, wallTop, z1 + ov], [x1 + ov, top, zm], [x0 - ov, top, zm]], roof, [0, 1, 1]);
+        poly(out, [[x0, wallTop, z0], [x0, wallTop, z1], [x0, top, zm]], mulCol(col, 0.74), [-1, 0, 0]);
+        poly(out, [[x1, wallTop, z0], [x1, wallTop, z1], [x1, top, zm]], mulCol(col, 0.8), [1, 0, 0]);
+      } else {
+        poly(out, [[x0 - ov, wallTop, z0 - ov], [x0 - ov, wallTop, z1 + ov], [xm, top, z1 + ov], [xm, top, z0 - ov]], mulCol(roof, 0.82), [-1, 1, 0]);
+        poly(out, [[x1 + ov, wallTop, z0 - ov], [x1 + ov, wallTop, z1 + ov], [xm, top, z1 + ov], [xm, top, z0 - ov]], roof, [1, 1, 0]);
+        poly(out, [[x0, wallTop, z0], [x1, wallTop, z0], [xm, top, z0]], mulCol(col, 0.64), [0, 0, -1]);
+        poly(out, [[x0, wallTop, z1], [x1, wallTop, z1], [xm, top, z1]], mulCol(col, 0.7), [0, 0, 1]);
+      }
+      // Chimney, door and a row of windows.
+      GL3D.box(out, x0 + (x1 - x0) * 0.7, top - 14, z0 + (z1 - z0) * 0.3, x0 + (x1 - x0) * 0.7 + 7, top + 6, z0 + (z1 - z0) * 0.3 + 7, hex('#8d6e63'), { skip: 'b' });
+      GL3D.box(out, xm - 5, base, z1, xm + 5, base + 17, z1 + 0.7, hex('#5d4037'), { skip: 'b' });
+      allWin(base + 8, wallTop - 4, 18, wallTop - base - 12);
+      return;
+    }
+    GL3D.box(out, x0, base, z0, x1, top, z1, col, { skip: 'b' });
+    if (b.style === 'warehouse' || b.style === 'shed') {
+      for (let x = x0 + 8; x < x1 - 4; x += 14) GL3D.box(out, x, top, z0, x + 3, top + 1.5, z1, mulCol(col, 0.82), { skip: 'b' });
+      GL3D.box(out, xm - 18, base, z1, xm + 18, base + Math.min(30, top - base - 6), z1 + 0.6, mulCol(col, 0.55), { skip: 'b' });
+      for (let x = xm - 16; x < xm + 16; x += 4) GL3D.box(out, x, base + 1, z1 + 0.6, x + 0.8, base + Math.min(30, top - base - 6) - 1, z1 + 0.9, mulCol(col, 0.45), { skip: 'b' });
+      if (b.style === 'warehouse') for (const f of 'ns') windows(night, x0 + 10, z0, x1 - 10, z1, top - 13, top - 4, f, 22, 9, seed + f.charCodeAt(0));
+      return;
+    }
+    // Offices and apartments: windows, a rim round the roof, and something on the roof.
+    allWin(base + 12, top - 7, 20, 24);
+    const rim = mulCol(col, 0.72), t = 2.5;
+    GL3D.box(out, x0 - 1, top, z0 - 1, x1 + 1, top + 3, z0 + t, rim, { skip: 'b' });
+    GL3D.box(out, x0 - 1, top, z1 - t, x1 + 1, top + 3, z1 + 1, rim, { skip: 'b' });
+    GL3D.box(out, x0 - 1, top, z0 + t, x0 + t, top + 3, z1 - t, rim, { skip: 'bns' });
+    GL3D.box(out, x1 - t, top, z0 + t, x1 + 1, top + 3, z1 - t, rim, { skip: 'bns' });
+    const w = x1 - x0, d = z1 - z0;
+    if (b.style === 'helipad') {
+      const rad = Math.min(w, d) * 0.3;
+      flat(out, xm - rad, zm - rad, xm + rad, zm + rad, top + 0.3, hex('#455a64'));
+      for (const [a0, b0, a1, b1] of [[-rad, -rad, rad, -rad + 3], [-rad, rad - 3, rad, rad], [-rad, -rad, -rad + 3, rad], [rad - 3, -rad, rad, rad]]) flat(out, xm + a0, zm + b0, xm + a1, zm + b1, top + 0.5, hex('#ffeb3b'));
+      const hs = rad * 0.45, white = [0.95, 0.95, 0.95];
+      flat(out, xm - hs, zm - hs, xm - hs * 0.6, zm + hs, top + 0.6, white);
+      flat(out, xm + hs * 0.6, zm - hs, xm + hs, zm + hs, top + 0.6, white);
+      flat(out, xm - hs * 0.6, zm - hs * 0.15, xm + hs * 0.6, zm + hs * 0.15, top + 0.6, white);
+    } else if (b.style === 'garden') {
+      flat(out, x0 + w * 0.15, z0 + d * 0.5, x0 + w * 0.65, z0 + d * 0.85, top + 0.3, hex('#66bb6a'));
+      for (let k = 0; k < 6; k++) {
+        const bx = x0 + w * (0.2 + r() * 0.4), bz = z0 + d * (0.55 + r() * 0.25), s = 3 + r() * 3;
+        GL3D.box(out, bx - s, top, bz - s, bx + s, top + s * 1.6, bz + s, hex('#43a047'), { skip: 'b' });
+      }
+    } else if (b.style === 'bank') {
+      const ch = Math.min(70, top - base - 20);
+      for (let k = 0; k < 7; k++) {
+        const cx = x0 + 14 + k * (w - 28) / 6;
+        GL3D.box(out, cx - 3, base, z1 + 2, cx + 3, base + ch, z1 + 8, [0.93, 0.92, 0.88], { skip: 'b' });
+      }
+      GL3D.box(out, x0 + 6, base + ch, z1, x1 - 6, base + ch + 8, z1 + 10, [0.88, 0.86, 0.8], { skip: 'b' });
+      GL3D.box(out, xm - 16, top + 3, zm - 4, xm + 16, top + 30, zm + 4, hex('#ffd54f'), { glow: true });
+    } else {
+      // Air-con units, vents and sometimes a water tank.
+      for (let k = 0; k < 3 + r() * 4; k++) {
+        const s = 4 + r() * 7, ux = x0 + 8 + s + r() * (w - 16 - 2 * s), uz = z0 + 8 + s + r() * (d - 16 - 2 * s);
+        GL3D.box(out, ux - s, top, uz - s, ux + s, top + 4 + r() * 6, uz + s, mulCol(hex(shade(b.color, 0.35)), 1), { skip: 'b' });
+      }
+      if (b.style === 'flat' && r() < 0.5) {
+        const tx = x0 + w * 0.7, tz = z0 + d * 0.3;
+        for (const [a, c] of [[-6, -6], [4, -6], [-6, 4], [4, 4]]) GL3D.box(out, tx + a, top, tz + c, tx + a + 2, top + 10, tz + c + 2, hex('#5d4037'), { skip: 'b' });
+        GL3D.box(out, tx - 8, top + 10, tz - 8, tx + 8, top + 26, tz + 8, hex('#8d6e63'), { skip: 'b' });
+      }
+    }
+    // The tallest towers get a narrower crown on top.
+    if (b.style === 'tower' && b.h > 200) {
+      const cx0 = x0 + w * 0.22, cx1 = x1 - w * 0.22, cz0 = z0 + d * 0.22, cz1 = z1 - d * 0.22, ct = top + b.h * HS * 0.14;
+      GL3D.box(out, cx0, top, cz0, cx1, ct, cz1, mulCol(col, 0.92), { skip: 'b' });
+      let k = 0;
+      for (const f of 'nsew') windows(night, cx0, cz0, cx1, cz1, top + 4, ct - 4, f, 20, 24, seed + 91 * ++k);
+      GL3D.box(out, (cx0 + cx1) / 2 - 1, ct, (cz0 + cz1) / 2 - 1, (cx0 + cx1) / 2 + 1, ct + 40, (cz0 + cz1) / 2 + 1, [0.3, 0.3, 0.32], { skip: 'b' });
+      GL3D.box(night, (cx0 + cx1) / 2 - 1.6, ct + 40, (cz0 + cz1) / 2 - 1.6, (cx0 + cx1) / 2 + 1.6, ct + 43, (cz0 + cz1) / 2 + 1.6, [1, 0.2, 0.15], { glow: true });
+    }
+    // Landmarks carry a glowing sign in their own colour over the forecourt.
+    if (land) {
+      const sy = Math.min(top - 6, base + 54);
+      GL3D.box(out, x0 + 14, sy - 8, z1, x1 - 14, sy, z1 + 1.4, hex(land.color), { glow: true, skip: 'b' });
+    }
+  }
+
+  function tree3d(out, t) {
+    const y = CURB, r = t.r;
+    GL3D.box(out, t.x - 2, y, t.y - 2, t.x + 2, y + 12, t.y + 2, hex('#6d4c41'), { skip: 'b' });
+    GL3D.box(out, t.x - r * 0.8, y + 10, t.y - r * 0.8, t.x + r * 0.8, y + 10 + r * 1.1, t.y + r * 0.8, hex('#2e7d32'));
+    GL3D.box(out, t.x - r * 0.5, y + 10 + r * 1.1, t.y - r * 0.5, t.x + r * 0.5, y + 10 + r * 1.6, t.y + r * 0.5, hex('#43a047'), { skip: 'b' });
+  }
+
+  function buildCity3d() {
+    const main = [], night = [];
+    const LINE = hex('#e8c547'), WHITE = [0.92, 0.92, 0.92];
+    // The sea, the quay wall round the city, and the road surface over all of it.
+    tiled(main, -2400, -2400, WORLD + 2400, WORLD + 2400, -5, hex('#2f6f9f'), 300);
+    GL3D.box(main, -4, -5, -4, WORLD + 4, 0, WORLD + 4, hex('#7d8288'), { skip: 'tb' });
+    tiled(main, -4, -4, WORLD + 4, WORLD + 4, 0, [0.27, 0.29, 0.32], 120);
+    for (let i = 0; i <= N; i++) {
+      const c = roadC(i);
+      for (const d of [-2, 0.5]) {
+        for (let t = 0; t < WORLD; t += 150) {
+          flat(main, t, c + d, Math.min(WORLD, t + 150), c + d + 1.5, 0.1, LINE);
+          flat(main, c + d, t, c + d + 1.5, Math.min(WORLD, t + 150), 0.1, LINE);
+        }
+      }
+    }
+    const lamps = [];
+    for (const blk of allBlocks) {
+      const { x1, y1, x2, y2 } = blk;
+      for (let k = 0; k < 6; k++) {
+        flat(main, x1 - R + 12 + k * 12, y1 - 16, x1 - R + 18 + k * 12, y1 - 4, 0.15, WHITE);
+        flat(main, x1 - 16, y1 - R + 12 + k * 12, x1 - 4, y1 - R + 18 + k * 12, 0.15, WHITE);
+      }
+      GL3D.box(main, x1, 0, y1, x2, CURB, y2, hex('#b9bec4'), { skip: 'b' });
+      const ix1 = x1 + 18, iy1 = y1 + 18, ix2 = x2 - 18, iy2 = y2 - 18, gy = CURB + 0.05;
+      const grass = blk.kind === 'park' || blk.district === 'suburb';
+      flat(main, ix1, iy1, ix2, iy2, gy, hex(grass ? (blk.kind === 'park' ? '#5fa35a' : '#79b26a') : blk.kind === 'lot' ? '#4a5058' : blk.district === 'industrial' ? '#8e8a80' : '#a3a8ae'));
+      if (blk.kind === 'park') {
+        const cx = (x1 + x2) / 2, cz = (y1 + y2) / 2, sand = hex('#d7c79e'), p = blk.pond;
+        flat(main, ix1, cz - 6, ix2, cz + 6, gy + 0.05, sand);
+        flat(main, cx - 6, iy1, cx + 6, iy2, gy + 0.05, sand);
+        poly(main, ring(20, p.r + 4, p.x, p.y, gy + 0.1), hex('#cfd8dc'), [0, 1, 0]);
+        poly(main, ring(20, p.r, p.x, p.y, gy + 0.15), hex('#3d8fd1'), [0, 1, 0]);
+        // Benches along the paths.
+        for (const [bx, bz, a] of [[cx - 90, cz - 14, 0], [cx + 90, cz + 14, 0], [cx - 14, cz + 90, 1], [cx + 14, cz - 90, 1]]) {
+          const hl = a ? 2 : 8, hw = a ? 8 : 2;
+          GL3D.box(main, bx - hl, gy, bz - hw, bx + hl, gy + 4, bz + hw, hex('#8d6e63'), { skip: 'b' });
+        }
+      } else if (grass) {
+        for (const b of blk.buildings) flat(main, b.x2 - 30, b.y2, b.x2 - 12, Math.min(b.y2 + 30, iy2), gy + 0.05, hex('#a8a8a8'));
+      }
+      if (blk.kind === 'lot' || blk.forecourt) for (let k = 0; k < 8; k++) { const x = ix1 + 20 + k * 38; flat(main, x - 1, y2 - 120, x + 1, y2 - 70, gy + 0.05, WHITE); }
+      blk.buildings.forEach((b, i) => building3d(main, night, b, i === 0 ? blk.land : null));
+      for (const t of blk.trees) tree3d(main, t);
+      // A street lamp on the block's corner, leaning out over the junction.
+      const lx = x1 + 6, lz = y1 + 6;
+      GL3D.box(main, lx - 1.2, CURB, lz - 1.2, lx + 1.2, CURB + 58, lz + 1.2, hex('#455a64'), { skip: 'b' });
+      GL3D.box(main, lx - 14, CURB + 56, lz - 1, lx + 1, CURB + 58, lz + 1, hex('#455a64'));
+      GL3D.box(night, lx - 15, CURB + 53, lz - 3, lx - 7, CURB + 56, lz + 3, [1, 0.88, 0.6], { glow: true });
+      lamps.push({ x: lx - 11, z: lz });
+    }
+    // Stunt ramps: striped wedges.
+    for (const r of ramps) {
+      const ca = Math.cos(r.a), sa = Math.sin(r.a);
+      const P3 = (al, sd, h) => [r.x + ca * al - sa * sd, h, r.y + sa * al + ca * sd];
+      for (let k = 0; k < 5; k++) {
+        const s0 = -30 + k * 12, s1 = s0 + 12;
+        poly(main, [P3(-16, s0, 0.2), P3(16, s0, 10), P3(16, s1, 10), P3(-16, s1, 0.2)], hex(k % 2 ? '#212121' : '#ffca28'), [0, 1, 0]);
+      }
+      poly(main, [P3(16, -30, 0), P3(16, 30, 0), P3(16, 30, 10), P3(16, -30, 10)], hex('#5d4037'), [ca, 0, sa]);
+      poly(main, [P3(-16, -30, 0), P3(16, -30, 0), P3(16, -30, 10)], hex('#6d4c41'), [sa, 0, -ca]);
+      poly(main, [P3(-16, 30, 0), P3(16, 30, 0), P3(16, 30, 10)], hex('#6d4c41'), [-sa, 0, ca]);
+    }
+    const winTex = G3.texture(windowTexture());
+    const gl = G3.gl;
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    const spotTex = G3.texture(spotTexture());
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    city3d = { main: G3.mesh(main), night: G3.mesh(night), winTex, spotTex, lamps, dyn: {} };
+    buildActors3d();
+  }
+
+  // ---------- Cars, people and the helicopter ----------
+
+  const carMeshes = new Map(), personMeshes = new Map();
+  let lightBar, riotBar, legMesh, heliBody, heliRotor, pkgMesh;
+  const CAB = (L) => [-L / 2 + L * 0.3, -L / 2 + L * 0.72];
+  function carMesh(type, color) {
+    const key = type + color;
+    if (carMeshes.has(key)) return carMeshes.get(key);
+    const T = CARS[type], L = T.len, hl = L / 2, hw = T.wid / 2, out = [];
+    const c = hex(color), dark = [0.1, 0.11, 0.13], glass = [0.16, 0.23, 0.3];
+    const van = type === 'van' || type === 'riot', beast = type === 'beast', low = type === 'sports' || type === 'super';
+    const wr = beast ? 6 : 4.2, base = beast ? 6 : 3, top = van ? 23 : low ? 9 : beast ? 15 : 11;
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      const wx = sx * L * 0.31, wz = sz * (hw - 2.2);
+      GL3D.box(out, wx - wr, 0, wz - 2.4, wx + wr, wr * 2, wz + 2.4, dark);
+      GL3D.box(out, wx - wr * 0.45, wr * 0.55, wz - 2.5, wx + wr * 0.45, wr * 1.45, wz + 2.5, [0.62, 0.64, 0.68]);
+    }
+    GL3D.box(out, -hl, base, -hw, hl, top, hw, c);
+    GL3D.box(out, -hl - 0.2, base, -hw - 0.2, hl + 0.2, base + 2, hw + 0.2, mulCol(c, 0.55));
+    let roofY = top;
+    if (van) {
+      GL3D.box(out, hl - 0.3, top - 10, -hw + 2, hl + 0.3, top - 2, hw - 2, glass);
+      GL3D.box(out, hl - 12, top - 10, -hw - 0.3, hl - 2, top - 3, hw + 0.3, glass);
+    } else {
+      const [cx0, cx1] = CAB(L), ch = low ? 6.5 : beast ? 8 : 7.5;
+      GL3D.box(out, cx0, top, -hw + 2, cx1, top + ch, hw - 2, glass);
+      GL3D.box(out, cx0 + 2.5, top + ch - 0.3, -hw + 2.3, cx1 - 2, top + ch + 1, hw - 2.3, c);
+      const mid = (cx0 + cx1) / 2;
+      GL3D.box(out, mid - 1, top, -hw + 1.8, mid + 1, top + ch, hw - 1.8, c);
+      roofY = top + ch + 1;
+      if (type === 'police') {
+        GL3D.box(out, cx1, top, -hw - 0.1, hl + 0.1, top + 0.3, hw + 0.1, dark);
+        GL3D.box(out, -hl - 0.1, top, -hw - 0.1, cx0, top + 0.3, hw + 0.1, dark);
+        GL3D.box(out, cx0 - 2, base + 2, -hw - 0.25, cx1 + 2, top - 1, hw + 0.25, dark);
+      }
+      if (type === 'taxi') GL3D.box(out, -3, roofY, -5, 3, roofY + 3.5, 5, [1, 0.85, 0.2], { glow: true });
+      if (type === 'muscle' || type === 'super') {
+        for (const z of [-2.6, 0.8]) {
+          GL3D.box(out, cx1, top, z, hl + 0.05, top + 0.3, z + 1.8, [0.95, 0.95, 0.95]);
+          GL3D.box(out, -hl - 0.05, top, z, cx0, top + 0.3, z + 1.8, [0.95, 0.95, 0.95]);
+        }
+      }
+      if (low) {
+        for (const z of [-hw + 4, hw - 5]) GL3D.box(out, -hl + 1.5, top, z, -hl + 3, top + 4, z + 1, dark);
+        GL3D.box(out, -hl, top + 4, -hw + 2, -hl + 5, top + 5, hw - 2, mulCol(c, 0.7));
+      }
+      if (beast) {
+        GL3D.box(out, hl, base, -hw + 2, hl + 2.5, base + 8, hw - 2, dark);
+        GL3D.box(out, cx0 + 2, roofY, -hw + 3, cx1 - 2, roofY + 1.5, hw - 3, dark);
+      }
+    }
+    for (const sz of [-1, 1]) {
+      const za = sz > 0 ? hw - 6 : -hw + 1.5, zb = sz > 0 ? hw - 1.5 : -hw + 6;
+      GL3D.box(out, hl - 0.2, base + 4, za, hl + 0.5, base + 6.5, zb, [1, 0.96, 0.78], { glow: true });
+      GL3D.box(out, -hl - 0.5, base + 4, za, -hl + 0.2, base + 6.5, zb, [1, 0.12, 0.1], { glow: true });
+    }
+    const m = G3.mesh(out);
+    carMeshes.set(key, m);
+    return m;
+  }
+  function personMesh(color, skin) {
+    const key = color + skin;
+    if (personMeshes.has(key)) return personMeshes.get(key);
+    const out = [], c = hex(color);
+    GL3D.box(out, -2, 7, -3.6, 2, 13.5, 3.6, c);
+    GL3D.box(out, -2.2, 13.5, -2.2, 2.2, 17.6, 2.2, hex(skin));
+    GL3D.box(out, -2.4, 16.6, -2.4, 1.2, 18.3, 2.4, [0.24, 0.17, 0.12]);
+    GL3D.box(out, -1, 8, -5, 1, 13, -3.6, mulCol(c, 0.8));
+    GL3D.box(out, -1, 8, 3.6, 1, 13, 5, mulCol(c, 0.8));
+    const m = G3.mesh(out);
+    personMeshes.set(key, m);
+    return m;
+  }
+  function buildActors3d() {
+    const T = CARS.police, [cx0, cx1] = CAB(T.len), y = 11 + 7.5 + 1, mid = (cx0 + cx1) / 2;
+    const bar = (z0, z1, col, glow) => G3.mesh(GL3D.box([], mid - 3, y, z0, mid + 3, y + 2.5, z1, col, { glow }));
+    lightBar = { red: bar(-7, -0.4, [1, 0.1, 0.15], true), blue: bar(0.4, 7, [0.15, 0.45, 1], true), redOff: bar(-7, -0.4, [0.45, 0.1, 0.12], false), blueOff: bar(0.4, 7, [0.1, 0.18, 0.45], false) };
+    // Riot vans are van-shaped, so their bar sits on the taller roof near the front.
+    const RV = CARS.riot, rx = RV.len / 2 - 12, ry = 23;
+    const rbar = (z0, z1, col, glow) => G3.mesh(GL3D.box([], rx - 3, ry, z0, rx + 3, ry + 2.5, z1, col, { glow }));
+    riotBar = { red: rbar(-7, -0.4, [1, 0.1, 0.15], true), blue: rbar(0.4, 7, [0.15, 0.45, 1], true), redOff: rbar(-7, -0.4, [0.45, 0.1, 0.12], false), blueOff: rbar(0.4, 7, [0.1, 0.18, 0.45], false) };
+    legMesh = G3.mesh(GL3D.box([], -1.3, 0, -1.3, 1.3, 7.2, 1.3, [0.22, 0.27, 0.33]));
+    const body = [], dark = hex('#263238');
+    GL3D.box(body, -20, 0, -10, 20, 16, 10, dark);
+    GL3D.box(body, 8, 3, -8.5, 20.6, 14, 8.5, hex('#80deea'));
+    GL3D.box(body, -52, 6, -2, -20, 11, 2, dark);
+    GL3D.box(body, -54, 6, -1, -47, 22, 1, hex('#37474f'));
+    GL3D.box(body, -1.5, 16, -1.5, 1.5, 20, 1.5, dark);
+    for (const z of [-9, 9]) {
+      GL3D.box(body, -15, -6, z - 1, 15, -4.5, z + 1, hex('#90a4ae'));
+      for (const x of [-8, 6]) GL3D.box(body, x, -4.5, z - 0.6, x + 2, 0, z + 0.6, hex('#90a4ae'));
+    }
+    GL3D.box(body, 19, -3, -2, 21.5, 1, 2, [1, 1, 0.85], { glow: true });
+    GL3D.box(body, -55, 20, -0.5, -53, 22, 0.5, [1, 0.1, 0.1], { glow: true });
+    heliBody = G3.mesh(body);
+    const rot = [];
+    GL3D.box(rot, -50, 0, -2.2, 50, 1, 2.2, [0.12, 0.12, 0.12]);
+    GL3D.box(rot, -2.2, 0, -50, 2.2, 1, 50, [0.12, 0.12, 0.12]);
+    heliRotor = G3.mesh(rot);
+    const pk = [];
+    GL3D.box(pk, -7, 0, -6, 7, 10, 6, hex('#a1887f'));
+    GL3D.box(pk, -1.5, -0.05, -6.2, 1.5, 10.2, 6.2, hex('#ffd54f'));
+    GL3D.box(pk, -7.2, 4, -6.2, 7.2, 6, 6.2, hex('#8d6e63'));
+    pkgMesh = G3.mesh(pk);
+  }
+
+  function drawPerson3d(x, z, a, color, skin, step, diving) {
+    const y = groundAt(x, z), sy = diving ? 0.45 : 1;
+    M4.trs(model, x, y, z, -a, 1, sy, 1);
+    G3.draw(personMesh(color, skin), model);
+    const ca = Math.cos(a), sa = Math.sin(a), sw = diving ? 0 : Math.sin(step) * 2.2;
+    for (const side of [-1, 1]) {
+      const lx = sw * side, lz = side * 1.7;
+      M4.trs(model, x + ca * lx - sa * lz, y, z + sa * lx + ca * lz, -a, 1, sy, 1);
+      G3.draw(legMesh, model);
+    }
+  }
+
+  // ---------- Camera and frame ----------
+
+  const cam3 = { a: 0, dist: 90, cur: 90, fov: 1.1, ready: false };
+  const view3 = { ex: 0, ez: 0, ca: 0, f: 1, back: false };
+  function project(x, y, z) {
+    const m = PV;
+    const cx = m[0] * x + m[4] * y + m[8] * z + m[12], cy = m[1] * x + m[5] * y + m[9] * z + m[13], w = m[3] * x + m[7] * y + m[11] * z + m[15];
+    if (w < 2) return null;
+    return { x: (cx / w * 0.5 + 0.5) * W, y: (0.5 - cy / w * 0.5) * H, w };
+  }
+
+  function render3d(dt) {
+    const gl = G3.gl, pc = player.car, tgt = pc || player, sp = pc ? speedOf(pc) : 0;
+    // Chase camera: swings round behind your heading (half-following a drift), pulls in front of
+    // buildings, and backs off and widens with speed. Hold C to look behind.
+    let heading = pc ? pc.a : player.a;
+    if (pc && sp > 80 && fwdSpeed(pc) > 0) heading = pc.a + angDiff(Math.atan2(pc.vy, pc.vx), pc.a) * 0.6;
+    if (!cam3.ready) { cam3.a = heading; cam3.cur = cam3.dist = pc ? 90 : 50; cam3.ready = true; }
+    cam3.a += angDiff(heading, cam3.a) * (1 - Math.exp(-(pc ? 4 : 6) * dt));
+    view3.back = keys.has('KeyC');
+    const ca = cam3.a + (view3.back ? Math.PI : 0);
+    const want = pc ? 88 + sp * 0.05 : 50, hgt = pc ? 34 + sp * 0.015 : 24;
+    cam3.dist = Gfx.approach(cam3.dist, want, 3, dt);
+    let d = cam3.dist;
+    for (let k = 12; k <= cam3.dist; k += 6) if (solidAt(tgt.x - Math.cos(ca) * k, tgt.y - Math.sin(ca) * k)) { d = Math.max(10, k - 8); break; }
+    cam3.cur = d < cam3.cur ? d : Gfx.approach(cam3.cur, d, 2.5, dt);
+    const baseY = groundAt(tgt.x, tgt.y) + (pc ? pc.z : 0);
+    const sh = shake.offset(8);
+    const ex = tgt.x - Math.cos(ca) * cam3.cur + sh.x * 0.5, ez = tgt.y - Math.sin(ca) * cam3.cur + sh.y * 0.5, ey = baseY + hgt;
+    const lx = tgt.x + Math.cos(ca) * 30, lz = tgt.y + Math.sin(ca) * 30, ly = baseY + (pc ? 10 : 14);
+    const yaw = Math.atan2(lx - ex, -(lz - ez)), pitch = Math.atan2(ly - ey, Math.hypot(lx - ex, lz - ez));
+    const boosting = pc && player.nitro > 0 && held('ShiftLeft', 'ShiftRight') && held('KeyW', 'ArrowUp');
+    cam3.fov = Gfx.approach(cam3.fov, 1.05 + Math.min(0.22, sp / 2200) + (boosting ? 0.1 : 0), 3, dt);
+    Object.assign(view3, { ex, ez, ca, f: 1 / Math.tan(cam3.fov / 2) });
+
+    // Sky and light follow the clock.
+    const dk = darkness(), kn = dk / 0.6;
+    const fog = [0.6 + (0.05 - 0.6) * kn, 0.76 + (0.07 - 0.76) * kn, 0.92 + (0.17 - 0.92) * kn];
+    const FOG0 = 520, FOG1 = 1200;
+    G3.begin(cam3.fov, 2, 1700, fog, FOG0, FOG1, 1 - dk * 1.15);
+    G3.camera(ex, ey, ez, yaw, pitch);
+    M4.mul(PV, G3.proj, G3.view);
+    const near = (x, y, r) => Math.abs(x - ex) < r && Math.abs(y - ez) < r && Math.hypot(x - ex, y - ez) < r;
+
+    G3.bindTexture(null);
+    G3.draw(city3d.main);
+    G3.bindTexture(city3d.winTex);
+    G3.tint(0.42, 0.56, 0.7, 0.85 * (1 - clamp(dk / 0.3, 0, 1)));
+    G3.draw(city3d.night);
+    G3.tint(0, 0, 0, 0);
+    G3.bindTexture(null);
+
+    // Cars.
+    const flash = Math.floor(time * 8) % 2;
+    for (const c of cars) {
+      if (!near(c.x, c.y, 1300)) continue;
+      M4.trs(model, c.x, groundAt(c.x, c.y) + c.z, c.y, -c.a);
+      if (c.broken) G3.tint(0.08, 0.08, 0.08, 0.6);
+      G3.draw(carMesh(c.type, c.color), model);
+      if (c.broken) G3.tint(0, 0, 0, 0);
+      if (c.type === 'police' || c.type === 'riot') {
+        const on = !c.broken && (c.role === 'cop' || c.siren > 0), lb = c.type === 'riot' ? riotBar : lightBar;
+        G3.draw(on && flash ? lb.red : lb.redOff, model);
+        G3.draw(on && !flash ? lb.blue : lb.blueOff, model);
+      }
+    }
+    // People.
+    for (const p of peds) if (near(p.x, p.y, 900)) drawPerson3d(p.x, p.y, p.a || 0, p.color, p.skin, p.step, p.dive > 0);
+    if (!pc) drawPerson3d(player.x, player.y, player.a, '#7c4dff', '#ffe0bd', player.walk, false);
+    drawFriend3d();
+    const tg = missionTarget();
+    if (tg && mission.kind === 'taxi' && mission.stage === 'pickup') drawPerson3d(tg.x, tg.y, Math.atan2(player.y - tg.y, player.x - tg.x), '#fdd835', '#ffe0bd', time * 6, false);
+    // Hidden packages spin and bob.
+    for (const p of packages) {
+      if (s.pkgs.includes(p.id) || !near(p.x, p.y, 900)) continue;
+      M4.trs(model, p.x, groundAt(p.x, p.y) + 3 + Math.sin(time * 3 + p.id) * 2, p.y, time * 1.5 + p.id);
+      G3.draw(pkgMesh, model);
+    }
+    // The police helicopter.
+    let heliAt = null;
+    if (heli) {
+      heliAt = { x: heli.x, y: 240, z: heli.y };
+      M4.trs(model, heli.x, heliAt.y, heli.y, -Math.atan2(player.y - heli.y, player.x - heli.x));
+      G3.draw(heliBody, model);
+      M4.trs(model, heli.x, heliAt.y + 20, heli.y, heli.a);
+      G3.draw(heliRotor, model);
+    }
+
+    // See-through things: soft shadows (multiplied in), then markers and beacons, then light
+    // pools (added on). Depth testing keeps all of them behind buildings.
+    const dyn = city3d.dyn;
+    gl.enable(gl.BLEND);
+    gl.depthMask(false);
+    const shadows = [], shadowK = 0.55 * (1 - kn * 0.6);
+    for (const c of cars) {
+      if (!near(c.x, c.y, 480)) continue;
+      const lift = Math.max(0.5, 1 - c.z / 120);
+      rect3(shadows, c.x, c.y, groundAt(c.x, c.y) + 0.3, c.T.len * 0.72 * lift, c.T.wid * 0.85 * lift, c.a, [shadowK, shadowK, shadowK], true);
+    }
+    for (const p of peds) if (near(p.x, p.y, 350)) rect3(shadows, p.x, p.y, groundAt(p.x, p.y) + 0.3, 7, 7, 0, [shadowK, shadowK, shadowK], true);
+    if (!pc) rect3(shadows, player.x, player.y, groundAt(player.x, player.y) + 0.3, 8, 8, 0, [shadowK, shadowK, shadowK], true);
+    G3.bindTexture(city3d.spotTex);
+    gl.blendFunc(gl.ZERO, gl.ONE_MINUS_SRC_COLOR);
+    G3.draw(dyn.shadows = G3.mesh(shadows, dyn.shadows));
+
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    G3.bindTexture(null);
+    const rings = [], beams = [], pulse = 0.5 + 0.5 * Math.sin(time * 4);
+    const outside = (x, z, r) => Math.hypot(x - ex, z - ez) > r + 14;      // a beacon with the camera inside it would tint the whole screen
+    for (const m of markers) {
+      if (!near(m.x, m.y, 1000)) continue;
+      const active = mission && mission.kind === 'heist' && mission.target === m, r = active ? 46 : 32, col = hex(m.color);
+      flatRing(rings, m.x, m.y, CURB + 0.4, r - 3, r, col);
+      if (outside(m.x, m.y, r)) tube(beams, m.x, CURB, m.y, r, m.x, CURB + 22 + pulse * 6, m.y, r, col);
+      if (active && mission.stage === 'crack') {
+        const n = Math.max(1, Math.round(28 * mission.crack / mission.h.crack));
+        for (let i = 0; i < n; i++) {
+          const a0 = -Math.PI / 2 + i / 28 * TAU, a1 = a0 + TAU / 28;
+          poly(rings, [[m.x + Math.cos(a0) * 50, CURB + 0.5, m.y + Math.sin(a0) * 50], [m.x + Math.cos(a1) * 50, CURB + 0.5, m.y + Math.sin(a1) * 50], [m.x + Math.cos(a1) * 56, CURB + 0.5, m.y + Math.sin(a1) * 56], [m.x + Math.cos(a0) * 56, CURB + 0.5, m.y + Math.sin(a0) * 56]], hex('#ffd54f'), [0, 1, 0], true);
+        }
+      }
+    }
+    if (tg) {
+      const g = groundAt(tg.x, tg.y), col = hex(tg.color);
+      flatRing(rings, tg.x, tg.y, g + 0.5, 36, 40, col);
+      if (outside(tg.x, tg.y, 34)) tube(beams, tg.x, g, tg.y, 34, tg.x, g + 260, tg.y, 34, col);
+    }
+    if (mission && mission.kind === 'race') {
+      const next = RACE[(mission.cp + 1) % RACE.length];
+      if (mission.cp < RACE.length && outside(next.x, next.y, 30)) tube(beams, next.x, 0, next.y, 30, next.x, 120, next.y, 30, [0.8, 0.8, 0.8]);
+    }
+    const spot = [];
+    if (heliAt) tube(spot, heliAt.x, heliAt.y - 4, heliAt.z, 3, player.x, groundAt(player.x, player.y), player.y, 45, [1, 1, 0.85]);
+    G3.alpha(0.85);
+    G3.draw(dyn.rings = G3.mesh(rings, dyn.rings));
+    gl.disable(gl.CULL_FACE);
+    G3.alpha(0.22 + pulse * 0.08);
+    G3.draw(dyn.beams = G3.mesh(beams, dyn.beams));
+    if (spot.length) { G3.alpha(0.07); G3.draw(dyn.spot = G3.mesh(spot, dyn.spot)); }
+    gl.enable(gl.CULL_FACE);
+    G3.alpha(1);
+
+    const pools = [];
+    if (kn > 0.05) {
+      for (const L of city3d.lamps) {
+        if (!near(L.x, L.z, 800)) continue;
+        const k = kn * 0.5 * (1 - Math.hypot(L.x - ex, L.z - ez) / 800);
+        rect3(pools, L.x, L.z, CURB + 0.45, 75, 75, 0, [k, k * 0.8, k * 0.5], true);
+      }
+      for (const c of cars) {
+        if (c.broken || !near(c.x, c.y, 700)) continue;
+        const k = kn * 0.6 * (1 - Math.hypot(c.x - ex, c.y - ez) / 700), f = c.T.len / 2 + 44;
+        rect3(pools, c.x + Math.cos(c.a) * f, c.y + Math.sin(c.a) * f, groundAt(c.x, c.y) + 0.5, 52, 34, c.a, [k, k * 0.97, k * 0.8], true);
+        if ((c.type === 'police' || c.type === 'riot') && (c.role === 'cop' || c.siren > 0)) rect3(pools, c.x, c.y, groundAt(c.x, c.y) + 0.55, 55, 55, 0, flash ? [k * 1.2, 0, 0] : [0, k * 0.4, k * 1.3], true);
+      }
+    }
+    if (heliAt) { const k = 0.25 + kn * 0.6; rect3(pools, player.x, player.y, groundAt(player.x, player.y) + 0.6, 70, 70, 0, [k, k, k * 0.85], true); }
+    if (pools.length) {
+      gl.blendFunc(gl.ONE, gl.ONE);
+      gl.uniform2f(G3.u.fogRange, 1e6, 2e6);
+      G3.bindTexture(city3d.spotTex);
+      G3.draw(dyn.pools = G3.mesh(pools, dyn.pools));
+      gl.uniform2f(G3.u.fogRange, FOG0, FOG1);
+      G3.bindTexture(null);
+    }
+    gl.depthMask(true);
+    gl.disable(gl.BLEND);
+  }
+
+  // World-space bits on the HUD layer: particles, floating text and landmark labels.
+  function drawWorldHud3d() {
+    const scale = view3.f * H / 2;
+    for (const p of fx.list) {
+      const lift = p.grow ? 6 + p.t * 22 : 5 + (p.z || 0);
+      const q = project(p.x, groundAt(p.x, p.y) + lift, p.y);
+      if (!q || q.w > 700) continue;
+      ctx.globalAlpha = clamp(p.fade ? 1 - p.t / p.life : 1, 0, 1) * 0.75;
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(q.x, q.y, Math.max(0.6, Math.min(40, p.size * 0.7 * scale / q.w)), 0, TAU); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    for (const m of markers) {
+      const d = Math.hypot(m.x - player.x, m.y - player.y);
+      if (d > 750) continue;
+      const q = project(m.x, CURB + 48, m.y);
+      if (!q) continue;
+      ctx.globalAlpha = clamp((750 - d) / 150, 0, 1);
+      Gfx.text(ctx, m.icon, q.x, q.y, { size: clamp(22 * 300 / q.w, 12, 28), stroke: null });
+      if (d < 400) Gfx.text(ctx, m.name, q.x, q.y + clamp(22 * 300 / q.w, 12, 28) * 0.9, { size: 12, color: '#fff', width: 3 });
+    }
+    ctx.globalAlpha = 1;
+    for (const f of pops.list) {
+      if (f.t < 0) continue;
+      const k = f.t / f.life, q = project(f.x, 34 + f.rise * k * 0.7, f.y);
+      if (!q || q.w > 900) continue;
+      ctx.globalAlpha = clamp(1 - k * k, 0, 1);
+      Gfx.text(ctx, f.str, q.x, q.y, { size: clamp(f.size * 220 / q.w, 11, f.size * 1.4), color: f.color });
+    }
+    ctx.globalAlpha = 1;
+    friendTag3d();
+    if (view3.back) Gfx.text(ctx, 'REAR VIEW', W / 2, H - 24, { size: 14, color: '#80deea' });
+  }
+
+  // Off-screen things you need to know about: the job target, and cops closing in from behind.
+  function edgeArrow(x, y, color, size) {
+    const rel = angDiff(Math.atan2(y - player.y, x - player.x), view3.ca);
+    const px = W / 2 + Math.sin(rel) * (W / 2 - 70), py = H / 2 - Math.cos(rel) * (H / 2 - 64);
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(rel - Math.PI / 2);
+    ctx.scale(size, size);
+    ctx.fillStyle = color;
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(20, 0); ctx.lineTo(-10, -13); ctx.lineTo(-4, 0); ctx.lineTo(-10, 13); ctx.closePath();
+    ctx.stroke(); ctx.fill();
+    ctx.restore();
+  }
+  function drawArrows3d() {
+    const tg = missionTarget();
+    if (tg) {
+      const q = project(tg.x, groundAt(tg.x, tg.y) + 70, tg.y), dist = Math.hypot(tg.x - player.x, tg.y - player.y);
+      if (q && q.x > 30 && q.x < W - 30 && q.y > 70 && q.y < H - 30) {
+        Gfx.text(ctx, '▼', q.x, q.y + Math.sin(time * 5) * 4, { size: 22, color: tg.color });
+        Gfx.text(ctx, `${Math.round(dist / 10)} m`, q.x, q.y - 20, { size: 12 });
+      } else edgeArrow(tg.x, tg.y, tg.color, 1);
+    }
+    for (const c of cars) {
+      if (c.role !== 'cop' || c.broken || Math.hypot(c.x - player.x, c.y - player.y) > 900) continue;
+      const q = project(c.x, 10, c.y);
+      if (q && q.x > 0 && q.x < W && q.y > 0 && q.y < H) continue;
+      edgeArrow(c.x, c.y, Math.floor(time * 6) % 2 ? '#ff1744' : '#2979ff', 0.65);
+    }
+    if (online()) {
+      const q = project(friend.x, 20, friend.y);
+      if (!(q && q.x > 0 && q.x < W && q.y > 0 && q.y < H)) edgeArrow(friend.x, friend.y, FRIEND_COLOR, 0.7);
+    }
+  }
+
+  // A round radar that turns with the camera, so "up" is always the way you're looking.
+  function drawRadar() {
+    const R0 = 74, cx = W - R0 - 14, cy = H - R0 - 14, k = 0.065, rot = -Math.PI / 2 - view3.ca;
+    ctx.save();
+    ctx.fillStyle = 'rgba(20,28,40,0.78)';
+    ctx.beginPath(); ctx.arc(cx, cy, R0 + 5, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy, R0, 0, TAU); ctx.clip();
+    ctx.translate(cx, cy);
+    ctx.rotate(rot);
+    ctx.fillStyle = '#2f6f9f';
+    ctx.fillRect(-R0 * 1.5, -R0 * 1.5, R0 * 3, R0 * 3);
+    ctx.drawImage(mapCanvas, -player.x * k, -player.y * k, WORLD * k, WORLD * k);
+    const dot = (x, y, c, r, pin) => {
+      let dx = (x - player.x) * k, dy = (y - player.y) * k;
+      const m = Math.hypot(dx, dy);
+      if (m > R0 - 6) { if (!pin) return; dx *= (R0 - 6) / m; dy *= (R0 - 6) / m; }
+      ctx.fillStyle = c;
+      ctx.beginPath(); ctx.arc(dx, dy, r, 0, TAU); ctx.fill();
+    };
+    for (const m of markers) dot(m.x, m.y, m.color, 3);
+    if (mission && mission.kind === 'race') RACE.forEach((p, i) => { if (i >= mission.cp % RACE.length) dot(p.x, p.y, 'rgba(255,255,255,0.55)', 2); });
+    for (const c of cars) if (c.role === 'cop') dot(c.x, c.y, Math.floor(time * 6) % 2 ? '#ff1744' : '#2979ff', 3, true);
+    if (online()) dot(friend.x, friend.y, FRIEND_COLOR, 4.5, true);
+    const tg = missionTarget();
+    if (tg) { ctx.strokeStyle = '#000'; dot(tg.x, tg.y, tg.color, 5, true); }
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cx, cy, R0, 0, TAU); ctx.stroke();
+    const na = -Math.PI / 2 + rot;
+    Gfx.text(ctx, 'N', cx + Math.cos(na) * (R0 - 9), cy + Math.sin(na) * (R0 - 9), { size: 11, color: '#ff8a80', width: 3 });
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate((player.car ? player.car.a : player.a) + rot);
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(-6, -6); ctx.lineTo(-2, 0); ctx.lineTo(-6, 6); ctx.closePath();
+    ctx.stroke(); ctx.fill();
+    ctx.restore();
+  }
+
+  // ---------- Online: two friends in one city (live.js) ----------
+  // The city is the same for everyone (it's seeded), so nothing big has to be sent. Each player
+  // keeps their own save, cash, jobs, traffic and police; what goes back and forth is where you
+  // are and what you're driving, 15 times a second. On top of that: bumping into each other,
+  // "Join my friend" to meet up, and a head-to-head race to a finish line you both see.
+
+  const FRIEND_COLOR = '#26c6da';
+  const friend = { x: 0, y: 0, a: 0, car: null, color: '#fff', z: 0, walk: 0, stars: 0, net: null };
+  let netT = 0, onlineError = '';
+  const live = Live.create({
+    ui,
+    tag: 'getaway',
+    label: 'Free roam',
+    title: 'Free roam',
+    onReady: () => { friend.net = null; ui.hide(); say('Online with a friend', 'You each keep your own cash, jobs and police. Pause for a race!', 3.2, FRIEND_COLOR); },
+    onEvent: onNet,
+    onState: d => {
+      if (!d) return;
+      const first = !friend.net;
+      friend.net = { ...d, at: performance.now() };
+      if (first) { friend.x = +d.x || 0; friend.y = +d.y || 0; friend.a = +d.a || 0; }
+    },
+    onGone: lost => {
+      friend.net = null;
+      if (mission && mission.kind === 'duel') mission = null;
+      say(lost ? 'Lost the connection' : `${live.them} left the city`, '', 2.4, FRIEND_COLOR);
+    },
+    onCancel: msg => { onlineError = msg || ''; showIntro(); },
+  });
+  const online = () => live.on && !!friend.net;
+
+  function onlineHtml() {
+    if (live.on) {
+      return `<p class="bf-label" style="color:${FRIEND_COLOR};text-align:left;margin:10px 0 4px">Online with ${Online.escape(live.them)}</p>
+        <div class="menu">
+          <button class="btn secondary" type="button" data-race ${online() && !mission ? '' : 'disabled'}>🏁 Race ${Online.escape(live.them)} to a finish line</button>
+          <button class="btn secondary" type="button" data-meet ${online() ? '' : 'disabled'}>📍 Join my friend</button>
+          <button class="btn secondary" type="button" data-leave-online>Leave online</button>
+        </div>`;
+    }
+    if (!live.enabled()) return '';
+    const err = onlineError;
+    onlineError = '';
+    return `<p style="text-align:left;margin:10px 0 4px;font-size:13px"><b>Play with a friend online:</b> drive the same city together, meet up and race each other.</p>
+      ${live.html()}<p class="error">${Online.escape(err)}</p>`;
+  }
+  function wireOnline(panel, reshow) {
+    live.wire(panel);
+    panel.querySelector('[data-race]')?.addEventListener('click', () => { ui.hide(); challenge(); });
+    panel.querySelector('[data-meet]')?.addEventListener('click', () => { ui.hide(); meetUp(); });
+    panel.querySelector('[data-leave-online]')?.addEventListener('click', () => {
+      if (mission && mission.kind === 'duel') mission = null;
+      live.leave();
+      friend.net = null;
+      reshow();
+    });
+  }
+
+  function onNet(name, d) {
+    d = d || {};
+    if (name === 'race') {
+      // Your friend wants a race. Say no if you're in the middle of something.
+      if (mission || bustT > 0) return live.send('race-busy', { why: mission ? mission.label || 'a job' : 'busted' });
+      live.send('race-ok', {});
+      startDuel(+d.x, +d.y);
+    } else if (name === 'race-ok' && pendingRace) {
+      startDuel(pendingRace.x, pendingRace.y);
+      pendingRace = null;
+    } else if (name === 'race-busy') {
+      pendingRace = null;
+      say(`${live.them} is busy`, `They're on ${String(d.why || 'a job').slice(0, 30)}`, 2.2, '#ff8a80');
+    } else if (name === 'race-won' && mission && mission.kind === 'duel') {
+      mission = null;
+      Relay.result('l');
+      say(`${live.them} won the race`, `They crossed the line in ${(+d.t || 0).toFixed(1)} s`, 3, '#ff8a80');
+      sfx.bad();
+    } else if (name === 'race-quit' && mission && mission.kind === 'duel') {
+      mission = null;
+      Relay.result('w');
+      earn(250, player.x, player.y - 40, 'Walkover');
+      say(`${live.them} gave up`, 'The race is yours', 2.6, '#9be37a');
+    }
+  }
+
+  // A finish line about as far from you as from your friend, a good drive away for both.
+  let pendingRace = null;
+  function challenge() {
+    if (!online() || mission) return;
+    const me = player.car || player, f = friend;
+    const mid = { x: (me.x + f.x) / 2, y: (me.y + f.y) / 2 };
+    let best = null, bs = Infinity;
+    for (let k = 0; k < 40; k++) {
+      const p = randomSidewalk(1300, 3400, mid);
+      const d1 = Math.hypot(p.x - me.x, p.y - me.y), d2 = Math.hypot(p.x - f.x, p.y - f.y);
+      const sc = Math.abs(d1 - d2) + Math.max(0, 1300 - Math.min(d1, d2)) * 2;
+      if (sc < bs) { bs = sc; best = p; }
+    }
+    pendingRace = { x: Math.round(best.x), y: Math.round(best.y) };
+    live.send('race', pendingRace);
+    say('Challenge sent', `Waiting for ${live.them}…`, 2, FRIEND_COLOR);
+  }
+  function startDuel(x, y) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    mission = { kind: 'duel', dest: { x, y }, countdown: 3, t: 0, label: `Race vs ${live.them}` };
+    say(`Race vs ${live.them}!`, 'First to the green finish line wins. Any car, any route.', 3, '#69f0ae');
+  }
+  function updateDuel(dt) {
+    const m = mission;
+    if (!online()) { mission = null; return; }
+    if (m.countdown > 0) {
+      const before = Math.ceil(m.countdown);
+      m.countdown -= dt;
+      if (Math.ceil(m.countdown) !== before) Arcade.tone({ freq: m.countdown <= 0 ? 880 : 440, dur: 0.15, type: 'square', vol: 0.05 });
+      if (m.countdown <= 0) say('GO!', '', 0.8, '#69f0ae');
+      // Hold still until the lights change.
+      if (player.car) player.car.vx = player.car.vy = 0;
+      else player.vx = player.vy = 0;
+      return;
+    }
+    m.t += dt;
+    const here = player.car || player;
+    if (Math.hypot(here.x - m.dest.x, here.y - m.dest.y) < 45) {
+      mission = null;
+      live.send('race-won', { t: Math.round(m.t * 10) / 10 });
+      Relay.result('w');
+      Arcade.flag('getaway-friend-race');
+      earn(500, here.x, here.y - 40, 'Race win');
+      say(`You beat ${live.them}!`, `${m.t.toFixed(1)} s`, 3, '#9be37a');
+      sfx.good();
+      persist();
+    } else if (m.t > 300) {
+      mission = null;
+      live.send('race-quit', {});
+      say('Race timed out', '', 2, '#ff8a80');
+    }
+  }
+
+  // Jump next to your friend, as long as nobody's chasing you and you're not on a job.
+  function meetUp() {
+    if (!online()) return;
+    if (stars > 0) return say('Not with the cops after you', 'Lose them first', 2, '#ff8a80');
+    if (mission) return say('Finish your job first', '', 2, '#ff8a80');
+    const back = friend.a + Math.PI;
+    let x = friend.x, y = friend.y;
+    for (const [da, d] of [[0, 70], [0.6, 70], [-0.6, 70], [Math.PI / 2, 45], [-Math.PI / 2, 45], [0, 0]]) {
+      const tx = friend.x + Math.cos(back + da) * d, ty = friend.y + Math.sin(back + da) * d;
+      if (!inBuilding(tx, ty, player.car ? 24 : 10)) { x = tx; y = ty; break; }
+    }
+    if (player.car) {
+      const c = player.car;
+      c.x = x; c.y = y; c.a = friend.a; c.vx = c.vy = 0; c.z = 0;
+    }
+    player.x = x; player.y = y; player.a = friend.a;
+    cam.x = x - W / 2 / cam.z; cam.y = y - H / 2 / cam.z;
+    cam3.ready = false;
+    say(`Met up with ${live.them}`, '', 1.6, FRIEND_COLOR);
+  }
+
+  function updateOnline(dt) {
+    if (!live.on) return;
+    netT -= dt;
+    if (netT <= 0) {
+      netT = 1 / 15;
+      const c = player.car, r = v => Math.round(v * 10) / 10;
+      const o = c || player;
+      live.state({ x: r(o.x), y: r(o.y), a: Math.round((c ? c.a : player.a) * 100) / 100, vx: r(o.vx || 0), vy: r(o.vy || 0), c: c ? c.type : 0, col: c ? c.color : 0, z: c ? r(c.z) : 0, w: r(player.walk % 100), st: stars });
+    }
+    const n = friend.net;
+    if (!n) return;
+    // Ease their puppet toward where they should be by now.
+    const lag = Math.min(0.2, (performance.now() - n.at) / 1000);
+    const tx = (+n.x || 0) + (+n.vx || 0) * lag, ty = (+n.y || 0) + (+n.vy || 0) * lag;
+    if (Math.hypot(tx - friend.x, ty - friend.y) > 200) { friend.x = tx; friend.y = ty; }
+    else { friend.x = Gfx.approach(friend.x, tx, 14, dt); friend.y = Gfx.approach(friend.y, ty, 14, dt); }
+    friend.a += angDiff(+n.a || 0, friend.a) * Math.min(1, dt * 14);
+    friend.car = CARS[n.c] ? n.c : null;
+    friend.color = typeof n.col === 'string' && /^#[0-9a-f]{3,8}$/i.test(n.col) ? n.col : '#ffffff';
+    friend.z = +n.z || 0;
+    friend.walk = +n.w || 0;
+    friend.stars = clamp(n.st | 0, 0, MAX_STARS);
+    // Bumping into their car: you bounce off on your screen, and they do on theirs.
+    const pc = player.car;
+    if (pc && friend.car && friend.z < 6 && pc.z < 6) {
+      const dx = pc.x - friend.x, dy = pc.y - friend.y, d = Math.hypot(dx, dy);
+      const min = (pc.T.len + CARS[friend.car].len) * 0.42;
+      if (d > 0.01 && d < min) {
+        const nx = dx / d, ny = dy / d;
+        pc.x += nx * (min - d); pc.y += ny * (min - d);
+        const rel = (pc.vx - (+n.vx || 0)) * nx + (pc.vy - (+n.vy || 0)) * ny;
+        if (rel < 0) {
+          pc.vx -= nx * rel * 1.3; pc.vy -= ny * rel * 1.3;
+          if (-rel > 80) { shake.add(Math.min(0.5, -rel / 900)); sfx.crash(-rel); damage(pc, -rel * 0.02); }
+        }
+      }
+    }
+  }
+
+  const friendCar = () => ({ type: friend.car, T: CARS[friend.car], color: friend.color, x: friend.x, y: friend.y, z: friend.z, a: friend.a, role: 'friend', honk: 0, broken: false, siren: 0 });
+  const friendTag = () => `${live.them}${friend.stars ? ' ' + '★'.repeat(friend.stars) : ''}`;
+  function drawFriend2d() {
+    if (!online()) return;
+    if (friend.car) drawCar(friendCar());
+    else drawPerson(friend.x, friend.y, friend.a, FRIEND_COLOR, '#ffe0bd', friend.walk, false);
+    Gfx.text(ctx, friendTag(), friend.x, friend.y - (friend.car ? 32 : 22), { size: 13, color: FRIEND_COLOR, width: 3 });
+  }
+  function drawFriend3d() {
+    if (!online() || Math.hypot(friend.x - player.x, friend.y - player.y) > 1300) return;
+    if (friend.car) {
+      M4.trs(model, friend.x, groundAt(friend.x, friend.y) + friend.z, friend.y, -friend.a);
+      G3.draw(carMesh(friend.car, friend.color), model);
+    } else drawPerson3d(friend.x, friend.y, friend.a, FRIEND_COLOR, '#ffe0bd', friend.walk, false);
+  }
+  function friendTag3d() {
+    if (!online()) return;
+    const d = Math.hypot(friend.x - player.x, friend.y - player.y);
+    if (d > 1300) return;
+    const q = project(friend.x, groundAt(friend.x, friend.y) + (friend.car ? 34 : 26), friend.y);
+    if (q && q.x > 0 && q.x < W && q.y > 0 && q.y < H) Gfx.text(ctx, friendTag(), q.x, q.y, { size: clamp(14 * 300 / q.w, 11, 16), color: FRIEND_COLOR, width: 3 });
+  }
+  // An arrow at the screen's edge pointing to your friend (Classic view).
+  function friendArrow2d() {
+    if (!online()) return;
+    const sx = (friend.x - cam.x) * cam.z, sy = (friend.y - cam.y) * cam.z, m = 40;
+    if (sx > m && sx < W - m && sy > m && sy < H - m) return;
+    const cx = W / 2, cy = H / 2, a = Math.atan2(sy - cy, sx - cx);
+    const k = Math.min((W / 2 - m) / Math.abs(Math.cos(a) || 1e-6), (H / 2 - m) / Math.abs(Math.sin(a) || 1e-6));
+    ctx.save();
+    ctx.translate(cx + Math.cos(a) * k, cy + Math.sin(a) * k);
+    ctx.rotate(a);
+    ctx.scale(0.75, 0.75);
+    ctx.fillStyle = FRIEND_COLOR;
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(20, 0); ctx.lineTo(-10, -13); ctx.lineTo(-4, 0); ctx.lineTo(-10, 13); ctx.closePath();
+    ctx.stroke(); ctx.fill();
+    ctx.restore();
+  }
+
   // ---------- Loop and start ----------
 
   let last = performance.now();
   function frame(now) {
-    const dt = Math.min(0.05, (now - last) / 1000);
+    const raw = (now - last) / 1000, dt = Math.min(0.05, raw);
     last = now;
     if (overlayEl.hidden && !mapOpen) update(dt);
-    drawWorld();
+    else if (live.on) updateOnline(dt);   // a menu open online: keep your friend moving
+    if (view3d) {
+      render3d(dt);
+      ctx.clearRect(0, 0, W, H);
+      drawWorldHud3d();
+      checkSpeed(raw);
+    } else drawWorld();
     drawHud();
     updateStats();
     requestAnimationFrame(frame);
   }
 
   loadSave();
+  setView(viewPref === '3d' || viewPref === 'auto', false);
   spawnAtHideout();
   // Your starter car waits outside the hideout.
   makeCar(s.owned[s.owned.length - 1], hideout.x + 70, hideout.y + 75, 0, 'parked');
@@ -1902,11 +2936,16 @@
   const tips = `<ul>
       <li><b>WASD</b> or arrows to walk or drive. <b>E</b> gets in or out of any car. <b>Space</b> is the handbrake for drifting.</li>
       <li>Walk into a marker to start a job: <b>💼 heists</b>, <b>🚕 taxi</b> shifts, <b>🍕 pizza</b> runs and the <b>🏁 street race</b>.</li>
-      <li>Heists and reckless driving bring the police. The wanted scale runs to <b>8 stars</b>: past five, riot vans join the chase. Get out of sight to lose them, lie low at the <b>🏠 Hideout</b>, or get a respray at a <b>🎨 Spray Shop</b>. Stop next to a cop for too long and you're <b>busted</b>.</li>
-      <li>Hit the yellow <b>ramps</b> fast for stunt cash, and hunt for 120 hidden <b>📦 packages</b> across the bigger city. <b>M</b> shows the map.</li>
+      <li>Heists and reckless driving bring the police. The wanted scale runs to <b>8 stars</b>: past five, riot vans join the chase. Stay out of their sight until the stars fade, or slip into a <b>🎨 Spray Shop</b> unseen for a respray. The fence only pays once you've lost every cop, and getting <b>busted</b> costs you the loot and a fine.</li>
+      <li>Hit the yellow <b>ramps</b> fast for stunt cash, and hunt for 120 hidden <b>📦 packages</b> across the city. <b>M</b> shows the map, hold <b>C</b> to look behind you, and <b>V</b> switches between the 3D and Classic (top-down) views.</li>
       <li>Spend your cash on cars at the <b>🚗 Dealer</b> and perks at the Hideout.</li>
     </ul>`;
-  if (!s.intro) ui.show({ title: '🌆 Getaway City', html: `<p>A whole city to drive around, and plenty of ways to make money in it.</p>${tips}`, button: 'Hit the streets', onAction: () => { s.intro = true; persist(); ui.hide(); } });
-  else ui.show({ title: '🌆 Getaway City', html: `<p>${money(s.cash)} in your pocket · ${s.heists} heists pulled</p>${tips}`, button: 'Hit the streets', onAction: () => ui.hide() });
+  function showIntro() {
+    const html = s.intro ? `<p>${money(s.cash)} in your pocket · ${s.heists} heists pulled</p>${tips}` : `<p>A whole city to drive around, and plenty of ways to make money in it.</p>${tips}`;
+    ui.show({ title: '🌆 Getaway City', html: html + onlineHtml(), button: 'Hit the streets', onAction: () => { s.intro = true; persist(); ui.hide(); }, onRender: p => { viewButton(p, showIntro); wireOnline(p, showIntro); } });
+  }
+  showIntro();
+  const invite = Live.invite('getaway');
+  if (invite) live.connect('public', invite);
   requestAnimationFrame(frame);
 })();

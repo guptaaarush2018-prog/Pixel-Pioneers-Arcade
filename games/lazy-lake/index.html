@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Lazy Lake · Pixel Pioneers Arcade</title>
+  <link rel="icon" href="../../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../../assets/css/arcade.css">
+  <style>
+    .ll-shop { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .ll-shop .btn { flex-direction: column; line-height: 1.25; padding: 8px 6px; font-size: 14px; }
+    .ll-shop small { font-weight: 500; font-size: 11px; opacity: .8; }
+    .ll-journal { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; justify-content: center; }
+  </style>
+</head>
+<body class="game" data-game="lazy-lake">
+  <header class="topbar">
+    <a class="back" href="../../index.html">← All games</a>
+    <h1>Lazy Lake</h1>
+    <div class="stats">
+      <span>Catch<b id="score">0</b></span>
+      <span>Fish<b id="fish">0</b></span>
+      <span>Coins<b id="coins">0</b></span>
+    </div>
+    <button class="icon-btn" id="mute" type="button">Sound on</button>
+  </header>
+
+  <main class="stage">
+    <canvas id="game"></canvas>
+    <div class="overlay" id="overlay" hidden></div>
+  </main>
+
+  <p class="help">Hold <kbd>Space</kbd> (or the mouse) to charge a cast, let go to throw · press on the real bite · then hold to reel, let go to ease off · <kbd>W</kbd>/<kbd>S</kbd> lure depth · <kbd>P</kbd> pause</p>
+
+  <script src="../../assets/js/config.js"></script>
+  <script src="../../assets/js/catalog.js"></script>
+  <script src="../../assets/js/arcade.js"></script>
+  <script src="../../assets/js/gfx.js"></script>
+  <script src="../../assets/js/filter.js"></script>
+  <script src="../../assets/js/friends.js"></script>
+  <script src="../../assets/js/online.js"></script>
+  <script src="../../assets/js/chat.js"></script>
+  <script src="../../assets/js/invites.js"></script>
+  <script src="../../assets/js/relay.js"></script>
+  <script src="../../assets/js/versus.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

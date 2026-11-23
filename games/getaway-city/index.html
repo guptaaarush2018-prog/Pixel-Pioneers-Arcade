@@ -18,6 +18,9 @@
     .gc-buy:disabled { opacity: .45; cursor: not-allowed; filter: none; }
     .gc-tabs { display: flex; gap: 6px; margin-bottom: 10px; }
     .gc-tabs .btn { flex: 1; padding: 6px; font-size: 14px; }
+    .gl-wrap { position: relative; }
+    .gl-wrap #hud { position: absolute; left: 0; top: 0; pointer-events: none; border: none; }
+    .stage canvas[hidden], .gl-wrap[hidden] { display: none; }
   </style>
 </head>
 <body class="game" data-game="getaway-city">
@@ -34,21 +37,24 @@
 
   <main class="stage">
     <canvas id="game"></canvas>
+    <div class="gl-wrap" id="glwrap" hidden><canvas id="game3d"></canvas><canvas id="hud"></canvas></div>
     <div class="overlay" id="overlay" hidden></div>
   </main>
 
-  <p class="help"><kbd>WASD</kbd> / arrows drive or walk · <kbd>E</kbd> get in or out · <kbd>Space</kbd> handbrake · <kbd>Shift</kbd> nitro or sprint · <kbd>M</kbd> map · <kbd>P</kbd> pause · on touch, drag to steer</p>
+  <p class="help"><kbd>WASD</kbd> / arrows drive or walk · <kbd>E</kbd> get in or out · <kbd>Space</kbd> handbrake · <kbd>Shift</kbd> nitro or sprint · <kbd>M</kbd> map · <kbd>C</kbd> look back · <kbd>V</kbd> 3D / Classic view · <kbd>P</kbd> pause · on touch, drag to steer</p>
 
   <script src="../../assets/js/config.js"></script>
   <script src="../../assets/js/catalog.js?v=20261123"></script>
   <script src="../../assets/js/arcade.js"></script>
   <script src="../../assets/js/gfx.js"></script>
+  <script src="../../assets/js/gl3d.js"></script>
   <script src="../../assets/js/filter.js"></script>
   <script src="../../assets/js/friends.js"></script>
   <script src="../../assets/js/online.js"></script>
   <script src="../../assets/js/chat.js"></script>
   <script src="../../assets/js/invites.js"></script>
   <script src="../../assets/js/relay.js"></script>
+  <script src="../../assets/js/live.js"></script>
   <script src="game.js"></script>
 </body>
 </html>

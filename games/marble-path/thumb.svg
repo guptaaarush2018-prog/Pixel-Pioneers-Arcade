@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+<rect width="320" height="200" fill="#1f4a6e"/>
+<g stroke="rgba(255,255,255,.07)"><path d="M0 20H320M0 40H320M0 60H320M0 80H320M0 100H320M0 120H320M0 140H320M0 160H320M0 180H320M20 0V200M40 0V200M60 0V200M80 0V200M100 0V200M120 0V200M140 0V200M160 0V200M180 0V200M200 0V200M220 0V200M240 0V200M260 0V200M280 0V200M300 0V200"/></g>
+<rect x="34" y="0" width="22" height="34" rx="5" fill="#3a4560"/>
+<path d="M30 70L140 100" stroke="#9aa6bd" stroke-width="7" stroke-linecap="round"/>
+<g transform="translate(180 128) rotate(-12)"><rect x="-55" y="-5" width="110" height="9" rx="3" fill="#c98b46"/></g>
+<circle cx="120" cy="150" r="16" fill="#e0559f" stroke="#ffd1ec" stroke-width="2"/>
+<path d="M44 46Q90 60 150 92Q190 104 226 104Q256 104 262 140" fill="none" stroke="rgba(220,230,255,.35)" stroke-width="4" stroke-dasharray="2 6" stroke-linecap="round"/>
+<circle cx="230" cy="104" r="9" fill="#e6ecf7"/>
+<path d="M244 140l4 44h44l4-44" fill="rgba(255,210,63,.15)" stroke="#9aa6bd" stroke-width="5" stroke-linejoin="round"/>
+<line x1="296" y1="140" x2="296" y2="106" stroke="#ddd" stroke-width="2"/><path d="M296 106l16 6-16 6z" fill="#ff5a5f"/>
+<text x="76" y="28" font-family="system-ui,sans-serif" font-size="20" font-weight="900" fill="#fff">MARBLE PATH</text>
+</svg>

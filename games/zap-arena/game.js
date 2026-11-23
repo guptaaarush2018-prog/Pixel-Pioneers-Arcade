@@ -5,6 +5,8 @@
   const ID = 'zap-arena';
   const W = 960, H = 540;
   const TAGS_TO_WIN = 20, MATCH_TIME = 210, BOTS = 5;
+  // Live 1v1 against a real player (live.js): shorter race, and nobody else in the arena.
+  const LIVE_TAGS = 15, LIVE_TIME = 240;
   const GRAV = 22, JUMP = 8, EYE = 1.6, EYE_LOW = 1.0, PW = 0.35, PH = 1.8, PH_LOW = 1.15;
   const PREFS_KEY = 'zap:prefs';
 
@@ -378,14 +380,18 @@
       if (victim) {
         let dmg = w.dmg * (head ? w.head : 1);
         if (w.falloff && dist > w.falloff) dmg *= Math.max(0.3, 1 - (dist - w.falloff) / (w.range - w.falloff));
-        damage(victim, dmg, f, head);
+        // The other player's machine owns their health: tell it, and it confirms any tag.
+        if (victim.remote) pending.push({ d: Math.round(dmg * 10) / 10, h: head ? 1 : 0, w: f.weapon });
+        else damage(victim, dmg, f, head);
         if (f === me) { hits++; if (head) heads++; hitMark = head ? 0.25 : 0.15; }
         for (let k = 0; k < 4; k++) sparks.push({ x: ex, y: ey, z: ez, vx: (Math.random() - 0.5) * 5, vy: Math.random() * 4, vz: (Math.random() - 0.5) * 5, t: 0.4, c: w.color });
       } else if (dist < w.range) {
         for (let k = 0; k < 2; k++) sparks.push({ x: ex, y: ey, z: ez, vx: (Math.random() - 0.5) * 3, vy: Math.random() * 3, vz: (Math.random() - 0.5) * 3, t: 0.3, c: [1, 1, 1] });
       }
       if (!bestHit && victim) bestHit = victim;
+      if (f === me && netMode === 'live') shotBeams.push([...beams[beams.length - 1].a, ex, ey, ez].map(v => Math.round(v * 100) / 100));
     }
+    if (f === me && netMode === 'live') flushShots();
     // Sound: loud for you, quieter with distance for the bots.
     const d = f === me ? 0 : Math.hypot(f.x - me.x, f.z - me.z);
     const vol = (f === me ? 0.045 : 0.03) * Math.max(0, 1 - d / 50);
@@ -431,10 +437,12 @@
         banner = { text: streak >= 3 ? `${streak} IN A ROW!` : head ? 'HEADSHOT TAG!' : 'TAGGED!', t: 1.2, color: head ? '#ffd23f' : '#7ef0ff' };
       }
       if (v === me) { streak = 0; banner = { text: `Tagged by ${by.name}`, t: 2.4, color: '#ff6b6b' }; }
-      if (by.tags >= TAGS_TO_WIN) endMatch();
+      if (v === me && by.remote) live.send('tagged', { h: head ? 1 : 0, w: lastHitWeapon, n: me.deaths });
+      if (by.tags >= goal()) endMatch();
     }
   }
-  let recoil = 0, streak = 0, banner = null;
+  let recoil = 0, streak = 0, banner = null, lastHitWeapon = 0;
+  const goal = () => (netMode === 'live' ? LIVE_TAGS : TAGS_TO_WIN);
 
   // ---------- Bots ----------
 
@@ -584,6 +592,7 @@
     state = 'over';
     look.unlock();
     mouseL = mouseR = false;
+    if (netMode === 'live') return endLive();
     const place = placeOf(me);
     if (place === 1) {
       Arcade.flag('zap-arena-win');
@@ -611,6 +620,7 @@
   function pause() {
     if (state !== 'play') return;
     mouseL = mouseR = false;
+    if (netMode === 'live') return livePause();
     ui.show({
       title: 'Paused',
       html: `<p>${me.tags} tags · ${Math.ceil(matchT)} s left</p>
@@ -638,23 +648,222 @@
         <li><b>Click</b> to zap, <b>right click</b> to zoom. <b>1 2 3</b> switch between the Pulse Blaster, Scatter Zapper and Rail Lance.</li>
         <li>Hold <b>Space</b> to bunny hop, steer in the air to keep your speed, and <b>Shift</b> while running to slide. Green pads launch you.</li>
       </ul>
-      ${pick(MAPS, prefs.map, 'map', 'Arena')}${pick(DIFFS, prefs.diff, 'diff', 'Bots')}`;
+      ${pick(MAPS, prefs.map, 'map', 'Arena')}${pick(DIFFS, prefs.diff, 'diff', 'Bots')}${live.html(`Live 1v1 against a real player: first to ${LIVE_TAGS} tags, on the arena picked above`)}<p class="error" data-live-error>${liveError}</p>`;
   }
   function wireMenu(p) {
+    live.wire(p);
+    liveError = '';
     p.querySelectorAll('[data-map]').forEach(b => b.addEventListener('click', () => { prefs.map = +b.dataset.map; Arcade.save(PREFS_KEY, prefs); showMenu(); }));
     p.querySelectorAll('[data-diff]').forEach(b => b.addEventListener('click', () => { prefs.diff = +b.dataset.diff; Arcade.save(PREFS_KEY, prefs); showMenu(); }));
   }
   function showMenu() {
     state = 'menu';
+    netMode = null;
+    live.leave();
     look.unlock();
     ui.show({ title: '⚡ Zap Arena', html: menuHtml(), button: 'Start match', onAction: start, onRender: wireMenu });
+  }
+
+  // ---------- Live 1v1 (live.js) ----------
+  // Each machine runs its own player and streams where it is. The shooter decides what it hit
+  // (it sees the target where it is drawn), the target's machine takes the damage and confirms
+  // any tag, so both sides always agree on the score. The host's clock ends the match.
+
+  let netMode = null, rival = null, liveError = '', sendT = 0, pending = [], shotBeams = [];
+  const live = Live.create({
+    ui,
+    tag: 'zap',
+    label: '1v1',
+    title: 'The 1v1',
+    onReady: host => { if (host) hostStart(); },
+    onEvent: onLive,
+    onState: s => {
+      if (!rival) return;
+      rival.net = { ...s, at: performance.now() };
+      if (!live.host && typeof s.t === 'number' && state === 'play') matchT = s.t;
+    },
+    onRematch: hostStart,
+    onGone: lost => liveGone(lost),
+    onCancel: msg => { liveError = msg ? Online.escape(msg) : ''; showMenu(); },
+  });
+
+  function hostStart() {
+    const m = MAPS[prefs.map] ? prefs.map : 0;
+    live.send('start', { map: m });
+    startLive(m);
+  }
+
+  function startLive(mapIndex) {
+    netMode = 'live';
+    map = MAPS[mapIndex] || MAPS[0];
+    diff = DIFFS[1];
+    buildMap();
+    me = makeFighter('You', '#4fc3ff', false, 0);
+    rival = makeFighter(live.them, '#ff4f6d', false, 0);
+    rival.remote = true;
+    rival.net = null;
+    fighters = [me, rival];
+    // Opposite corners to start; after that, the usual farthest-spawn rule.
+    const [a, b] = [map.spawns[0], map.spawns[1]];
+    spawn(me);
+    [me.x, me.y, me.z] = live.host ? a : b;
+    me.yaw = Math.atan2(-me.x, me.z);
+    [rival.x, rival.y, rival.z] = live.host ? b : a;
+    matchT = LIVE_TIME;
+    feed = []; beams = []; sparks = []; streak = 0; shots = 0; hits = 0; heads = 0; pending = []; shotBeams = []; sendT = 0;
+    banner = { text: `1v1 vs ${rival.name} · FIRST TO ${LIVE_TAGS}`, t: 2.6, color: '#ffffff' };
+    state = 'play';
+    ui.hide();
+    look.lock();
+  }
+
+  function onLive(name, d) {
+    if (name === 'hello') { if (rival) rival.name = live.them; return; }
+    if (name === 'start' && !live.host) return startLive(d?.map | 0);
+    if (!rival || state !== 'play') {
+      if (name === 'end' && state === 'over') return;
+      return;
+    }
+    if (name === 'fire') {
+      // Their beams and sound, then any damage they say they did to us.
+      const w = WEAPONS[d.w | 0] || WEAPONS[0];
+      for (const b of (d.b || []).slice(0, 12)) beams.push({ a: b.slice(0, 3), b: b.slice(3, 6), t: 0.09, c: w.color, w: w.id === 'rail' ? 0.05 : 0.025 });
+      const dist = Math.hypot(rival.x - me.x, rival.z - me.z), vol = 0.03 * Math.max(0, 1 - dist / 50);
+      if (vol > 0.002) Arcade.tone(w.id === 'blaster' ? { freq: 900, to: 300, dur: 0.07, type: 'square', vol } : w.id === 'scatter' ? { freq: 260, to: 60, dur: 0.18, type: 'sawtooth', vol: vol * 1.4 } : { freq: 1600, to: 200, dur: 0.35, type: 'sine', vol: vol * 1.6 });
+      let dmg = 0, head = false;
+      for (const h of (d.h || []).slice(0, 12)) { dmg += Math.min(160, +h.d || 0); head ||= !!h.h; }
+      if (dmg > 0 && me.alive) {
+        lastHitWeapon = d.w | 0;
+        damage(me, dmg, rival, head);
+      }
+    } else if (name === 'tagged') {
+      // They confirm we tagged them.
+      rival.deaths = Math.max(rival.deaths + 1, d.n | 0);
+      me.tags = rival.deaths;
+      rival.alive = false;
+      const head = !!d.h;
+      feed.unshift({ text: `${me.name} ⚡ ${rival.name}${head ? ' (headshot)' : ''}`, mine: true, t: 4 });
+      if (feed.length > 5) feed.pop();
+      for (let k = 0; k < 24; k++) sparks.push({ x: rival.x, y: rival.y + 1, z: rival.z, vx: (Math.random() - 0.5) * 8, vy: Math.random() * 6, vz: (Math.random() - 0.5) * 8, t: 0.7, c: hex(rival.color) });
+      Arcade.tone({ freq: 660, to: 1320, dur: 0.18, type: 'triangle', vol: 0.06 });
+      streak++;
+      if (streak >= 5) Arcade.flag('zap-arena-streak');
+      if (head && WEAPONS[d.w | 0]?.id === 'rail') Arcade.flag('zap-arena-rail');
+      banner = { text: streak >= 3 ? `${streak} IN A ROW!` : head ? 'HEADSHOT TAG!' : 'TAGGED!', t: 1.2, color: head ? '#ffd23f' : '#7ef0ff' };
+      if (me.tags >= LIVE_TAGS) { live.send('end', { a: me.tags, b: rival.tags }); endMatch(); }
+    } else if (name === 'end') {
+      // Their final count, from their side: a = their tags, b = ours.
+      rival.tags = Math.max(rival.tags, d.a | 0);
+      me.tags = Math.max(me.tags, d.b | 0);
+      endMatch();
+    }
+  }
+
+  function flushShots() {
+    if (!shotBeams.length && !pending.length) return;
+    live.send('fire', { w: me.weapon, b: shotBeams, h: pending });
+    shotBeams = [];
+    pending = [];
+  }
+
+  const liveLag = () => (rival?.net ? (performance.now() - rival.net.at) / 1000 : 0);
+
+  function updateLive(dt) {
+    // Send our state 20 times a second.
+    sendT -= dt;
+    if (sendT <= 0) {
+      sendT = 0.05;
+      const r = v => Math.round(v * 100) / 100;
+      live.state({ x: r(me.x), y: r(me.y), z: r(me.z), vx: r(me.vx), vy: r(me.vy), vz: r(me.vz), yaw: r(me.yaw), p: r(me.pitch), c: me.crouch ? 1 : 0, g: me.ground ? 1 : 0, w: me.weapon, hp: Math.round(Math.max(0, me.hp)), a: me.alive ? 1 : 0, d: me.deaths, t: live.host ? Math.round(matchT * 10) / 10 : undefined });
+    }
+    // Move their puppet toward where they should be by now.
+    const s = rival.net;
+    if (!s) return;
+    const lag = Math.min(0.15, liveLag());
+    const tx = s.x + s.vx * lag, tz = s.z + s.vz * lag, ty = s.g ? s.y : s.y + s.vy * lag;
+    const wasAlive = rival.alive;
+    rival.alive = !!s.a && (s.d | 0) >= rival.deaths;
+    if (!wasAlive && rival.alive || Math.hypot(tx - rival.x, tz - rival.z) > 5) { rival.x = tx; rival.y = ty; rival.z = tz; }
+    else {
+      rival.x = Gfx.approach(rival.x, tx, 18, dt);
+      rival.y = Gfx.approach(rival.y, ty, 18, dt);
+      rival.z = Gfx.approach(rival.z, tz, 18, dt);
+    }
+    rival.yaw += angDiff(s.yaw, rival.yaw) * Math.min(1, dt * 20);
+    rival.pitch = s.p;
+    rival.vx = s.vx; rival.vz = s.vz;
+    rival.crouch = !!s.c;
+    rival.ground = !!s.g;
+    rival.weapon = s.w | 0;
+    rival.hp = s.hp;
+    rival.step += Math.hypot(s.vx, s.vz) * dt * (s.g ? 1 : 0);
+  }
+
+  function livePause() {
+    ui.show({
+      title: 'Menu',
+      html: `<p>The match keeps going while this is open.</p><p>${me.tags} – ${rival.tags} · ${Math.ceil(matchT)} s left</p>
+        <div class="menu"><button class="btn secondary" type="button" data-quit>Leave match (counts as a loss)</button></div>`,
+      button: 'Back in',
+      onAction: () => { ui.hide(); look.lock(); },
+      onRender: p => p.querySelector('[data-quit]').addEventListener('click', () => {
+        Relay.result('l');
+        showMenu();
+      }),
+    });
+  }
+
+  function endLive() {
+    const won = me.tags > rival.tags, draw = me.tags === rival.tags;
+    Arcade.countPlay();
+    Arcade.flag('online-match');
+    Relay.result(draw ? 'd' : won ? 'w' : 'l');
+    if (won) {
+      Arcade.flag('zap-arena-online-win');
+      if (me.deaths === 0) Arcade.flag('zap-arena-flawless');
+    }
+    const acc = shots ? Math.round(hits / shots * 100) : 0;
+    ui.show({
+      title: draw ? "It's a draw" : won ? 'You win! ⚡' : `${Online.escape(rival.name)} wins`,
+      html: `<p class="big">${me.tags} – ${rival.tags}</p>
+        <p>You vs ${Online.escape(rival.name)} · ${map.name} · ${acc}% accuracy · ${heads} headshot${heads === 1 ? '' : 's'}</p>
+        <div class="menu"><button class="btn secondary" type="button" data-leave>Leave</button></div>${live.waitNote}`,
+      button: 'Rematch',
+      delay: 600,
+      onAction: () => live.rematch(),
+      onRender: p => p.querySelector('[data-leave]').addEventListener('click', showMenu),
+    });
+  }
+
+  function liveGone(lost) {
+    const wasPlaying = state === 'play' && netMode === 'live';
+    const name = rival?.name || 'Your opponent';
+    netMode = null;
+    if (wasPlaying) {
+      state = 'over';
+      look.unlock();
+      if (lost) return ui.show({ title: 'Connection lost', html: "<p>Lost the connection to the game server, so this match doesn't count.</p>", button: 'Back to menu', onAction: showMenu });
+      Arcade.countPlay();
+      Arcade.flag('online-match');
+      Arcade.flag('zap-arena-online-win');
+      Relay.result('w');
+      return ui.show({ title: `${Online.escape(name)} left`, html: '<p>You win by forfeit.</p>', button: 'Back to menu', onAction: showMenu });
+    }
+    if (state === 'over') {
+      const w = document.querySelector('[data-live-wait]');
+      if (w) { w.textContent = `${name} left.`; return; }
+    }
+    liveError = lost ? 'Lost the connection to the game server.' : `${Online.escape(name)} left.`;
+    showMenu();
   }
 
   // ---------- Update ----------
 
   function update(dt) {
     matchT -= dt;
-    if (matchT <= 0) { matchT = 0; endMatch(); return; }
+    // Online, the host's clock is the one that ends the match.
+    if (matchT <= 0 && netMode === 'live' && !live.host) matchT = 0;
+    else if (matchT <= 0) { matchT = 0; if (netMode === 'live') live.send('end', { a: me.tags, b: rival.tags }); endMatch(); return; }
     // You.
     if (me.alive) {
       const fwd = (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
@@ -663,7 +872,9 @@
       if (mouseL && WEAPONS[me.weapon].auto) fire(me);
       zoomT = Gfx.approach(zoomT, mouseR && me.reloadT <= 0 ? 1 : 0, 14, dt);
     }
+    if (netMode === 'live') updateLive(dt);
     for (const f of fighters) {
+      if (f.remote) continue;
       if (!f.alive) {
         f.respawnT -= dt;
         if (f.respawnT <= 0) spawn(f);
@@ -858,7 +1069,8 @@
     const mm = Math.floor(matchT / 60), ss = String(Math.floor(matchT % 60)).padStart(2, '0');
     Gfx.card(hud, W / 2 - 110, 10, 220, 38);
     Gfx.text(hud, `${mm}:${ss}`, W / 2, 22, { size: 15, stroke: null });
-    Gfx.text(hud, `You ${me.tags} · ${lead === me ? 'leading' : `${lead.name} ${lead.tags}`} · first to ${TAGS_TO_WIN}`, W / 2, 38, { size: 11, color: '#9aa3b5', stroke: null });
+    Gfx.text(hud, `You ${me.tags} · ${lead === me ? 'leading' : `${lead.name} ${lead.tags}`} · first to ${goal()}`, W / 2, 38, { size: 11, color: '#9aa3b5', stroke: null });
+    if (netMode === 'live' && liveLag() > 3) Gfx.text(hud, `Waiting for ${rival.name}…`, W / 2, 64, { size: 13, color: '#ffb02e', width: 3 });
     // Kill feed.
     feed.forEach((f, i) => Gfx.text(hud, f.text, W - 16, 22 + i * 20, { size: 12, align: 'right', color: f.mine ? '#ffd23f' : '#e0e6f0', width: 3 }));
     if (Tab()) {
@@ -893,7 +1105,7 @@
   function frame(now) {
     const dt = Math.min(0.04, (now - last) / 1000);
     last = now;
-    if (state === 'play' && (overlayEl.hidden || (typeof Versus !== 'undefined' && Versus.active()))) update(dt);
+    if (state === 'play' && (overlayEl.hidden || netMode === 'live' || (typeof Versus !== 'undefined' && Versus.active()))) update(dt);
     if (mapMesh) draw();
     $('tags').textContent = me ? me.tags : 0;
     $('clock').textContent = state === 'play' ? `${Math.floor(matchT / 60)}:${String(Math.floor(matchT % 60)).padStart(2, '0')}` : '-';
@@ -905,11 +1117,13 @@
   // A camera drifting around the arena behind the menu.
   me = makeFighter('You', '#4fc3ff', false, 0);
   me.y = 6; me.z = 22; me.pitch = -0.2;
+  const liveInvite = Live.invite('zap');
   Versus.attach({
     ui,
     start,
     score,
     intro: { title: '⚡ Zap Arena', html: menuHtml(), button: 'Start match', onAction: start, onRender: wireMenu },
   });
+  if (liveInvite) live.connect('public', liveInvite);
   requestAnimationFrame(frame);
 })();

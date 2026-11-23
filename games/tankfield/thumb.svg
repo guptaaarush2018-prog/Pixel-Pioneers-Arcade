@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200">
+<rect width="320" height="200" fill="#d8dde6"/>
+<g stroke="rgba(80,90,110,.12)" stroke-width="2"><path d="M0 40H320M0 80H320M0 120H320M0 160H320M40 0V200M80 0V200M120 0V200M160 0V200M200 0V200M240 0V200M280 0V200"/></g>
+<path d="M232 40l18 10v20l-18 10-18-10V50z" fill="#7aa2ff" stroke="#4a6ab8" stroke-width="3"/>
+<rect x="60" y="140" width="22" height="22" fill="#ffd23f" stroke="#a88a20" stroke-width="3" transform="rotate(20 71 151)"/>
+<path d="M270 140l14 24h-28z" fill="#ff6b6b" stroke="#a83a3a" stroke-width="3"/>
+<g transform="translate(140 110) rotate(-25)"><rect x="0" y="-15" width="44" height="12" fill="#8d94a1" stroke="#4a5060" stroke-width="2"/><rect x="0" y="3" width="44" height="12" fill="#8d94a1" stroke="#4a5060" stroke-width="2"/><circle cx="0" cy="0" r="24" fill="#4f8cff" stroke="#2a4f9c" stroke-width="3"/><circle cx="0" cy="0" r="10" fill="rgba(0,0,0,.18)"/></g>
+<g fill="#4f8cff" stroke="#2a4f9c" stroke-width="2"><circle cx="196" cy="80" r="5"/><circle cx="212" cy="64" r="5"/></g>
+<g transform="translate(270 70)"><rect x="-38" y="-6" width="30" height="12" fill="#8d94a1" stroke="#4a5060" stroke-width="2"/><circle r="18" fill="#ff5a5f" stroke="#9c2a2e" stroke-width="3"/></g>
+<text x="14" y="30" font-family="system-ui,sans-serif" font-size="22" font-weight="900" fill="#2b2f3a">TANKFIELD</text>
+</svg>
