@@ -22,7 +22,7 @@
   const LAYOUT = {};
   let o = 0;
   const at = (name, n) => { LAYOUT[name] = o; o += n; };
-  at('selfHp', 1); at('selfVel', 2); at('selfReload', 1); at('selfStats', 7); at('selfTurret', NT);
+  at('selfHp', 1); at('selfVel', 2); at('selfReload', 1); at('selfStats', 7); at('selfTurret', NT); at('selfAim', 2);
   at('oppDx', 1); at('oppDy', 1); at('oppDist', 1); at('oppVel', 2); at('oppHp', 1); at('oppStats', 7); at('oppTurret', NT);
   at('oppAim', 2); at('oppReload', 1);
   at('shots', N_SHOTS * 4); at('shapes', N_SHAPES * 3); at('walls', 4); at('prev', 9 + 9 + 2);
@@ -46,6 +46,9 @@
     out[L.oppHp] = opp.hp / opp.max;
     for (let i = 0; i < 7; i++) out[L.oppStats + i] = opp.stats[STATS[i].id] / MAX_STAT;
     out[L.oppTurret + TURRET_INDEX[opp.turret]] = 1;
+    // How our own gun sits relative to the straight line from us to them (0 = pointing at them).
+    const own = angDiff(self.a, Math.atan2(dy, dx));
+    out[L.selfAim] = Math.sin(own); out[L.selfAim + 1] = Math.cos(own);
     // How the opponent's gun sits relative to the line from them to us (0 = pointing at us).
     const rel = angDiff(opp.a, Math.atan2(-dy, -dx));
     out[L.oppAim] = Math.sin(rel); out[L.oppAim + 1] = Math.cos(rel);

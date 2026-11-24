@@ -22,7 +22,7 @@ test('observe writes exactly OBS_DIM finite values', () => {
   IO.observe(world, a, b, new Int32Array([4, 2, 1]), out);
   for (let i = 0; i < IO.OBS_DIM; i++) assert.ok(Number.isFinite(out[i]), 'index ' + i);
   assert.ok(Number.isNaN(out[IO.OBS_DIM]), 'wrote past OBS_DIM');
-  assert.equal(IO.OBS_DIM, 121);
+  assert.equal(IO.OBS_DIM, 123);
 });
 
 test('mirrored world: opponent block of one matches self block of the other', () => {
@@ -134,4 +134,17 @@ test('chooseBuild: valid alloc, deterministic greedy, hand-summed logp', () => {
   const top = bias.slice(0, np).indexOf(Math.max(...bias.slice(0, np)));
   assert.equal(g1.path, top);
   assert.equal(g1.alloc[0], bias.slice(np).indexOf(Math.max(...bias.slice(np))));
+});
+
+test('rotating self.a changes exactly the two selfAim values', () => {
+  const { world, a, b } = duel();
+  const prev = new Int32Array(3);
+  const o1 = new Float32Array(IO.OBS_DIM), o2 = new Float32Array(IO.OBS_DIM);
+  a.a = 0.3; IO.observe(world, a, b, prev, o1);
+  a.a = 1.9; IO.observe(world, a, b, prev, o2);
+  const changed = [];
+  for (let i = 0; i < IO.OBS_DIM; i++) if (o1[i] !== o2[i]) changed.push(i);
+  assert.deepEqual(changed, [IO.LAYOUT.selfAim, IO.LAYOUT.selfAim + 1]);
+  a.a = Math.atan2(b.y - a.y, b.x - a.x); IO.observe(world, a, b, prev, o1);
+  assert.ok(Math.abs(o1[IO.LAYOUT.selfAim]) < 1e-6 && Math.abs(o1[IO.LAYOUT.selfAim + 1] - 1) < 1e-6);
 });
