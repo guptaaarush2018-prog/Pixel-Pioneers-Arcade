@@ -137,17 +137,21 @@
     }
   }
 
-  function damage(world, target, n, by) {
+  // `at` is the shot that did it (if any); the hit event carries its position for the spark.
+  function damage(world, target, n, by, at) {
     if (target.shield > 0 || target.dead || target.alive === false) return;
     // Live: each machine owns its own tank, so damage to the other player only happens over
-    // there (they report it).
-    if (target.remote) return;
+    // there (they report it). The spark still shows.
+    if (target.remote) {
+      if (at) world.events.push({ type: 'hit', target, n, by, x: target.x, y: target.y, sx: at.x, sy: at.y });
+      return;
+    }
     if (target.sides) world.events.push({ type: 'shapeHit', s: target, n, by });
     target.hp -= n;
     target.hitT = 0.1;
     target.regenT = 0;
     if (target.ai && by && !by.bot) target.ai.provoked = true;
-    if (!target.sides) world.events.push({ type: 'hit', target, n, by, x: target.x, y: target.y });
+    if (!target.sides) world.events.push({ type: 'hit', target, n, by, x: target.x, y: target.y, sx: at ? at.x : undefined, sy: at ? at.y : undefined });
     if (target.hp <= 0) {
       if (target.sides) killShape(world, target, by);
       else killTank(world, target, by);
@@ -296,7 +300,7 @@
       if (s.life <= 0) continue;
       for (const t of tanks) {
         if (t === s.owner || !t.alive || t.shield > 0 || Math.hypot(t.x - s.x, t.y - s.y) > radius(t) + s.r) continue;
-        damage(world, t, s.dmg, s.owner);
+        damage(world, t, s.dmg, s.owner, s);
         if (--s.pierce <= 0) { s.life = 0; break; }
       }
     }
@@ -346,7 +350,7 @@
 
   const api = { AW, AH, STATS, MAX_STAT, TURRETS, SHAPE_KINDS, xpFor, LEVEL_CAP,
     maxHp, moveSpeed, reloadTime, shotDamage, shotSpeed, radius,
-    createWorld, makeTank, place, gainXp, spend, botSpend, setTurret, fire, damage, drive, botControl, respawnBot, spawnShape, step };
+    createWorld, makeTank, makeShape, killShape, place, gainXp, spend, botSpend, setTurret, fire, damage, drive, botControl, respawnBot, spawnShape, step };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.TankCore = api;
 })(typeof window !== 'undefined' ? window : globalThis);
