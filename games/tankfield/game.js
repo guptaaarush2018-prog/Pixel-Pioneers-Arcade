@@ -120,7 +120,7 @@
       if (e.type === 'shot') {
         if (e.t !== me) continue;
         fired = true;
-        const s = e.shot;
+        const s = e.snap;   // as fired, not as step has since moved it
         if (netMode === 'live') liveShots.push([s.x, s.y, s.vx, s.vy, s.r, s.dmg, s.life, s.pierce].map(v => Math.round(v * 10) / 10));
       } else if (e.type === 'levelUp') {
         if (e.t !== me) continue;

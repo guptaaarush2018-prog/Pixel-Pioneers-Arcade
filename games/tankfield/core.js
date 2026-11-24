@@ -126,7 +126,8 @@
           const aa = a + rand(world, -1, 1) * tur.spread, sp = shotSpeed(t) * (tur.pellets ? rand(world, 0.8, 1.1) : 1);
           const shot = { x: bx, y: by, vx: Math.cos(aa) * sp + t.vx * 0.3, vy: Math.sin(aa) * sp + t.vy * 0.3, r: wid * 0.42 * sc, dmg: shotDamage(t), life: 1.3 * (tur.range || 1), owner: t, pierce: tur.pierce || 1, color: t.color };
           world.shots.push(shot);
-          world.events.push({ type: 'shot', t, shot });
+          // snap: the shot as fired, before step moves it (live sends this).
+          world.events.push({ type: 'shot', t, shot, snap: { x: shot.x, y: shot.y, vx: shot.vx, vy: shot.vy, r: shot.r, dmg: shot.dmg, life: shot.life, pierce: shot.pierce } });
         }
         // Recoil (forward thrust for the Thruster's back barrels).
         const k = tur.thrust && Math.abs(angDiff(a, t.a)) > 1 ? -28 : 9;

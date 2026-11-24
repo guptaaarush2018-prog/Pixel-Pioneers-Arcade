@@ -106,3 +106,16 @@ test('a shot hit event carries the shot position, remote targets included', () =
   assert.equal(ev.sy, 500);
   assert.equal(b.hp, 100);
 });
+
+test('shot event snapshot is taken at fire time, before step moves or spends the shot', () => {
+  const w = mk(3, 0);
+  const a = C.makeTank(w, { name: 'A', color: '#fff', bot: false }), b = C.makeTank(w, { name: 'B', color: '#000', bot: false });
+  b.remote = true; w.tanks.push(a, b);
+  a.x = 500; a.y = 500; a.a = 0; b.x = 540; b.y = 500;
+  C.step(w, 1 / 60, new Map([[a, { mx: 0, my: 0, aim: null, fire: true }]]), { spawnShapes: false });
+  const ev = w.events.find(e => e.type === 'shot');
+  assert.ok(ev);
+  assert.ok(ev.snap.life > 0 && ev.snap.life === 1.3);
+  assert.equal(ev.snap.pierce, 1);
+  assert.ok(ev.shot.life < ev.snap.life || ev.shot.life === 0);
+});
