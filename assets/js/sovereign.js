@@ -72,7 +72,9 @@
   }
 
   // Samples one option per head (heads = [n0, n1, ...]) into act. Returns the joint log-probability.
-  function sample(logits, heads, act, greedy) {
+  // rng (optional, default Math.random) makes sampling reproducible for the trainer.
+  function sample(logits, heads, act, greedy, rng) {
+    const rand = rng || Math.random;
     let off = 0, logp = 0;
     for (let h = 0; h < heads.length; h++) {
       const n = heads[h];
@@ -84,7 +86,7 @@
       if (greedy) {
         for (let k = 1; k < n; k++) if (logits[off + k] > logits[off + pick]) pick = k;
       } else {
-        let r = Math.random() * z;
+        let r = rand() * z;
         for (pick = 0; pick < n - 1; pick++) { r -= Math.exp(logits[off + pick] - mx); if (r <= 0) break; }
       }
       act[h] = pick;
