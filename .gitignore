@@ -2,3 +2,9 @@ node_modules/
 .DS_Store
 .claude/worktrees/
 .superpowers/
+tools/sovereign/.venv/
+tools/sovereign/runs/
+tools/sovereign/data/
+tools/sovereign/reports/
+tools/sovereign/clones/
+tools/sovereign/service-account.json
