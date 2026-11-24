@@ -262,7 +262,7 @@ const RR = (() => {
       rows, lane, shardsAt, length, finishRow, cps, ensure,
       get shardCount() { return shardCount; },
       // Total shards in the whole level (campaign levels are generated up front).
-      totalShards() { ensure(finishRow + 20); return shardCount; },
+      totalShards() { ensure(finishRow + 20); let n = 0; for (let r = 0; r <= finishRow + 4; r++) { const l = shardsAt.get(r); if (l) n += l.length; } return n; },
       shardsBetween(a, b) { let n = 0; for (let r = a; r < b; r++) n += (shardsAt.get(r) || []).length; return n; },
     };
   }

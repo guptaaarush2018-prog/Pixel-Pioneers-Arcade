@@ -156,6 +156,8 @@
     // Fill to the right edge so the exit lies on solid ground at a safe height.
     while (c < COLS) col(c++, h);
     room.exitY = h * TS;
+    // Mid-room checkpoint on solid ground.
+    room.checkpoints.push({ x: 14 * TS + 6, y: h * TS - 24, w: 24, h: 24 });
     // Make sure the last 3 columns are flat and clear.
     for (let cc = COLS - 3; cc < COLS; cc++) { for (let rr = 0; rr < ROWS; rr++) set(cc, rr, rr >= h ? 1 : 0); }
     // Ground under spawn is clear and flat.
@@ -302,6 +304,8 @@
     if (P.y > H + 40) { die(); return; }
     // Stars.
     for (const [i, s] of R.stars.entries()) if (!R.got.has(i) && Math.hypot(s.x - cxp, s.y - cyp) < 16) { R.got.add(i); run.stars++; const key = R.n + ':' + i; if (!save.stars[key]) { save.stars[key] = 1; persist(); } tone({ freq: 900, to: 1500, dur: 0.15, type: 'triangle', vol: 0.05 }); Arcade.flag('speck-spire-star'); if (starCount() >= 20) Arcade.flag('speck-spire-stars-20'); }
+    // Checkpoints.
+    for (const cp of R.checkpoints) if (!R.cp && Math.hypot(cxp - cp.x, cyp - cp.y) < 20) { R.cp = { x: cp.x, y: cp.y }; tone({ freq: 800, to: 1400, dur: 0.1, type: 'triangle', vol: 0.04 }); shake = 0.1; }
     // Boss gauntlet.
     if (R.boss) bossUpdate(dt);
     // Exit.
@@ -385,7 +389,6 @@
     if (R.boss) Arcade.flag('speck-spire-boss-win');
     if (n + 1 >= TOTAL_ROOMS) { finishRun(); return; }
     save.room = n + 1;
-    save.deaths += 0;
     persist();
     tone({ freq: 440, to: 880, dur: 0.15, type: 'triangle', vol: 0.05 });
     loadRoom(n + 1);
@@ -402,7 +405,7 @@
     tone({ freq: 523, to: 1568, dur: 1, type: 'triangle', vol: 0.07 });
     Arcade.finish(ui, {
       score: boardScore(), title: 'You reached the top',
-      html: `<p>${mmss(run.time)} · ${run.deaths} deaths · ${starCount()} / ${TOTAL_ROOMS + 6} stars collected</p><div class="ss-row"><button class="btn secondary" data-act="menu" type="button">Menu</button></div>`,
+      html: `<p>${mmss(run.time)} · ${run.deaths} deaths · ${starCount()} stars collected</p><div class="ss-row"><button class="btn secondary" data-act="menu" type="button">Menu</button></div>`,
       button: 'Climb again', onAction: () => { run = { deaths: 0, time: 0, stars: 0 }; loadRoom(0); },
     });
   }
@@ -467,6 +470,15 @@
     R.stars.forEach((s, i) => { if (R.got.has(i)) return; ctx.save(); ctx.translate(s.x, s.y + Math.sin(R.t * 3 + i) * 3); ctx.fillStyle = '#ffd23f'; ctx.shadowColor = '#ffd23f'; ctx.shadowBlur = 12; ctx.beginPath(); for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + k * Math.PI / 5, rr = k % 2 ? 5 : 11; ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); } ctx.closePath(); ctx.fill(); ctx.restore(); });
     // Exit marker.
     if (!R.boss || R.bossOpen) { ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fillRect(W - 10, (R.exitY || 14 * TS) - 90, 10, 90); ctx.fillStyle = Z.accent; ctx.beginPath(); ctx.moveTo(W - 22, (R.exitY || 14 * TS) - 50); ctx.lineTo(W - 12, (R.exitY || 14 * TS) - 40); ctx.lineTo(W - 22, (R.exitY || 14 * TS) - 30); ctx.fill(); }
+    // Checkpoints.
+    for (const cp of R.checkpoints) {
+      const active = R.cp && R.cp.x === cp.x && R.cp.y === cp.y;
+      ctx.fillStyle = active ? '#7be36a' : '#ffd23f';
+      ctx.shadowColor = ctx.fillStyle;
+      ctx.shadowBlur = active ? 16 : 10;
+      ctx.fillRect(cp.x - 2, cp.y - 2, cp.w + 4, cp.h + 4);
+      ctx.shadowBlur = 0;
+    }
     // Player.
     for (const t of trail) { if (t.life > 0) { ctx.globalAlpha = t.life * 1.5; ctx.fillStyle = '#fff'; ctx.fillRect(t.x - 3, t.y - 3, 6, 6); ctx.globalAlpha = 1; } }
     if (!P.dead) {
