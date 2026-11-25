@@ -3,11 +3,13 @@
    tanks are doing the same, and they'll come for you once they're strong enough. One life; the
    score is all the experience you earned. Auto-aim is on by default (Q switches to the mouse).
    Live 1v1 (live.js) drops the bots: two players share one arena of shapes, first to
-   LIVE_KILLS kills (or the most when the clock runs out). */
+   LIVE_KILLS kills (or the most when the clock runs out).
+   Solo runs that reach 20,000 xp meet Sovereign, a level 45 boss tank driven by a neural net
+   trained in tools/sovereign/ (weights in sovereign/latest.json). He plays by the same rules and
+   inputs as you; if the weights fail to load, a rule bot stands in and grants no flags. */
 (() => {
   const ID = 'tankfield';
   const W = 960, H = 540, TAU = Math.PI * 2;
-  const AW = 2600, AH = 1800;
   const RIVALS = 6, SHAPES = 70;
   const LIVE_KILLS = 3, LIVE_TIME = 300;
   const canvas = document.getElementById('game');
@@ -20,257 +22,122 @@
   const R = Gfx.rand;
   const fx = Gfx.particles(700), floats = Gfx.floaters(), shake = Gfx.shaker();
 
-  const STATS = [
-    { id: 'armor', name: 'Armor', color: '#3ccf8e' },
-    { id: 'repair', name: 'Repair', color: '#9be37a' },
-    { id: 'ram', name: 'Ram', color: '#ff7ae0' },
-    { id: 'shotSpeed', name: 'Shot speed', color: '#4fc3ff' },
-    { id: 'shotPower', name: 'Shot power', color: '#ff5a5f' },
-    { id: 'reload', name: 'Reload', color: '#ffd23f' },
-    { id: 'speed', name: 'Engine', color: '#b07cff' },
-  ];
-  const MAX_STAT = 7;
-  // Turrets: barrels are [angle offset, side offset, length, width, delay fraction].
-  const TURRETS = {
-    basic: { name: 'Basic', barrels: [[0, 0, 26, 12, 0]], reload: 1, power: 1, speed: 1, spread: 0.03, next: ['twin', 'longshot', 'spray', 'guard'], desc: 'One barrel' },
-    twin: { name: 'Twin', barrels: [[0, -6, 26, 10, 0], [0, 6, 26, 10, 0.5]], reload: 1, power: 0.75, speed: 1, spread: 0.04, next: ['triple', 'quad'], desc: 'Two barrels side by side' },
-    longshot: { name: 'Long Shot', barrels: [[0, 0, 36, 11, 0]], reload: 1.6, power: 1.6, speed: 1.5, spread: 0.01, range: 1.4, next: ['rail', 'hunter'], desc: 'Slow, hard-hitting, far' },
-    spray: { name: 'Spray', barrels: [[0, 0, 24, 16, 0]], reload: 0.5, power: 0.75, speed: 0.95, spread: 0.2, next: ['hose', 'shotgun'], desc: 'Fast and messy' },
-    guard: { name: 'Rear Guard', barrels: [[0, 0, 26, 12, 0], [Math.PI, 0, 22, 12, 0.5]], reload: 1, power: 0.95, speed: 1, spread: 0.03, next: ['star', 'tri'], desc: 'Front and back' },
-    triple: { name: 'Triple', barrels: [[0, 0, 28, 10, 0], [0.3, 0, 25, 10, 0.33], [-0.3, 0, 25, 10, 0.66]], reload: 1, power: 0.75, speed: 1, spread: 0.04, desc: 'A three-way fan' },
-    quad: { name: 'Quad Twin', barrels: [[0, -6, 26, 9, 0], [0, 6, 26, 9, 0.5], [0.15, -14, 22, 8, 0.25], [-0.15, 14, 22, 8, 0.75]], reload: 1.05, power: 0.65, speed: 1, spread: 0.05, desc: 'Four forward barrels' },
-    rail: { name: 'Railgun', barrels: [[0, 0, 44, 10, 0]], reload: 2.1, power: 2.6, speed: 2, spread: 0, range: 1.7, pierce: 3, desc: 'Shots go through targets' },
-    hunter: { name: 'Hunter', barrels: [[0, 0, 36, 13, 0], [0, 0, 28, 17, 0.12]], reload: 1.7, power: 1.35, speed: 1.4, spread: 0.01, range: 1.4, desc: 'A double long shot' },
-    hose: { name: 'Fire Hose', barrels: [[0, -5, 24, 12, 0], [0, 5, 24, 12, 0.5]], reload: 0.45, power: 0.6, speed: 0.95, spread: 0.22, desc: 'A wall of shots' },
-    shotgun: { name: 'Scattergun', barrels: [[0, 0, 26, 20, 0]], reload: 1.9, power: 0.7, speed: 1.1, spread: 0.35, pellets: 6, desc: 'Six pellets per shot' },
-    star: { name: 'Starburst', barrels: [0, 1, 2, 3, 4, 5].map(k => [k * TAU / 6, 0, 23, 10, k % 2 / 2]), reload: 1.15, power: 0.8, speed: 1, spread: 0.03, desc: 'Six barrels all around' },
-    tri: { name: 'Thruster', barrels: [[0, 0, 28, 12, 0], [Math.PI - 0.45, 0, 22, 10, 0.5], [Math.PI + 0.45, 0, 22, 10, 0.5]], reload: 0.95, power: 0.95, speed: 1.05, spread: 0.03, thrust: true, desc: 'Back barrels push you forward' },
-  };
-  const SHAPE_KINDS = [
-    { sides: 4, r: 14, hp: 10, xp: 10, color: '#ffd23f', w: 60 },
-    { sides: 3, r: 15, hp: 30, xp: 25, color: '#ff6b6b', w: 28 },
-    { sides: 5, r: 24, hp: 100, xp: 130, color: '#7aa2ff', w: 10 },
-    { sides: 6, r: 44, hp: 600, xp: 1200, color: '#b07cff', w: 1 },
-  ];
-  const xpFor = lv => Math.round(20 * Math.pow(lv, 1.75));   // total xp needed to reach level lv+1
+  const C = TankCore;
+  const { AW, AH, STATS, MAX_STAT, TURRETS, SHAPE_KINDS, xpFor, radius, shotSpeed, maxHp } = C;
+  const T = t => TURRETS[t.turret];
+  // All the rules live in core.js; this file draws, listens and keeps score.
+  const newWorld = shapes => C.createWorld({ rng: () => Math.random(), shapes });
+  let world = newWorld(SHAPES);
+  const controls = new Map();
 
-  let tanks = [], shapes = [], shots = [], me = null, state = 'menu', cam = { x: AW / 2, y: AH / 2 }, time = 0, aimMode = Arcade.load('tank:aim', 'auto');
-  let mouse = { x: W / 2, y: H / 2, down: false }, kills = 0, picking = null, shapeId = 0;
+  let me = null, state = 'menu', cam = { x: AW / 2, y: AH / 2 }, time = 0, aimMode = Arcade.load('tank:aim', 'auto');
+  let mouse = { x: W / 2, y: H / 2, down: false }, kills = 0, picking = null;
+  const spend = (t, i) => C.spend(world, t, i);
 
-  // ---------- Tanks ----------
+  // ---------- Sovereign ----------
+  const BOSS_XP = 20000, BOSS_DIST = 700;
+  const IO = TankSovIO, Sov = Sovereign;
+  const SIDX = id => STATS.findIndex(s => s.id === id);
+  const FALLBACK_BUILD = { path: ['longshot', 'rail'], alloc: [
+    ...Array(7).fill(SIDX('shotPower')), ...Array(7).fill(SIDX('reload')), ...Array(7).fill(SIDX('shotSpeed')),
+    ...Array(6).fill(SIDX('armor')), ...Array(6).fill(SIDX('speed'))] };
+  // undefined: not asked yet; null: failed (fallback boss); else { v, pi, build }.
+  let bossWeights, bossWeightsP = null, boss = null, bannerT = 0;
+  const prefetchBoss = () => { bossWeightsP = bossWeightsP || Sov.loadWeights(ID).then(w => { bossWeights = w; }); };
+  const soloRun = () => netMode !== 'live' && !(typeof Versus !== 'undefined' && Versus.active());
+
+  function spawnBoss() {
+    const w = bossWeights;
+    const net = w ? Sov.loadNet(w.pi) : null, buildNet = w && w.build ? Sov.loadNet(w.build) : null;
+    const fallback = !net || !buildNet;
+    const t = C.makeTank(world, { name: 'Sovereign', color: '#ffd23f', bot: false });
+    const a = R(0, TAU), r = 40;
+    t.x = clamp(me.x + Math.cos(a) * BOSS_DIST, r, AW - r);
+    t.y = clamp(me.y + Math.sin(a) * BOSS_DIST, r, AH - r);
+    t.a = Math.atan2(me.y - t.y, me.x - t.x);
+    let build = FALLBACK_BUILD;
+    if (!fallback) { const b = IO.chooseBuild(buildNet, IO.buildFeatures(me), Math.random, true); build = { path: IO.BUILD_PATHS[b.path], alloc: b.alloc }; }
+    IO.applyBuild(world, t, build);
+    // The fallback is a rule bot: give it the bot brain without making core drive it.
+    if (fallback) t.ai = { mode: 'farm', target: null, thinkT: 0, wander: 0, aimErr: 0, courage: 2 };
+    world.tanks.push(t);
+    boss = { tank: t, net, state: net ? Sov.newState(net) : null, act: new Int32Array(IO.HEADS.length), prev: new Int32Array(IO.HEADS.length),
+      obs: new Float32Array(IO.OBS_DIM), c: { mx: 0, my: 0, aim: t.a, fire: false }, decisionT: 0, version: w ? w.v : null, fallback, outcome: null, build,
+      // The fight is recorded for training (net boss only): both tanks at 10 Hz, your inputs and his choices.
+      recorder: fallback ? null : new Sov.Recorder({ game: ID, version: w.v, hz: 10 }), recT: 0, startT: time,
+      playerBuild: { turret: me.turret, stats: { ...me.stats } } };
+    bannerT = 4;
+    shake.add(0.8);
+    Arcade.tone({ freq: 110, to: 55, dur: 0.9, type: 'sawtooth', vol: 0.07 });
+    Arcade.tone({ freq: 523, to: 1046, dur: 0.4, type: 'triangle', vol: 0.05 });
+  }
+
+  // Sovereign's controls this frame. The net decides every REPEAT sim frames (as in training)
+  // and holds its move, aim and trigger in between; the turret turns like the player's auto-aim.
+  function bossControl(dt) {
+    const t = boss.tank;
+    if (boss.fallback) {
+      const rivals = new Set(world.tanks.filter(o => o !== me && o !== t));
+      const b = C.botControl(world, t, dt, { ignore: rivals });
+      return { mx: b.mx, my: b.my, aim: null, fire: false };
+    }
+    boss.decisionT -= dt;
+    if (boss.decisionT <= 0) {
+      boss.decisionT += IO.REPEAT / 60;
+      if (boss.decisionT <= 0) boss.decisionT = IO.REPEAT / 60;
+      IO.observe(world, t, me, boss.prev, boss.obs);
+      Sov.sample(Sov.forward(boss.net, boss.obs, boss.state), IO.HEADS, boss.act, true);
+      boss.prev.set(boss.act);
+      boss.c = IO.applyAction(world, t, me, boss.act, dt);
+    }
+    t.a += angDiff(boss.c.aim, t.a) * Math.min(1, dt * 12);
+    return boss.c;
+  }
+
+  const tankRow = t => [Math.round(t.x), Math.round(t.y), Math.round(t.vx), Math.round(t.vy), Math.round(t.a * 100), Math.round(Math.max(0, t.hp))];
+  function recordBoss(dt) {
+    if (!boss.recorder) return;
+    boss.recT -= dt;
+    if (boss.recT > 0) return;
+    boss.recT += 1 / boss.recorder.hz;
+    const c = controls.get(me) || { mx: 0, my: 0, fire: false };
+    boss.recorder.row([...tankRow(me), ...tankRow(boss.tank), Math.round(c.mx || 0), Math.round(c.my || 0), c.fire ? 1 : 0, ...boss.act]);
+  }
+  // Ends the recording once, with the outcome from your side ('win' | 'loss' | 'other'), and sends it.
+  function finishBoss(outcome) {
+    if (!boss || !boss.recorder) return;
+    const rec = boss.recorder.finish(outcome, { pb: boss.playerBuild, sb: boss.build, dur: Math.round(time - boss.startT) });
+    if (rec) boss.recorder.upload(rec);
+  }
+  addEventListener('pagehide', () => { if (boss && !boss.outcome) finishBoss('other'); });
 
   const NAMES = ['Rumble', 'Ironsides', 'Boomer', 'Tread', 'Clank', 'Bolt', 'Rivet', 'Howitzer', 'Pounder', 'Sprocket'];
   const COLORS = ['#ff5a5f', '#ffb02e', '#3ccf8e', '#ff7ae0', '#b07cff', '#2ee6c9'];
-  function makeTank(name, color, bot) {
-    const t = { name, color, bot, x: 0, y: 0, vx: 0, vy: 0, a: 0, r: 22, hp: 100, max: 100, xp: 0, level: 1, points: 0, stats: Object.fromEntries(STATS.map(s => [s.id, 0])), turret: 'basic', reload: 0, phase: 0, alive: true, hitT: 0, regenT: 0, respawnT: 0, recoilT: 0,
-      ai: bot ? { mode: 'farm', target: null, thinkT: 0, wander: R(0, TAU), aimErr: 0, courage: R(0.5, 1.2) } : null };
-    place(t);
-    return t;
-  }
-  function place(t) {
-    for (let k = 0; k < 50; k++) {
-      t.x = 150 + Math.random() * (AW - 300); t.y = 150 + Math.random() * (AH - 300);
-      if (tanks.every(o => o === t || !o.alive || Math.hypot(o.x - t.x, o.y - t.y) > 600)) break;
-    }
-  }
-  const T = t => TURRETS[t.turret];
-  const maxHp = t => 100 + t.stats.armor * 30 + (t.level - 1) * 4;
-  const moveSpeed = t => 210 + t.stats.speed * 16 - t.level * 1.2;
-  const reloadTime = t => 0.42 * T(t).reload * Math.pow(0.88, t.stats.reload);
-  const shotDamage = t => 7 * T(t).power * (1 + t.stats.shotPower * 0.22);
-  const shotSpeed = t => 460 * T(t).speed * (1 + t.stats.shotSpeed * 0.1);
-  const radius = t => 22 + Math.min(14, (t.level - 1) * 0.45);
-
-  function gainXp(t, n) {
-    t.xp += n;
-    while (t.level < 45 && t.xp >= xpFor(t.level)) {
-      t.level++;
-      if (t.level <= 34) t.points++;
-      t.max = maxHp(t);
-      t.hp = Math.min(t.max, t.hp + 20);
-      if (t === me) {
-        floats.add(`Level ${t.level}!`, t.x, t.y - 46, { color: '#ffd23f', size: 18 });
-        Arcade.tone({ freq: 523, to: 1046, dur: 0.18, type: 'triangle', vol: 0.05 });
-        if (t.level >= 25) Arcade.flag('tankfield-25');
-      }
-      // New turrets at 10 and 20.
-      if ((t.level === 10 || t.level === 20) && T(t).next) {
-        if (t === me) picking = T(t).next;
-        else t.turret = Arcade.pick(T(t).next);
-      }
-      if (t.bot) botSpend(t);
-    }
-    if (t === me) updateHud();
-  }
-  function spend(t, i) {
-    const s = STATS[i];
-    if (!s || t.points <= 0 || t.stats[s.id] >= MAX_STAT) return false;
-    t.stats[s.id]++;
-    t.points--;
-    t.max = maxHp(t);
-    if (s.id === 'armor') t.hp += 30;
-    return true;
-  }
-  function botSpend(t) {
-    const pref = [4, 5, 0, 3, 6, 1, 2];
-    while (t.points > 0) { const opts = pref.filter(i => t.stats[STATS[i].id] < MAX_STAT); if (!opts.length) break; spend(t, opts[Math.floor(Math.random() * Math.min(3, opts.length))]); }
-  }
-
-  // ---------- Shooting ----------
-
-  function fire(t) {
-    if (t.reload > 0 || !t.alive) return;
-    const tur = T(t);
-    t.reload = reloadTime(t);
-    for (const [ao, side, len, wid, delay] of tur.barrels) {
-      const go = () => {
-        if (!t.alive) return;
-        const a = t.a + ao, ca = Math.cos(a), sa = Math.sin(a), sc = radius(t) / 22;
-        const bx = t.x + ca * len * sc - sa * side * sc, by = t.y + sa * len * sc + ca * side * sc;
-        for (let p = 0; p < (tur.pellets || 1); p++) {
-          const aa = a + R(-1, 1) * tur.spread, sp = shotSpeed(t) * (tur.pellets ? R(0.8, 1.1) : 1);
-          const shot = { x: bx, y: by, vx: Math.cos(aa) * sp + t.vx * 0.3, vy: Math.sin(aa) * sp + t.vy * 0.3, r: wid * 0.42 * sc, dmg: shotDamage(t), life: 1.3 * (tur.range || 1), owner: t, pierce: tur.pierce || 1, color: t.color };
-          shots.push(shot);
-          if (t === me && netMode === 'live') liveShots.push([shot.x, shot.y, shot.vx, shot.vy, shot.r, shot.dmg, shot.life, shot.pierce].map(v => Math.round(v * 10) / 10));
-        }
-        // Recoil (forward thrust for the Thruster's back barrels).
-        const k = tur.thrust && Math.abs(angDiff(a, t.a)) > 1 ? -28 : 9;
-        t.vx -= ca * k; t.vy -= sa * k;
-        t.recoilT = 0.08;
-        if (t === me) Arcade.tone({ freq: 380, to: 160, dur: 0.05, type: 'square', vol: 0.02 });
-      };
-      if (delay) setTimeout(go, delay * t.reload * 1000); else go();
-    }
-  }
-
-  function damage(target, n, by) {
-    if (target.shield > 0 || target.dead || target.alive === false) return;
-    // Live: each machine owns its own tank, so damage to the other player only happens over
-    // there (they report it). Our hits on shared shapes are sent to them too.
-    if (target.remote) return;
-    if (netMode === 'live' && target.sides && by === me) liveHits.push([target.id, Math.round(n * 10) / 10]);
-    target.hp -= n;
-    target.hitT = 0.1;
-    target.regenT = 0;
-    if (target.ai && by === me) target.ai.provoked = true;
-    if (target === me) { shake.add(0.12); }
-    if (target.hp <= 0) {
-      if (target.sides) killShape(target, by);
-      else killTank(target, by);
-    }
-  }
-
-  function killShape(s, by) {
-    s.dead = true;
-    if (netMode === 'live') goneShapes.add(s.id);
-    fx.burst(10, () => ({ x: s.x, y: s.y, vx: R(-120, 120), vy: R(-120, 120), life: R(0.3, 0.6), size: R(2, 5), color: s.k.color, drag: 3, shape: 'square', spin: R(-10, 10) }));
-    if (by && by.alive !== undefined) {
-      gainXp(by, s.k.xp);
-      if (by === me) floats.add(`+${s.k.xp}`, s.x, s.y - 12, { color: s.k.color, size: 12 + Math.min(10, s.k.xp / 40) });
-      if (by === me && s.k.sides === 6) Arcade.flag('tankfield-hexagon');
-    }
-  }
-
-  function killTank(t, by) {
-    t.alive = false;
-    fx.burst(40, () => { const a = R(0, TAU), v = R(60, 260); return { x: t.x, y: t.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: R(0.5, 1), size: R(3, 7), color: t.color, drag: 2.5, shape: 'square', spin: R(-8, 8) }; });
-    Arcade.tone({ freq: 150, to: 40, dur: 0.5, type: 'sawtooth', vol: 0.06 });
-    if (t === me && netMode === 'live') { shake.add(0.8); return liveDied(by); }
-    if (t === me) { shake.add(0.8); setTimeout(gameOver, 1000); return; }
-    if (by) {
-      gainXp(by, Math.round(t.xp * 0.5) + 50);
-      if (by === me) {
-        kills++;
-        floats.add(`${t.name} destroyed! +${Math.round(t.xp * 0.5) + 50}`, t.x, t.y - 30, { color: '#ffd23f', size: 18 });
-        shake.add(0.3);
-        Arcade.flag('tankfield-kill');
-        if (kills >= 5) Arcade.flag('tankfield-five');
-      }
-    }
-    t.respawnT = 4;
-  }
-
-  // ---------- Shapes ----------
-
-  function spawnShape() {
-    let r = Math.random() * 99, k = SHAPE_KINDS[0];
-    for (const kk of SHAPE_KINDS) { if (r < kk.w) { k = kk; break; } r -= kk.w; }
-    // Pentagons and the rare big hexagon gather in the middle.
-    const mid = k.sides >= 5;
-    const x = mid ? AW / 2 + R(-450, 450) : 60 + Math.random() * (AW - 120), y = mid ? AH / 2 + R(-300, 300) : 60 + Math.random() * (AH - 120);
-    shapes.push(makeShape(k, x, y, ++shapeId));
-  }
-  function makeShape(k, x, y, id) {
-    return { id, k, sides: k.sides, x, y, vx: 0, vy: 0, a: R(0, TAU), spin: R(-0.6, 0.6), hp: k.hp, max: k.hp, r: k.r, hitT: 0, drift: R(0, TAU) };
-  }
-
-  // ---------- Bots ----------
-
-  function botControl(t, dt) {
-    const ai = t.ai;
-    ai.thinkT -= dt;
-    if (ai.thinkT <= 0) {
-      ai.thinkT = 0.4 + R(0, 0.4);
-      // Enemies close by: fight them if we're not much weaker, otherwise back off.
-      let foe = null, fd = 650;
-      for (const o of tanks) {
-        if (o === t || !o.alive) continue;
-        // A new player gets 30 seconds to find their feet, unless they start the fight.
-        if (o === me && time < 30 && !ai.provoked) continue;
-        const d = Math.hypot(o.x - t.x, o.y - t.y);
-        if (d < fd) { fd = d; foe = o; }
-      }
-      const brave = foe && (t.level * ai.courage >= foe.level * 0.8 || t.hp > t.max * 0.7);
-      if (foe && brave && t.hp > t.max * 0.3) { ai.mode = 'fight'; ai.target = foe; }
-      else if (foe && fd < 450) { ai.mode = 'flee'; ai.target = foe; }
-      else {
-        ai.mode = 'farm';
-        let best = null, bs = -Infinity;
-        for (const s of shapes) { const d = Math.hypot(s.x - t.x, s.y - t.y); const sc = s.k.xp / (d + 150) - (s.k.sides === 6 && t.level < 15 ? 1 : 0); if (sc > bs) { bs = sc; best = s; } }
-        ai.target = best;
-      }
-      ai.aimErr = R(-0.12, 0.12);
-    }
-    const tg = ai.target && (ai.target.alive !== false) && !ai.target.dead ? ai.target : null;
-    let mx = 0, my = 0;
-    if (tg) {
-      const dx = tg.x - t.x, dy = tg.y - t.y, d = Math.hypot(dx, dy) || 1;
-      const lead = d / shotSpeed(t);
-      t.a += angDiff(Math.atan2(tg.y + (tg.vy || 0) * lead - t.y, tg.x + (tg.vx || 0) * lead - t.x) + ai.aimErr, t.a) * Math.min(1, dt * 6);
-      const want = ai.mode === 'fight' ? 260 * (T(t).range || 1) : ai.mode === 'flee' ? 99999 : 160;
-      const dir = ai.mode === 'flee' ? -1 : d > want ? 1 : d < want * 0.7 ? -1 : 0;
-      mx = dx / d * dir; my = dy / d * dir;
-      if (ai.mode !== 'flee') { const s = Math.sin(time * 1.3 + ai.wander) * 0.6; mx += -dy / d * s; my += dx / d * s; }
-      if (ai.mode !== 'flee' || d < 400) if (Math.abs(angDiff(Math.atan2(dy, dx), t.a)) < 0.3 && d < 520 * (T(t).range || 1)) fire(t);
-    } else {
-      mx = Math.cos(ai.wander); my = Math.sin(ai.wander);
-      ai.wander += R(-0.5, 0.5) * dt;
-    }
-    return { mx, my };
-  }
 
   // ---------- Flow ----------
 
   function start() {
     netMode = null; rival = null;
-    tanks = []; shapes = []; shots = []; fx.clear();
-    me = makeTank('You', '#4f8cff', false);
-    tanks.push(me);
+    world = newWorld(SHAPES);
+    fx.clear();
+    me = C.makeTank(world, { name: 'You', color: '#4f8cff', bot: false });
+    world.tanks.push(me);
     me.x = AW / 2 + R(-300, 300); me.y = AH / 2 + R(-200, 200);
     const names = [...NAMES].sort(() => Math.random() - 0.5);
     for (let i = 0; i < RIVALS; i++) {
-      const b = makeTank(names[i], COLORS[i], true);
-      tanks.push(b);
-      gainXp(b, Math.floor(Math.random() * 300));
+      const b = C.makeTank(world, { name: names[i], color: COLORS[i], bot: true });
+      world.tanks.push(b);
+      C.gainXp(world, b, Math.floor(Math.random() * 300));
     }
-    for (let i = 0; i < SHAPES; i++) spawnShape();
+    world.events.length = 0;
     kills = 0; time = 0; picking = null;
+    boss = null; bannerT = 0;
+    prefetchBoss();
     cam.x = me.x; cam.y = me.y;
     state = 'play';
     ui.hide();
     updateHud();
   }
-
   function gameOver() {
     if (state !== 'play') return;
     state = 'over';
@@ -296,124 +163,99 @@
       me.shield = Math.max(0, (me.shield || 0) - dt);
     }
     // You.
+    controls.clear();
     if (me.alive) {
       let mx = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0);
       let my = (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0) - (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0);
-      drive(me, mx, my, dt);
       // Aim: the mouse, or the nearest thing worth shooting.
       let want = me.a, auto = null;
       if (aimMode === 'mouse') want = Math.atan2(mouse.y + cam.y - H / 2 - me.y, mouse.x + cam.x - W / 2 - me.x);
       else {
         let bd = 520 * (T(me).range || 1), bs = -Infinity;
-        for (const o of tanks) {
+        for (const o of world.tanks) {
           if (o === me || !o.alive) continue;
           const d = Math.hypot(o.x - me.x, o.y - me.y);
           // Only tanks that are after you, or right on top of you: auto-aim shouldn't start fights.
           const hostile = o.remote || (o.ai?.mode === 'fight' && o.ai.target === me) || d < 260;
           if (hostile && d < bd) { bs = 1e9 - d; auto = o; bd = d; }
         }
-        if (!auto) for (const s of shapes) { const d = Math.hypot(s.x - me.x, s.y - me.y); if (d > 460) continue; const sc = s.k.xp / (d + 60); if (sc > bs) { bs = sc; auto = s; } }
+        if (!auto) for (const s of world.shapes) { const d = Math.hypot(s.x - me.x, s.y - me.y); if (d > 460) continue; const sc = s.k.xp / (d + 60); if (sc > bs) { bs = sc; auto = s; } }
         if (auto) { const d = Math.hypot(auto.x - me.x, auto.y - me.y), lead = d / shotSpeed(me); want = Math.atan2(auto.y + (auto.vy || 0) * lead - me.y, auto.x + (auto.vx || 0) * lead - me.x); }
       }
       me.a += angDiff(want, me.a) * Math.min(1, dt * (aimMode === 'mouse' ? 30 : 12));
-      if (mouse.down || keys.has('Space') || (aimMode === 'auto' && auto && autoFire)) fire(me);
+      controls.set(me, { mx, my, aim: null, fire: mouse.down || keys.has('Space') || (aimMode === 'auto' && auto && autoFire) });
     }
     if (netMode === 'live') updateLive(dt);
-    for (const t of tanks) {
-      if (t.remote) continue;
-      if (!t.alive) {
-        if (t.bot) { t.respawnT -= dt; if (t.respawnT <= 0) respawnBot(t); }
-        continue;
-      }
-      if (t.bot) { const c = botControl(t, dt); drive(t, c.mx, c.my, dt); }
-      t.reload = Math.max(0, t.reload - dt);
-      t.hitT = Math.max(0, t.hitT - dt);
-      t.recoilT = Math.max(0, t.recoilT - dt);
-      t.regenT += dt;
-      if (t.regenT > 5 - t.stats.repair * 0.4) t.hp = Math.min(t.max, t.hp + (2 + t.stats.repair * 2.2) * dt);
-    }
-    // Shots.
-    for (const s of shots) {
-      s.x += s.vx * dt; s.y += s.vy * dt; s.life -= dt;
-      if (s.x < 0 || s.y < 0 || s.x > AW || s.y > AH) s.life = 0;
-      if (s.life <= 0) continue;
-      for (const sh of shapes) {
-        if (sh.dead || Math.hypot(sh.x - s.x, sh.y - s.y) > sh.r + s.r) continue;
-        // The other player's shots only knock shapes about here; their machine sends the damage.
-        if (!s.owner.remote) damage(sh, s.dmg, s.owner);
-        sh.hitT = 0.08;
-        sh.vx += s.vx * 0.02; sh.vy += s.vy * 0.02;
-        if (--s.pierce <= 0) { s.life = 0; break; }
-      }
-      if (s.life <= 0) continue;
-      for (const t of tanks) {
-        if (t === s.owner || !t.alive || t.shield > 0 || Math.hypot(t.x - s.x, t.y - s.y) > radius(t) + s.r) continue;
-        damage(t, s.dmg, s.owner);
-        fx.burst(3, () => ({ x: s.x, y: s.y, vx: R(-80, 80), vy: R(-80, 80), life: 0.25, size: 2, color: '#fff', shape: 'spark' }));
-        if (--s.pierce <= 0) { s.life = 0; break; }
-      }
-    }
-    shots = shots.filter(s => s.life > 0);
-    // Shapes drift and spin; bodies bump.
-    for (const sh of shapes) {
-      sh.drift += dt * 0.2;
-      sh.vx += Math.cos(sh.drift) * 4 * dt; sh.vy += Math.sin(sh.drift) * 4 * dt;
-      sh.vx *= 1 - 2 * dt; sh.vy *= 1 - 2 * dt;
-      sh.x = clamp(sh.x + sh.vx * dt, sh.r, AW - sh.r); sh.y = clamp(sh.y + sh.vy * dt, sh.r, AH - sh.r);
-      sh.a += sh.spin * dt;
-      sh.hitT = Math.max(0, sh.hitT - dt);
-      // Live guest: ease toward where the host says the shape is.
-      if (sh.tx !== undefined) { const k = Math.min(1, dt * 3); sh.x += (sh.tx - sh.x) * k; sh.y += (sh.ty - sh.y) * k; }
-      for (const t of tanks) {
-        if (!t.alive || t.remote) continue;
-        const dx = sh.x - t.x, dy = sh.y - t.y, d = Math.hypot(dx, dy), min = sh.r + radius(t);
-        if (d >= min || d === 0) continue;
-        const nx = dx / d, ny = dy / d;
-        sh.vx += nx * 140; sh.vy += ny * 140; t.vx -= nx * 70; t.vy -= ny * 70;
-        damage(sh, 4 + t.stats.ram * 4, t);
-        damage(t, sh.k.sides === 3 ? 6 : 3, null);
-      }
-    }
-    shapes = shapes.filter(s => !s.dead);
-    // Online, only the host makes new shapes (the guest gets them in the host's snapshots).
-    if (netMode !== 'live' || live.host) while (shapes.length < SHAPES) spawnShape();
-    // Tanks ramming tanks.
-    for (let i = 0; i < tanks.length; i++) for (let j = i + 1; j < tanks.length; j++) {
-      const a = tanks[i], b = tanks[j];
-      if (!a.alive || !b.alive) continue;
-      const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy), min = radius(a) + radius(b);
-      if (d >= min || d === 0) continue;
-      const nx = dx / d, ny = dy / d;
-      // Live: only our own side of a bump (the other player's machine does theirs).
-      if (!a.remote) { a.vx -= nx * 200; a.vy -= ny * 200; damage(a, 6 + b.stats.ram * 5, b); }
-      if (!b.remote) { b.vx += nx * 200; b.vy += ny * 200; damage(b, 6 + a.stats.ram * 5, a); }
-    }
+    // Sovereign arrives once per solo run at 20,000 xp; while he lives the rivals leave you two alone.
+    if (!boss && me.alive && me.xp >= BOSS_XP && soloRun() && bossWeights !== undefined) spawnBoss();
+    const duel = boss && boss.tank.alive && me.alive;
+    if (duel) { controls.set(boss.tank, bossControl(dt)); recordBoss(dt); }
+    bannerT = Math.max(0, bannerT - dt);
+    // A new player gets 30 seconds to find their feet (the bots' grace), unless they start the fight.
+    C.step(world, dt, controls, { spawnShapes: netMode !== 'live' || live.host, graceTarget: me, graceUntil: 30, ignore: duel ? new Set([me, boss.tank]) : undefined });
+    handleEvents();
     cam.x = Gfx.approach(cam.x, me.x, 6, dt);
     cam.y = Gfx.approach(cam.y, me.y, 6, dt);
     fx.update(dt); floats.update(dt); shake.update(dt);
     updateHud();
   }
 
-  function drive(t, mx, my, dt) {
-    const m = Math.hypot(mx, my);
-    const sp = moveSpeed(t);
-    if (m > 0) { t.vx += mx / m * sp * 5 * dt; t.vy += my / m * sp * 5 * dt; }
-    const v = Math.hypot(t.vx, t.vy);
-    if (v > sp) { t.vx *= sp / v; t.vy *= sp / v; }
-    t.vx *= 1 - 3 * dt; t.vy *= 1 - 3 * dt;
-    const r = radius(t);
-    t.x = clamp(t.x + t.vx * dt, r, AW - r);
-    t.y = clamp(t.y + t.vy * dt, r, AH - r);
-  }
-
-  function respawnBot(t) {
-    // Back with a fraction of what it had, so the arena keeps some strong rivals.
-    const keep = Math.floor(t.xp * 0.3);
-    Object.assign(t, { xp: 0, level: 1, points: 0, stats: Object.fromEntries(STATS.map(s => [s.id, 0])), turret: 'basic', alive: true, vx: 0, vy: 0 });
-    t.max = maxHp(t); t.hp = t.max;
-    place(t);
-    gainXp(t, keep);
-    t.hp = t.max;
+  // What the rules did this frame, as sights, sounds, flags and live messages.
+  function handleEvents() {
+    let fired = false;
+    for (const e of world.events) {
+      if (e.type === 'shot') {
+        if (e.t !== me) continue;
+        fired = true;
+        const s = e.snap;   // as fired, not as step has since moved it
+        if (netMode === 'live') liveShots.push([s.x, s.y, s.vx, s.vy, s.r, s.dmg, s.life, s.pierce].map(v => Math.round(v * 10) / 10));
+      } else if (e.type === 'levelUp') {
+        if (e.t !== me) continue;
+        floats.add(`Level ${me.level}!`, me.x, me.y - 46, { color: '#ffd23f', size: 18 });
+        Arcade.tone({ freq: 523, to: 1046, dur: 0.18, type: 'triangle', vol: 0.05 });
+        if (me.level >= 25) Arcade.flag('tankfield-25');
+      } else if (e.type === 'turretPick') {
+        if (e.t === me) picking = e.options;
+      } else if (e.type === 'shapeHit') {
+        if (netMode === 'live' && e.by === me) liveHits.push([e.s.id, Math.round(e.n * 10) / 10]);
+      } else if (e.type === 'hit') {
+        if (e.target === me) shake.add(0.12);
+        if (e.sx !== undefined) fx.burst(3, () => ({ x: e.sx, y: e.sy, vx: R(-80, 80), vy: R(-80, 80), life: 0.25, size: 2, color: '#fff', shape: 'spark' }));
+      } else if (e.type === 'shapeKilled') {
+        const s = e.s;
+        if (netMode === 'live') goneShapes.add(s.id);
+        fx.burst(10, () => ({ x: s.x, y: s.y, vx: R(-120, 120), vy: R(-120, 120), life: R(0.3, 0.6), size: R(2, 5), color: s.k.color, drag: 3, shape: 'square', spin: R(-10, 10) }));
+        if (e.by === me) {
+          floats.add(`+${s.k.xp}`, s.x, s.y - 12, { color: s.k.color, size: 12 + Math.min(10, s.k.xp / 40) });
+          if (s.k.sides === 6) Arcade.flag('tankfield-hexagon');
+        }
+      } else if (e.type === 'tankKilled') {
+        const t = e.t;
+        fx.burst(40, () => { const a = R(0, TAU), v = R(60, 260); return { x: t.x, y: t.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: R(0.5, 1), size: R(3, 7), color: t.color, drag: 2.5, shape: 'square', spin: R(-8, 8) }; });
+        Arcade.tone({ freq: 150, to: 40, dur: 0.5, type: 'sawtooth', vol: 0.06 });
+        if (boss && t === boss.tank) {
+          shake.add(1);
+          if (e.by === me && !boss.fallback) {
+            Arcade.flag('tankfield-sovereign');
+            Arcade.save('sovereign:beaten:tankfield', { v: boss.version, t: Date.now() });
+          }
+          if (!boss.outcome) { boss.outcome = e.by === me ? 'win' : 'other'; finishBoss(boss.outcome); }
+        }
+        if (t === me && boss && boss.tank.alive && !boss.outcome) { boss.outcome = e.by === boss.tank ? 'loss' : 'other'; finishBoss(boss.outcome); }
+        if (t === me) {
+          shake.add(0.8);
+          if (netMode === 'live') liveDied(e.by); else setTimeout(gameOver, 1000);
+        } else if (e.by === me) {
+          kills++;
+          floats.add(`${t.name} destroyed! +${e.xp}`, t.x, t.y - 30, { color: '#ffd23f', size: 18 });
+          shake.add(0.3);
+          Arcade.flag('tankfield-kill');
+          if (kills >= 5) Arcade.flag('tankfield-five');
+        }
+      }
+    }
+    world.events.length = 0;
+    if (fired) Arcade.tone({ freq: 380, to: 160, dur: 0.05, type: 'square', vol: 0.02 });
   }
 
   // ---------- Input ----------
@@ -484,6 +326,10 @@
     ctx.beginPath(); ctx.arc(0, 0, r * 0.82, 0, TAU); ctx.fill();
     ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.beginPath(); ctx.arc(0, 0, r * 0.38, 0, TAU); ctx.fill();
     ctx.restore();
+    if (boss && t === boss.tank) {
+      ctx.strokeStyle = `rgba(255,210,63,${0.35 + 0.25 * Math.sin(time * 5)})`; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(t.x, t.y, r + 10, 0, TAU); ctx.stroke();
+    }
     if (t.shield > 0) {
       ctx.strokeStyle = `rgba(126,240,255,${0.4 + 0.3 * Math.sin(time * 12)})`; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.arc(t.x, t.y, r + 8, 0, TAU); ctx.stroke();
@@ -507,7 +353,7 @@
     // The middle, where the big shapes gather.
     ctx.fillStyle = 'rgba(176,124,255,0.07)'; ctx.fillRect(AW / 2 - 500, AH / 2 - 340, 1000, 680);
     const vis = (x, y, m) => Math.abs(x - cam.x) < W / 2 + m && Math.abs(y - cam.y) < H / 2 + m;
-    for (const s of shapes) {
+    for (const s of world.shapes) {
       if (!vis(s.x, s.y, 60)) continue;
       Gfx.shadow(ctx, s.x + 2, s.y + 4, s.r, s.r * 0.6, 0.2);
       polygon(s.x, s.y, s.r, s.sides, s.a);
@@ -515,12 +361,12 @@
       ctx.strokeStyle = Gfx.shade(s.k.color, -0.35); ctx.lineWidth = 3; ctx.stroke();
       if (s.hp < s.max) Gfx.bar(ctx, s.x - s.r, s.y + s.r + 6, s.r * 2, 4, s.hp / s.max, '#3ccf8e');
     }
-    for (const s of shots) {
+    for (const s of world.shots) {
       if (!vis(s.x, s.y, 20)) continue;
       ctx.fillStyle = Gfx.shade(s.color, -0.3); ctx.beginPath(); ctx.arc(s.x, s.y + 1.5, s.r, 0, TAU); ctx.fill();
       ctx.fillStyle = s.color; ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, TAU); ctx.fill();
     }
-    for (const t of tanks) if (t.alive && vis(t.x, t.y, 80)) drawTank(t);
+    for (const t of world.tanks) if (t.alive && vis(t.x, t.y, 80)) drawTank(t);
     fx.draw(ctx);
     floats.draw(ctx);
     ctx.strokeStyle = 'rgba(40,50,70,0.5)'; ctx.lineWidth = 6; ctx.strokeRect(0, 0, AW, AH);
@@ -553,9 +399,9 @@
     const mw = 150, mh = mw * AH / AW, mx = W - mw - 12, my = H - mh - 12, k = mw / AW;
     Gfx.card(ctx, mx - 4, my - 4, mw + 8, mh + 8);
     ctx.fillStyle = 'rgba(176,124,255,0.2)'; ctx.fillRect(mx + (AW / 2 - 500) * k, my + (AH / 2 - 340) * k, 1000 * k, 680 * k);
-    for (const t of tanks) { if (!t.alive) continue; ctx.fillStyle = t.color; ctx.beginPath(); ctx.arc(mx + t.x * k, my + t.y * k, t === me ? 3.5 : 2.5, 0, TAU); ctx.fill(); }
+    for (const t of world.tanks) { if (!t.alive) continue; ctx.fillStyle = t.color; ctx.beginPath(); ctx.arc(mx + t.x * k, my + t.y * k, t === me ? 3.5 : 2.5, 0, TAU); ctx.fill(); }
     // Leaderboard.
-    const top = [...tanks].filter(t => t.alive).sort((a, b) => b.xp - a.xp).slice(0, 5);
+    const top = [...world.tanks].filter(t => t.alive).sort((a, b) => b.xp - a.xp).slice(0, 5);
     Gfx.card(ctx, W - 182, 10, 170, 22 + top.length * 17);
     Gfx.text(ctx, 'Top tanks', W - 97, 21, { size: 11, stroke: null, color: '#cfd8dc' });
     top.forEach((t, i) => Gfx.text(ctx, `${i + 1}. ${t.name}  ${Math.floor(t.xp).toLocaleString()}`, W - 172, 38 + i * 17, { size: 11, align: 'left', stroke: null, color: t === me ? '#ffd23f' : t.color }));
@@ -582,6 +428,14 @@
         Gfx.text(ctx, t.desc, bx + w / 2, y + 106, { size: 10, stroke: null, color: '#9aa3b5' });
         hits.push({ x: bx, y, w, h: 120, fn: () => { me.turret = id; picking = null; Arcade.flag('tankfield-turret'); } });
       });
+    }
+    // Last, so nothing covers it.
+    if (bannerT > 0) {
+      const al = Math.min(1, bannerT / 0.6, (4 - bannerT) / 0.3);
+      ctx.save(); ctx.globalAlpha = al;
+      Gfx.text(ctx, 'SOVEREIGN HAS ENTERED', W / 2, H / 2 - 110, { size: 34, color: '#ffd23f', width: 6 });
+      Gfx.text(ctx, 'Matches against Sovereign help train him.', W / 2, H / 2 - 78, { size: 14, color: '#fff', width: 4 });
+      ctx.restore();
     }
   }
   function panelHit(x, y) {
@@ -638,20 +492,21 @@
 
   function startLive() {
     netMode = 'live';
-    tanks = []; shots = []; fx.clear(); goneShapes = new Set();
-    me = makeTank('You', '#4f8cff', false);
-    rival = makeTank(live.them, '#ff5a5f', false);
+    // The host makes the shapes; the guest waits for its first snapshot.
+    world = newWorld(live.host ? SHAPES : 0);
+    world.shapeTarget = SHAPES;
+    fx.clear(); goneShapes = new Set();
+    me = C.makeTank(world, { name: 'You', color: '#4f8cff', bot: false });
+    rival = C.makeTank(world, { name: live.them, color: '#ff5a5f', bot: false });
     rival.remote = true; rival.net = null; rival.kills = 0; rival.deaths = 0;
-    tanks.push(me, rival);
+    world.tanks.push(me, rival);
     // Opposite sides of the arena.
     const left = { x: AW * 0.2, y: AH / 2 }, right = { x: AW * 0.8, y: AH / 2 };
     Object.assign(me, live.host ? left : right);
     Object.assign(rival, live.host ? right : left);
     me.a = live.host ? 0 : Math.PI;
     me.shield = 3; me.deaths = 0;
-    // The host makes the shapes; the guest waits for its first snapshot.
-    shapes = [];
-    if (live.host) { for (let i = 0; i < SHAPES; i++) spawnShape(); sendShapes(); }
+    if (live.host) sendShapes();
     kills = 0; lost = 0; time = 0; picking = null; matchT = LIVE_TIME;
     liveShots = []; liveHits = []; sendT = 0; flushT = 0; snapT = 0;
     cam.x = me.x; cam.y = me.y;
@@ -662,24 +517,24 @@
   }
 
   function sendShapes() {
-    live.send('shapes', shapes.map(sh => [sh.id, SHAPE_KINDS.indexOf(sh.k), Math.round(sh.x), Math.round(sh.y), Math.ceil(sh.hp)]));
+    live.send('shapes', world.shapes.map(sh => [sh.id, SHAPE_KINDS.indexOf(sh.k), Math.round(sh.x), Math.round(sh.y), Math.ceil(sh.hp)]));
   }
 
   function applyShapes(list) {
     if (!Array.isArray(list)) return;
-    const byId = new Map(shapes.map(sh => [sh.id, sh]));
+    const byId = new Map(world.shapes.map(sh => [sh.id, sh]));
     const next = [];
     for (const row of list.slice(0, SHAPES * 2)) {
       const [id, ki, x, y, hp] = row;
       const k = SHAPE_KINDS[ki];
       if (!k || goneShapes.has(id) || !isFinite(x) || !isFinite(y)) continue;
       let sh = byId.get(id);
-      if (!sh) { sh = makeShape(k, clamp(x, 0, AW), clamp(y, 0, AH), id); sh.hp = clamp(+hp || k.hp, 1, k.hp); }
+      if (!sh) { sh = C.makeShape(world, k, clamp(x, 0, AW), clamp(y, 0, AH), id); sh.hp = clamp(+hp || k.hp, 1, k.hp); }
       else sh.hp = Math.min(sh.hp, clamp(+hp || k.hp, 1, k.hp));
       sh.tx = clamp(x, 0, AW); sh.ty = clamp(y, 0, AH);
       next.push(sh);
     }
-    shapes = next;
+    world.shapes = next;
   }
 
   const liveTotals = () => ({ a: kills, b: rival.kills, xa: Math.floor(me.xp), xb: Math.floor(rival.xp) });
@@ -694,14 +549,14 @@
       for (const v of (Array.isArray(d?.s) ? d.s : []).slice(0, 40)) {
         const [x, y, vx, vy, r, dmg, life, pierce] = v.map(Number);
         if (![x, y, vx, vy].every(isFinite)) continue;
-        shots.push({ x, y, vx, vy, r: clamp(r, 1, 12), dmg: clamp(dmg, 0, 80), life: clamp(life, 0, 3), owner: rival, pierce: clamp(pierce | 0, 1, 3), color: rival.color });
+        world.shots.push({ x, y, vx, vy, r: clamp(r, 1, 12), dmg: clamp(dmg, 0, 80), life: clamp(life, 0, 3), owner: rival, pierce: clamp(pierce | 0, 1, 3), color: rival.color });
       }
       for (const [id, n] of (Array.isArray(d?.h) ? d.h : []).slice(0, 60)) {
-        const sh = shapes.find(x => x.id === id);
+        const sh = world.shapes.find(x => x.id === id);
         if (!sh || sh.dead) continue;
         sh.hitT = 0.08;
         sh.hp -= clamp(+n || 0, 0, 200);
-        if (sh.hp <= 0) killShape(sh, null);
+        if (sh.hp <= 0) C.killShape(world, sh, null);
       }
       return;
     }
@@ -714,7 +569,7 @@
       if (!d?.k) return;
       kills = Math.max(kills + 1, d.n | 0);
       const xp = Math.round(rival.xp * 0.25) + 50;
-      gainXp(me, xp);
+      C.gainXp(world, me, xp);
       floats.add(`${rival.name} destroyed! +${xp}`, rival.x, rival.y - 30, { color: '#ffd23f', size: 18 });
       shake.add(0.3);
       Arcade.flag('tankfield-kill');
@@ -863,14 +718,15 @@
     netMode = null;
     rival = null;
     live.leave();
-    tanks = []; shots = [];
+    world.tanks = []; world.shots = []; world.pending = []; world.events.length = 0;
     Versus.attach(attachOpts);
   }
 
-  for (let i = 0; i < SHAPES; i++) spawnShape();
   updateHud();
   const liveInvite = Live.invite('tank');
   Versus.attach(attachOpts);
   if (liveInvite) live.connect('public', liveInvite);
+  // Console handle for testing (only with #dev in the address).
+  if (location.hash === '#dev') window.__tank = { get me() { return me; }, get boss() { return boss; }, get world() { return world; }, spawnBoss };
   requestAnimationFrame(frame);
 })();

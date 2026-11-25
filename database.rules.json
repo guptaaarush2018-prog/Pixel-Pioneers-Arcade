@@ -167,6 +167,15 @@
           }
         }
       }
+    },
+    "trainrec": {
+      ".read": false,
+      "$game": {
+        "$rec": {
+          ".write": "auth != null && !data.exists() && newData.exists()",
+          ".validate": "newData.hasChildren(['g','v','out','tag','frames','t']) && newData.child('frames').isString() && newData.child('frames').val().length < 60000 && newData.child('tag').isString() && newData.child('tag').val().length <= 16 && newData.child('t').val() <= now && $game.length < 24"
+        }
+      }
     }
   }
 }

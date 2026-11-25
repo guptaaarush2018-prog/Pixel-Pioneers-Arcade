@@ -165,12 +165,18 @@ function render() {
       <td class="num">${formatTime(s.time[g.id] || 0)}</td>
     </tr>`).join('');
 
+  // Which Sovereign version a "<game>-sovereign" achievement was won against.
+  const sovereignNote = a => {
+    const m = got[a.id] && /^(.+)-sovereign$/.exec(a.id);
+    const b = m && Arcade.load('sovereign:beaten:' + m[1], null);
+    return b && b.v != null ? ` · vs. v${b.v}` : '';
+  };
   const achCard = a => {
     const tierClass = a.tier ? a.tier.toLowerCase() : '';
     const icon = a.tier ? a.tier[0] : '★';
     return `<div class="ach${got[a.id] ? ' got' : ''}">
       <span class="icon ${tierClass}">${icon}</span>
-      <div><b>${a.title}</b><span>${a.desc}</span></div>
+      <div><b>${a.title}</b><span>${a.desc}${sovereignNote(a)}</span></div>
     </div>`;
   };
 
