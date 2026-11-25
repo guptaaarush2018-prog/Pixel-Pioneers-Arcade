@@ -3,7 +3,7 @@
  * tools/sovereign/train.js: trains Sovereign with PPO. DEV ONLY.
  *
  *   node tools/sovereign/train.js --game=tankfield --run=<name> [--iters=N] [--hours=H]
- *        [--workers=K] [--steps=S] [--from=<ckpt>] [--fresh]
+ *        [--workers=K] [--steps=S] [--from=<ckpt>] [--clones=<dir>] [--fresh]
  *
  * Each iteration every worker thread plays whole headless duels (tankfield/env.js) with the
  * current weights until it has --steps decisions, then the PyTorch sidecar (nn/torch_ppo.py)
@@ -12,7 +12,8 @@
  *
  * Opponents per match: 40% scripted styles (the switcher is at least 15% of all matches),
  * 30% self-play against a random snapshot, 30% hall of fame (runs/<name>/hof.json, Task 8's
- * exam fills it). With no hall of fame yet, that 30% goes to styles.
+ * exam fills it), plus behaviour clones of real players with --clones=<dir>. With neither, that
+ * 30% goes to styles.
  *
  * Writes runs/<name>/latest.json every iteration, snapshots/iter-<n>.json every 25, and one
  * log.jsonl line per iteration. The build policy (tankfield/build-policy.js) picks Sovereign's
@@ -52,6 +53,7 @@ function worker() {
     while (n < msg.steps) {
       const spec = msg.plan[k % msg.plan.length];
       const opponent = spec.kind === 'net' ? { kind: 'net', net: spec.key === 'current' ? pi : nets.get(spec.key), greedy: false }
+        : spec.kind === 'clone' ? { kind: 'clone', net: nets.get(spec.key) }
         : spec.kind === 'style' ? { kind: 'style', name: spec.name } : { kind: 'idle' };
       const seed = (msg.seed + k * 7919) >>> 0, brng = mulberry32((seed ^ 0x27d4eb2f) >>> 0);
       // Opponent build: the style's own, or a random style's for nets and idle. Then Sovereign answers it.
@@ -129,6 +131,9 @@ async function main() {
   const STYLE_NAMES = ['kiter', 'rusher', 'strafer', 'sniper', 'farmer'];
   const snapList = () => fs.readdirSync(SNAPS).filter(f => /^iter-\d+\.json$/.test(f));
   const readHof = () => loadJSON(path.join(DIR, 'hof.json'), []);
+  // --clones=<dir>: behaviour clones of real players (clone.js) join the hall of fame's share.
+  const CLONES = !args.clones ? [] : (d => fs.readdirSync(d).filter(f => /^clone-\d+\.json$/.test(f)).map(f => path.join(d, f)))(path.resolve(ROOT, String(args.clones)));
+  if (args.clones) log(`${CLONES.length} clones from ${args.clones}`);
   // One match's opponent, by the opponent mix.
   function pickOpponent(hof, snaps) {
     const r = Math.random();
@@ -145,8 +150,10 @@ async function main() {
       const f = snaps[Math.floor(Math.random() * snaps.length)];
       return { kind: 'net', key: 'snap:' + f, file: path.join(SNAPS, f), label: 'self' };
     }
-    if (!hof.length) return style();
-    const m = hof[Math.floor(Math.random() * hof.length)];
+    if (!hof.length && !CLONES.length) return style();
+    const k = Math.floor(Math.random() * (hof.length + CLONES.length));
+    if (k >= hof.length) { const f = CLONES[k - hof.length]; return { kind: 'clone', key: 'clone:' + f, file: f, label: 'clone' }; }
+    const m = hof[k];
     if (m.kind === 'style') return m.ref === 'idle' ? { kind: 'idle', label: 'idle' } : { kind: 'style', name: m.ref, label: 'hof' };
     return { kind: 'net', key: 'hof:' + m.ref, file: path.resolve(ROOT, m.ref), label: 'hof' };
   }
@@ -160,7 +167,7 @@ async function main() {
     // Plans: more matches than any worker will finish, picked up in order.
     const plans = workers.map(() => Array.from({ length: Math.ceil(STEPS / 200) + 4 }, () => pickOpponent(hof, snaps)));
     const need = new Map();
-    for (const p of plans.flat()) if (p.kind === 'net' && p.key !== 'current' && !sent.has(p.key) && !need.has(p.key)) {
+    for (const p of plans.flat()) if ((p.kind === 'net' || p.kind === 'clone') && p.key !== 'current' && !sent.has(p.key) && !need.has(p.key)) {
       const j = loadJSON(p.file, null);
       if (j) need.set(p.key, j.pi || j); else { p.kind = 'idle'; p.label = 'idle'; }
     }

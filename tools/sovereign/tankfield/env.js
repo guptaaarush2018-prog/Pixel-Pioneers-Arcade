@@ -6,6 +6,7 @@ const Core = require('../../../games/tankfield/core.js');
 const IO = require('../../../games/tankfield/sovereign-io.js');
 const Sov = require('../../../assets/js/sovereign.js');
 const { STYLES, styleBuild } = require('./styles.js');
+const CloneIO = require('./clone-io.js');
 const { AW, AH } = Core;
 
 const DT = 1 / 60;
@@ -90,6 +91,8 @@ function runEpisode({ seed, sovNet, sovGreedy = false, opponent, maxT = 120, mem
       Sov.sample(ol, IO.HEADS, oppAct, !!opponent.greedy, oppRng);
       oppPrev.set(oppAct);
       oc = IO.applyAction(world, opp, sov, oppAct, DT);
+    } else if (opponent.kind === 'clone') {   // a behaviour clone of real players (clone.js)
+      oc = CloneIO.control(world, opp, sov, opponent.net, oppRng);
     } else if (style) {
       oc = style(world, opp, sov, DT, mem);
     } else {
