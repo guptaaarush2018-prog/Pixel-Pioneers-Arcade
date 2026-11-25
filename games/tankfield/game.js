@@ -62,7 +62,10 @@
     if (fallback) t.ai = { mode: 'farm', target: null, thinkT: 0, wander: 0, aimErr: 0, courage: 2 };
     world.tanks.push(t);
     boss = { tank: t, net, state: net ? Sov.newState(net) : null, act: new Int32Array(IO.HEADS.length), prev: new Int32Array(IO.HEADS.length),
-      obs: new Float32Array(IO.OBS_DIM), c: { mx: 0, my: 0, aim: t.a, fire: false }, decisionT: 0, version: w ? w.v : null, fallback, outcome: null, build };
+      obs: new Float32Array(IO.OBS_DIM), c: { mx: 0, my: 0, aim: t.a, fire: false }, decisionT: 0, version: w ? w.v : null, fallback, outcome: null, build,
+      // The fight is recorded for training (net boss only): both tanks at 10 Hz, your inputs and his choices.
+      recorder: fallback ? null : new Sov.Recorder({ game: ID, version: w.v, hz: 10 }), recT: 0, startT: time,
+      playerBuild: { turret: me.turret, stats: { ...me.stats } } };
     bannerT = 4;
     shake.add(0.8);
     Arcade.tone({ freq: 110, to: 55, dur: 0.9, type: 'sawtooth', vol: 0.07 });
@@ -90,6 +93,23 @@
     t.a += angDiff(boss.c.aim, t.a) * Math.min(1, dt * 12);
     return boss.c;
   }
+
+  const tankRow = t => [Math.round(t.x), Math.round(t.y), Math.round(t.vx), Math.round(t.vy), Math.round(t.a * 100), Math.round(Math.max(0, t.hp))];
+  function recordBoss(dt) {
+    if (!boss.recorder) return;
+    boss.recT -= dt;
+    if (boss.recT > 0) return;
+    boss.recT += 1 / boss.recorder.hz;
+    const c = controls.get(me) || { mx: 0, my: 0, fire: false };
+    boss.recorder.row([...tankRow(me), ...tankRow(boss.tank), Math.round(c.mx || 0), Math.round(c.my || 0), c.fire ? 1 : 0, ...boss.act]);
+  }
+  // Ends the recording once, with the outcome from your side ('win' | 'loss' | 'other'), and sends it.
+  function finishBoss(outcome) {
+    if (!boss || !boss.recorder) return;
+    const rec = boss.recorder.finish(outcome, { pb: boss.playerBuild, sb: boss.build, dur: Math.round(time - boss.startT) });
+    if (rec) boss.recorder.upload(rec);
+  }
+  addEventListener('pagehide', () => { if (boss && !boss.outcome) finishBoss('other'); });
 
   const NAMES = ['Rumble', 'Ironsides', 'Boomer', 'Tread', 'Clank', 'Bolt', 'Rivet', 'Howitzer', 'Pounder', 'Sprocket'];
   const COLORS = ['#ff5a5f', '#ffb02e', '#3ccf8e', '#ff7ae0', '#b07cff', '#2ee6c9'];
@@ -169,7 +189,7 @@
     // Sovereign arrives once per solo run at 20,000 xp; while he lives the rivals leave you two alone.
     if (!boss && me.alive && me.xp >= BOSS_XP && soloRun() && bossWeights !== undefined) spawnBoss();
     const duel = boss && boss.tank.alive && me.alive;
-    if (duel) controls.set(boss.tank, bossControl(dt));
+    if (duel) { controls.set(boss.tank, bossControl(dt)); recordBoss(dt); }
     bannerT = Math.max(0, bannerT - dt);
     // A new player gets 30 seconds to find their feet (the bots' grace), unless they start the fight.
     C.step(world, dt, controls, { spawnShapes: netMode !== 'live' || live.host, graceTarget: me, graceUntil: 30, ignore: duel ? new Set([me, boss.tank]) : undefined });
@@ -219,9 +239,9 @@
             Arcade.flag('tankfield-sovereign');
             Arcade.save('sovereign:beaten:tankfield', { v: boss.version, t: Date.now() });
           }
-          if (!boss.outcome) boss.outcome = e.by === me ? 'win' : 'other';
+          if (!boss.outcome) { boss.outcome = e.by === me ? 'win' : 'other'; finishBoss(boss.outcome); }
         }
-        if (t === me && boss && boss.tank.alive && !boss.outcome) boss.outcome = e.by === boss.tank ? 'loss' : 'other';
+        if (t === me && boss && boss.tank.alive && !boss.outcome) { boss.outcome = e.by === boss.tank ? 'loss' : 'other'; finishBoss(boss.outcome); }
         if (t === me) {
           shake.add(0.8);
           if (netMode === 'live') liveDied(e.by); else setTimeout(gameOver, 1000);

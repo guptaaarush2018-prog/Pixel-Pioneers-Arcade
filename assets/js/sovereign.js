@@ -111,9 +111,14 @@
     } catch (e) { return null; }
   }
 
+  // arcade.js and online.js declare `const Arcade` / `const Online`, which are globals but not
+  // window properties, so look them up by name first.
+  const arcade = () => (typeof Arcade !== 'undefined' ? Arcade : root.Arcade);
+  const online = () => (typeof Online !== 'undefined' ? Online : root.Online);
+
   // A random 12-char id for this browser, persisted via Arcade (browser only).
   function sessionTag() {
-    const A = root.Arcade;
+    const A = arcade();
     let tag = null;
     try { tag = A && A.load ? A.load('sovereign:tag', null) : null; } catch (e) {}
     if (typeof tag === 'string' && tag.length === 12) return tag;
@@ -124,7 +129,58 @@
     return tag;
   }
 
-  const api = { loadNet, newState, forward, sample, loadWeights, sessionTag, f32ToB64, b64ToF32: _b64ToF32 };
+  // ---------- Training recordings ----------
+  // Rows of integers, stored as per-column deltas from the row before, base 36, ',' between
+  // values and ';' between rows. Small moves become one or two characters.
+  const MAX_FRAMES = 59000;   // the database rule allows < 60000
+  function encodeRow(row, prev) {
+    let s = '';
+    for (let k = 0; k < row.length; k++) s += (k ? ',' : '') + (Math.round(row[k]) - (prev && k < prev.length ? prev[k] : 0)).toString(36);
+    return s;
+  }
+  function encodeRows(rows) {
+    const out = []; let prev = null;
+    for (const r of rows) { out.push(encodeRow(r, prev)); prev = r.map(Math.round); }
+    return out.join(';');
+  }
+  function decodeRows(str) {
+    if (!str) return [];
+    const rows = []; let prev = null;
+    for (const part of str.split(';')) {
+      const row = part.split(',').map((v, k) => parseInt(v, 36) + (prev && k < prev.length ? prev[k] : 0));
+      rows.push(row); prev = row;
+    }
+    return rows;
+  }
+
+  // Records one boss fight. No uid, name or email: only the random per-browser session tag.
+  // The game calls row() at `hz`; finish() once with the outcome; upload() never throws.
+  function Recorder({ game, version, hz = 10 }) {
+    this.game = game; this.version = version; this.hz = hz;
+    this.parts = []; this.len = 0; this.prev = null; this.trunc = false; this.done = false;
+  }
+  Recorder.prototype.row = function (row) {
+    if (this.done || this.trunc) return;
+    const piece = encodeRow(row, this.prev), add = piece.length + (this.parts.length ? 1 : 0);
+    if (this.len + add > MAX_FRAMES) { this.trunc = true; return; }
+    this.parts.push(piece); this.len += add; this.prev = row.map(Math.round);
+  };
+  Recorder.prototype.finish = function (outcome, meta = {}) {
+    if (this.done) return null;
+    this.done = true;
+    const O = online();
+    return { g: this.game, v: this.version, out: outcome, tag: sessionTag(), pb: meta.pb, sb: meta.sb, dur: meta.dur,
+      trunc: this.trunc, frames: this.parts.join(';'), t: O && O.TIMESTAMP ? O.TIMESTAMP : Date.now() };
+  };
+  Recorder.prototype.upload = async function (record) {
+    try {
+      const O = online();
+      if (!record || !O || !O.enabled) return;
+      await O.post('trainrec/' + record.g, record);
+    } catch (e) { /* recording is best effort: offline or refused, play goes on */ }
+  };
+
+  const api = { loadNet, newState, forward, sample, loadWeights, sessionTag, f32ToB64, b64ToF32: _b64ToF32, encodeRows, decodeRows, Recorder };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sovereign = api;
 })(typeof window !== 'undefined' ? window : globalThis);
