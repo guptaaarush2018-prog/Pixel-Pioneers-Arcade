@@ -1,7 +1,8 @@
 /* Byte Bot: program a little robot to light every blue tile. Build the program from Forward,
    Turn left, Turn right and Light, then press Run and watch it go. Later levels give you two
    functions, P1 and P2, that Main (or each other, or themselves) can call. Shorter programs earn
-   more stars; the score is the total of your best on every level. */
+   more stars, and every command under par earns bonus points; the score is the total of your
+   best on every level. */
 (() => {
   const ID = 'byte-bot';
   const CW = 800, CH = 550;
@@ -30,6 +31,21 @@
   const FNS = ['main', 'p1', 'p2'];
 
   let best = Arcade.load(SAVE, {}), saved = Arcade.load(PROG, {});
+  // Re-score saved bests with the current rules (shorter = more points). The old rules didn't record
+  // a shorter run that scored the same, so also count a saved program that still solves its level.
+  (() => {
+    let changed = false;
+    for (const k of Object.keys(best)) {
+      const lv = LEVELS[k], b = best[k];
+      if (!lv) continue;
+      let n = b.size ?? Infinity;
+      if (saved[k] && B.run(lv, saved[k]).win) n = Math.min(n, B.size(saved[k]));
+      if (!Number.isFinite(n)) continue;
+      const pts = Math.max(b.pts || 0, B.points(lv, n)), stars = Math.max(b.stars || 0, B.stars(lv, n));
+      if (pts !== b.pts || n !== b.size || stars !== b.stars) { best[k] = { pts, stars, size: n }; changed = true; }
+    }
+    if (changed) Arcade.save(SAVE, best);
+  })();
   let L = null, li = 0, prog = null, active = 'main', run = null, bot = null, lit = new Set(), state = 'menu', time = 0;
   const total = () => Object.values(best).reduce((t, b) => t + b.pts, 0);
   const nextUp = () => { for (let i = 0; i < LEVELS.length; i++) if (!best[i]) return i; return LEVELS.length - 1; };
@@ -121,8 +137,8 @@
   function win() {
     state = 'won';
     const size = B.size(prog);
-    const stars = size <= L.par ? 3 : size <= L.par + 3 ? 2 : 1;
-    const pts = 200 + stars * 100 + (size < L.par ? 150 : 0);
+    const stars = B.stars(L, size);
+    const pts = B.points(L, size);
     const prev = best[li];
     if (!prev || pts > prev.pts) { best[li] = { pts, stars: Math.max(stars, prev?.stars || 0), size: Math.min(size, prev?.size ?? Infinity) }; Arcade.save(SAVE, best); }
     updateHud();
@@ -136,7 +152,7 @@
       Arcade.finish(ui, {
         score: total(),
         title: `${L.name}: all lit! ${'★'.repeat(stars)}${'☆'.repeat(3 - stars)}`,
-        lines: [`${size} command${size === 1 ? '' : 's'} (par ${L.par})${size < L.par ? ' · shorter than ours!' : ''}`, 'Your score is the total of your best on every level.'],
+        lines: [`${size} command${size === 1 ? '' : 's'} (par ${L.par})${size < L.par ? ` · ${L.par - size} under par, +${(L.par - size) * B.SAVE_PTS}!` : ''}`, 'Every command under par is worth ' + B.SAVE_PTS + ' more points. Your score is the total of your best on every level.'],
         button: li + 1 < LEVELS.length ? 'Next level' : 'Level select',
         onAction: () => (li + 1 < LEVELS.length ? load(li + 1) : showMenu()),
       });
@@ -301,7 +317,7 @@
     ui.show({
       title: '🤖 Byte Bot',
       html: `<p>Program the robot to light up every blue tile. Line up commands, press <b>Run</b>, and watch it follow them exactly.</p>
-        <p style="font-size:13px;color:var(--muted)">Later levels add <b>P1</b> and <b>P2</b>: little programs that Main can call, again and again. Shorter programs earn more stars.</p>
+        <p style="font-size:13px;color:var(--muted)">Later levels add <b>P1</b> and <b>P2</b>: little programs that Main can call, again and again. Shorter programs earn more stars, and every command under par is worth bonus points.</p>
         <div class="row" style="flex-wrap:wrap;gap:6px;justify-content:center">${LEVELS.map((l, i) => { const b = best[i], open = i <= Object.keys(best).length + 1; return `<button class="btn ${b ? 'secondary' : ''}" type="button" data-l="${i}" ${open ? '' : 'disabled'} style="min-width:60px;flex-direction:column;line-height:1.2"><b>${open ? i + 1 : '🔒'}</b><small style="font-size:10px;color:#ffd23f">${b ? '★'.repeat(b.stars) : ''}</small></button>`; }).join('')}</div>
         <p style="font-size:12px;color:var(--muted)">${total().toLocaleString()} points</p>`,
       button: `Play level ${nextUp() + 1}`,

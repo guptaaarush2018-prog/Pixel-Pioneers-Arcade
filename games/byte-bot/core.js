@@ -62,7 +62,12 @@
   }
 
   const size = prog => ['main', 'p1', 'p2'].reduce((t, k) => t + parse(prog[k]).length, 0);
-  const api = { LEVELS, run, size };
+  // Stars: 3 at par or shorter, 2 within 3 over, 1 otherwise. Points: 300 + 100 per star, plus
+  // SAVE_PTS for every command under par, so shorter solutions always score more.
+  const SAVE_PTS = 100;
+  const stars = (level, n) => (n <= level.par ? 3 : n <= level.par + 3 ? 2 : 1);
+  const points = (level, n) => 200 + stars(level, n) * 100 + Math.max(0, level.par - n) * SAVE_PTS;
+  const api = { LEVELS, run, size, stars, points, SAVE_PTS };
   if (typeof module !== 'undefined') module.exports = api;
   else root.ByteBot = api;
 })(typeof window !== 'undefined' ? window : globalThis);

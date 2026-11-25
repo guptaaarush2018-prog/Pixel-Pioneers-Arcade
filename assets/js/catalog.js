@@ -1225,7 +1225,7 @@ window.CATALOG = [
     id: 'byte-bot',
     title: 'Byte Bot',
     genre: 'Puzzle',
-    desc: 'Program a robot to light every blue tile: Forward, turn, Light, and later two functions that can call each other (or themselves). Twelve levels; shorter programs earn more stars.',
+    desc: 'Program a robot to light every blue tile: Forward, turn, Light, and later two functions that can call each other (or themselves). Twelve levels; shorter programs earn more stars and more points.',
     goals: [1000, 3000, 6000],
     extras: [
       { id: 'byte-bot-first', title: 'Byte Bot: Hello, World', desc: 'Solve a level.' },
