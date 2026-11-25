@@ -16,7 +16,7 @@ buffers named in header["bufs"] ([name, dtype, count] with dtype f32 or i32),
 concatenated in that order. Log lines go to stderr.
 
   init    {piSizes, vfSizes, gru, cfg, threads}  bufs pi, vf      -> {ok, device}
-  update  {N, D, H, episodes:[[start, len, trunc]], seed}
+  update  {N, D, H, episodes:[[start, len, trunc]], seed, lr?, targetKl?}
           bufs obs, acts, logps, rews, finalObs                    -> {upd} bufs pi, vf
   step    one minibatch with given indices, no shuffle (parity test only)
           {N, D, H, m} bufs obs, acts, logps, adv, ret, idx        -> {st} bufs pi, vf
@@ -279,6 +279,14 @@ class Trainer:
         return V, np.array(Vfin), ix, mask, torch.stack(hp), torch.stack(hv), lp_err
 
     def update(self, head, b):
+        # train.js may change the step size and the KL target per iteration (decaying-change rule).
+        if "lr" in head:
+            self.cfg["lr"] = float(head["lr"])
+            for opt in (self.pi_opt, self.vf_opt):
+                for g in opt.param_groups:
+                    g["lr"] = self.cfg["lr"]
+        if "targetKl" in head:
+            self.cfg["targetKl"] = float(head["targetKl"])
         c = self.cfg
         t0 = time.time()
         N, D, H = head["N"], head["D"], head["H"]

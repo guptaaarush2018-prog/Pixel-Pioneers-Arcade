@@ -39,8 +39,8 @@ class TorchPPO {
     this.proc.stderr.on('data', d => String(d).trimEnd().split('\n').forEach(l => log(l)));
     this.buf = Buffer.alloc(0); this.waiting = null; this.dead = null;
     this.proc.stdout.on('data', d => { this.buf = Buffer.concat([this.buf, d]); this._drain(); });
-    this.proc.on('exit', code => {
-      this.dead = new Error(`torch sidecar exited ${code}`);
+    this.proc.on('exit', (code, sig) => {
+      this.dead = new Error(`torch sidecar exited ${code}${sig ? ' (' + sig + ')' : ''}`);
       if (this.waiting) { const w = this.waiting; this.waiting = null; w.reject(this.dead); }
     });
   }
@@ -83,11 +83,12 @@ class TorchPPO {
   }
   // Runs values + GAE + the PPO epochs on the sidecar, then copies the new
   // weights into pi/vf. episodes: [{start, len, trunc, finalObs (Float32Array)}].
-  async update(pi, vf, b, seed) {
+  // extra: optional { lr, targetKl } for this update only onward.
+  async update(pi, vf, b, seed, extra = {}) {
     const fin = b.episodes.filter(e => e.trunc && e.finalObs);
     const finalObs = new Float32Array(fin.length * b.D); fin.forEach((e, i) => finalObs.set(e.finalObs, i * b.D));
     const { head, bufs } = await this.call(
-      { type: 'update', N: b.N, D: b.D, H: b.H, seed, episodes: b.episodes.map(e => [e.start, e.len, e.trunc && e.finalObs ? 1 : 0]) },
+      { type: 'update', ...extra, N: b.N, D: b.D, H: b.H, seed, episodes: b.episodes.map(e => [e.start, e.len, e.trunc && e.finalObs ? 1 : 0]) },
       [['obs', b.obs], ['acts', b.acts], ['logps', b.logps], ['rews', b.rews], ['finalObs', finalObs]]);
     loadFlat(pi, bufs.pi); loadFlat(vf, bufs.vf);
     return head.upd;

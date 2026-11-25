@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "test:sovereign": "node --test 'tools/sovereign/test/*.test.js'"
+  },
   "dependencies": {
     "firebase": "^13.2.0"
   }
