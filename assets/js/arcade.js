@@ -235,6 +235,7 @@ const Arcade = (() => {
 
   function achievementList() {
     const games = (window.CATALOG || []).filter(g => !g.url); // linked games keep their own scores
+    const SOVEREIGN_GAMES = ['tankfield'];   // games with Sovereign, the neural boss
     const list = [
       { id: 'first-finish', title: 'First Run', desc: 'Finish your first game.', test: s => s.totalPlays >= 1 },
       { id: 'ten-games', title: 'Warmed Up', desc: 'Finish 10 games.', test: s => s.totalPlays >= 10 },
@@ -248,6 +249,7 @@ const Arcade = (() => {
       { id: 'days-7', title: 'Weekly Player', desc: 'Play on 7 different days.', test: s => s.days.length >= 7 },
       { id: 'top-ten', title: 'On the Board', desc: 'Reach the top 10 of a global leaderboard.', test: s => s.flags['top-ten'] },
       { id: 'online-match', title: 'Good Game', desc: 'Finish an online match.', test: s => s.flags['online-match'] },
+      { id: 'sovereign-slayer', title: 'Sovereign Slayer', desc: 'Beat Sovereign in every game he appears in.', test: s => SOVEREIGN_GAMES.every(g => s.flags[g + '-sovereign']) },
     ];
     for (const g of games) {
       ['Bronze', 'Silver', 'Gold'].forEach((tier, i) => list.push({

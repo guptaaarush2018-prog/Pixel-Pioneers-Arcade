@@ -3,7 +3,10 @@
    tanks are doing the same, and they'll come for you once they're strong enough. One life; the
    score is all the experience you earned. Auto-aim is on by default (Q switches to the mouse).
    Live 1v1 (live.js) drops the bots: two players share one arena of shapes, first to
-   LIVE_KILLS kills (or the most when the clock runs out). */
+   LIVE_KILLS kills (or the most when the clock runs out).
+   Solo runs that reach 20,000 xp meet Sovereign, a level 45 boss tank driven by a neural net
+   trained in tools/sovereign/ (weights in sovereign/latest.json). He plays by the same rules and
+   inputs as you; if the weights fail to load, a rule bot stands in and grants no flags. */
 (() => {
   const ID = 'tankfield';
   const W = 960, H = 540, TAU = Math.PI * 2;
@@ -31,6 +34,63 @@
   let mouse = { x: W / 2, y: H / 2, down: false }, kills = 0, picking = null;
   const spend = (t, i) => C.spend(world, t, i);
 
+  // ---------- Sovereign ----------
+  const BOSS_XP = 20000, BOSS_DIST = 700;
+  const IO = TankSovIO, Sov = Sovereign;
+  const SIDX = id => STATS.findIndex(s => s.id === id);
+  const FALLBACK_BUILD = { path: ['longshot', 'rail'], alloc: [
+    ...Array(7).fill(SIDX('shotPower')), ...Array(7).fill(SIDX('reload')), ...Array(7).fill(SIDX('shotSpeed')),
+    ...Array(6).fill(SIDX('armor')), ...Array(6).fill(SIDX('speed'))] };
+  // undefined: not asked yet; null: failed (fallback boss); else { v, pi, build }.
+  let bossWeights, bossWeightsP = null, boss = null, bannerT = 0;
+  const prefetchBoss = () => { bossWeightsP = bossWeightsP || Sov.loadWeights(ID).then(w => { bossWeights = w; }); };
+  const soloRun = () => netMode !== 'live' && !(typeof Versus !== 'undefined' && Versus.active());
+
+  function spawnBoss() {
+    const w = bossWeights;
+    const net = w ? Sov.loadNet(w.pi) : null, buildNet = w && w.build ? Sov.loadNet(w.build) : null;
+    const fallback = !net || !buildNet;
+    const t = C.makeTank(world, { name: 'Sovereign', color: '#ffd23f', bot: false });
+    const a = R(0, TAU), r = 40;
+    t.x = clamp(me.x + Math.cos(a) * BOSS_DIST, r, AW - r);
+    t.y = clamp(me.y + Math.sin(a) * BOSS_DIST, r, AH - r);
+    t.a = Math.atan2(me.y - t.y, me.x - t.x);
+    let build = FALLBACK_BUILD;
+    if (!fallback) { const b = IO.chooseBuild(buildNet, IO.buildFeatures(me), Math.random, true); build = { path: IO.BUILD_PATHS[b.path], alloc: b.alloc }; }
+    IO.applyBuild(world, t, build);
+    // The fallback is a rule bot: give it the bot brain without making core drive it.
+    if (fallback) t.ai = { mode: 'farm', target: null, thinkT: 0, wander: 0, aimErr: 0, courage: 2 };
+    world.tanks.push(t);
+    boss = { tank: t, net, state: net ? Sov.newState(net) : null, act: new Int32Array(IO.HEADS.length), prev: new Int32Array(IO.HEADS.length),
+      obs: new Float32Array(IO.OBS_DIM), c: { mx: 0, my: 0, aim: t.a, fire: false }, decisionT: 0, version: w ? w.v : null, fallback, outcome: null, build };
+    bannerT = 4;
+    shake.add(0.8);
+    Arcade.tone({ freq: 110, to: 55, dur: 0.9, type: 'sawtooth', vol: 0.07 });
+    Arcade.tone({ freq: 523, to: 1046, dur: 0.4, type: 'triangle', vol: 0.05 });
+  }
+
+  // Sovereign's controls this frame. The net decides every REPEAT sim frames (as in training)
+  // and holds its move, aim and trigger in between; the turret turns like the player's auto-aim.
+  function bossControl(dt) {
+    const t = boss.tank;
+    if (boss.fallback) {
+      const rivals = new Set(world.tanks.filter(o => o !== me && o !== t));
+      const b = C.botControl(world, t, dt, { ignore: rivals });
+      return { mx: b.mx, my: b.my, aim: null, fire: false };
+    }
+    boss.decisionT -= dt;
+    if (boss.decisionT <= 0) {
+      boss.decisionT += IO.REPEAT / 60;
+      if (boss.decisionT <= 0) boss.decisionT = IO.REPEAT / 60;
+      IO.observe(world, t, me, boss.prev, boss.obs);
+      Sov.sample(Sov.forward(boss.net, boss.obs, boss.state), IO.HEADS, boss.act, true);
+      boss.prev.set(boss.act);
+      boss.c = IO.applyAction(world, t, me, boss.act, dt);
+    }
+    t.a += angDiff(boss.c.aim, t.a) * Math.min(1, dt * 12);
+    return boss.c;
+  }
+
   const NAMES = ['Rumble', 'Ironsides', 'Boomer', 'Tread', 'Clank', 'Bolt', 'Rivet', 'Howitzer', 'Pounder', 'Sprocket'];
   const COLORS = ['#ff5a5f', '#ffb02e', '#3ccf8e', '#ff7ae0', '#b07cff', '#2ee6c9'];
 
@@ -51,6 +111,8 @@
     }
     world.events.length = 0;
     kills = 0; time = 0; picking = null;
+    boss = null; bannerT = 0;
+    prefetchBoss();
     cam.x = me.x; cam.y = me.y;
     state = 'play';
     ui.hide();
@@ -104,8 +166,13 @@
       controls.set(me, { mx, my, aim: null, fire: mouse.down || keys.has('Space') || (aimMode === 'auto' && auto && autoFire) });
     }
     if (netMode === 'live') updateLive(dt);
+    // Sovereign arrives once per solo run at 20,000 xp; while he lives the rivals leave you two alone.
+    if (!boss && me.alive && me.xp >= BOSS_XP && soloRun() && bossWeights !== undefined) spawnBoss();
+    const duel = boss && boss.tank.alive && me.alive;
+    if (duel) controls.set(boss.tank, bossControl(dt));
+    bannerT = Math.max(0, bannerT - dt);
     // A new player gets 30 seconds to find their feet (the bots' grace), unless they start the fight.
-    C.step(world, dt, controls, { spawnShapes: netMode !== 'live' || live.host, graceTarget: me, graceUntil: 30 });
+    C.step(world, dt, controls, { spawnShapes: netMode !== 'live' || live.host, graceTarget: me, graceUntil: 30, ignore: duel ? new Set([me, boss.tank]) : undefined });
     handleEvents();
     cam.x = Gfx.approach(cam.x, me.x, 6, dt);
     cam.y = Gfx.approach(cam.y, me.y, 6, dt);
@@ -146,6 +213,15 @@
         const t = e.t;
         fx.burst(40, () => { const a = R(0, TAU), v = R(60, 260); return { x: t.x, y: t.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: R(0.5, 1), size: R(3, 7), color: t.color, drag: 2.5, shape: 'square', spin: R(-8, 8) }; });
         Arcade.tone({ freq: 150, to: 40, dur: 0.5, type: 'sawtooth', vol: 0.06 });
+        if (boss && t === boss.tank) {
+          shake.add(1);
+          if (e.by === me && !boss.fallback) {
+            Arcade.flag('tankfield-sovereign');
+            Arcade.save('sovereign:beaten:tankfield', { v: boss.version, t: Date.now() });
+          }
+          if (!boss.outcome) boss.outcome = e.by === me ? 'win' : 'other';
+        }
+        if (t === me && boss && boss.tank.alive && !boss.outcome) boss.outcome = e.by === boss.tank ? 'loss' : 'other';
         if (t === me) {
           shake.add(0.8);
           if (netMode === 'live') liveDied(e.by); else setTimeout(gameOver, 1000);
@@ -230,6 +306,10 @@
     ctx.beginPath(); ctx.arc(0, 0, r * 0.82, 0, TAU); ctx.fill();
     ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.beginPath(); ctx.arc(0, 0, r * 0.38, 0, TAU); ctx.fill();
     ctx.restore();
+    if (boss && t === boss.tank) {
+      ctx.strokeStyle = `rgba(255,210,63,${0.35 + 0.25 * Math.sin(time * 5)})`; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(t.x, t.y, r + 10, 0, TAU); ctx.stroke();
+    }
     if (t.shield > 0) {
       ctx.strokeStyle = `rgba(126,240,255,${0.4 + 0.3 * Math.sin(time * 12)})`; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.arc(t.x, t.y, r + 8, 0, TAU); ctx.stroke();
@@ -328,6 +408,14 @@
         Gfx.text(ctx, t.desc, bx + w / 2, y + 106, { size: 10, stroke: null, color: '#9aa3b5' });
         hits.push({ x: bx, y, w, h: 120, fn: () => { me.turret = id; picking = null; Arcade.flag('tankfield-turret'); } });
       });
+    }
+    // Last, so nothing covers it.
+    if (bannerT > 0) {
+      const al = Math.min(1, bannerT / 0.6, (4 - bannerT) / 0.3);
+      ctx.save(); ctx.globalAlpha = al;
+      Gfx.text(ctx, 'SOVEREIGN HAS ENTERED', W / 2, H / 2 - 110, { size: 34, color: '#ffd23f', width: 6 });
+      Gfx.text(ctx, 'Matches against Sovereign help train him.', W / 2, H / 2 - 78, { size: 14, color: '#fff', width: 4 });
+      ctx.restore();
     }
   }
   function panelHit(x, y) {
@@ -618,5 +706,7 @@
   const liveInvite = Live.invite('tank');
   Versus.attach(attachOpts);
   if (liveInvite) live.connect('public', liveInvite);
+  // Console handle for testing (only with #dev in the address).
+  if (location.hash === '#dev') window.__tank = { get me() { return me; }, get boss() { return boss; }, get world() { return world; }, spawnBoss };
   requestAnimationFrame(frame);
 })();
