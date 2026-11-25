@@ -166,6 +166,8 @@
     player.grounded = false;
     player.vy = player.g * FLIP_V;
     bufferUntil = 0;
+    shake = 4;
+    burst(PX + PS / 2, player.y + PS / 2, 8, ['#ffffff', GOLD]);
     Arcade.tone({ freq: player.g === 1 ? 520 : 780, to: player.g === 1 ? 300 : 1100, dur: 0.09, type: 'triangle', vol: 0.05 });
   }
 

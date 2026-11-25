@@ -188,6 +188,14 @@
   ribs.frustumCulled = false;
   scene.add(ribs);
 
+  // Void faces behind empty cells so holes read as dark gaps instead of nothing.
+  const VOID_CAP = CAP;
+  const voidGeo = new THREE.BoxGeometry(0.92, 0.32, 0.06); voidGeo.translate(0, -0.16, 0);
+  const voidMat = new THREE.MeshBasicMaterial({ color: 0x080a14, transparent: true, opacity: 0.85 });
+  const voids = new THREE.InstancedMesh(voidGeo, voidMat, VOID_CAP);
+  voids.frustumCulled = false;
+  scene.add(voids);
+
   // Stars drifting past.
   const STARS = 420;
   const starGeo = new THREE.BufferGeometry();
@@ -556,10 +564,11 @@
     burst(p[0], p[1], p[2], theme.glow, 6, 2, 1, 0.4);
   }
 
-  function land(t) {
+  function land(t, impactVy) {
     h = 0; vy = 0; grounded = true;
     airJumps = runnerDef().air;
     squash = 0.3;
+    if (impactVy < -6) shake = Math.min(0.6, -impactVy / 30);
     const p = worldPos(u, 0.05);
     burst(p[0], p[1], p[2], 0xffffff, 8, 2.5, 1, 0.45);
     if (performance.now() - lastLandT > 120) tone({ freq: 140, to: 80, dur: 0.06, type: 'sine', vol: 0.04 });
@@ -600,7 +609,7 @@
       vy -= G * dt;
       if (R.glide && jumpHeld && vy < -2.6 && h > 0.05) vy = -2.6;
       h += vy * dt;
-      if (t !== T.EMPTY && vy <= 0 && prevH >= -0.06 && h <= 0) land(t);
+      if (t !== T.EMPTY && vy <= 0 && prevH >= -0.06 && h <= 0) land(t, vy);
     }
     // Tile effects.
     onIce = false;
@@ -691,9 +700,10 @@
 
   function buildScene(dt) {
     const r0 = Math.max(0, Math.floor(row) - WINDOW_BACK), r1 = Math.floor(row) + WINDOW_AHEAD;
-    let nt = 0, nb = 0, ns = 0, nsh = 0;
+    let nt = 0, nb = 0, ns = 0, nsh = 0, nv = 0;
     const tArr = tiles.instanceMatrix.array, tCol = tiles.instanceColor.array;
     const bArr = barriers.instanceMatrix.array, sArr = spikes.instanceMatrix.array;
+    const vArr = voids.instanceMatrix.array;
     const cA = theme.tileA, cB = theme.tileB;
     for (let r = r0; r <= r1; r++) {
       const rw = level.rows[r];
@@ -701,7 +711,16 @@
       const z = -(r + 0.5);
       for (let c = 0; c < RING; c++) {
         const t = rw[c];
-        if (t === 0) continue;
+        if (t === 0) {
+          const tp = tpl[c];
+          const o = nv * 16;
+          for (let i = 0; i < 16; i++) vArr[o + i] = tp.e[i];
+          vArr[o + 12] = tp.e[12] - tp.nx * 0.28;
+          vArr[o + 13] = tp.e[13] - tp.ny * 0.28;
+          vArr[o + 14] = z;
+          nv++;
+          continue;
+        }
         const tp = tpl[c];
         let ox = 0, oy = 0, oz = 0;
         if (t === T.CRUMBLE) {
@@ -745,7 +764,7 @@
         nsh++;
       }
     }
-    for (const [m, n] of [[tiles, nt], [barriers, nb], [spikes, ns], [shards, nsh]]) {
+    for (const [m, n] of [[tiles, nt], [barriers, nb], [spikes, ns], [shards, nsh], [voids, nv]]) {
       m.count = n;
       m.instanceMatrix.needsUpdate = true;
       if (m.instanceColor) m.instanceColor.needsUpdate = true;

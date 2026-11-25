@@ -522,7 +522,7 @@
     // Progress.
     const prog = G.plan ? Math.min(1, (G.t - 0) / (G.plan.waves[G.plan.waves.length - 1].at + 20)) : 0;
     if (G.plan) {
-      ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(W - 230, H - 22, 210, 10); ctx.fillStyle = '#7be36a'; ctx.fillRect(W - 230, H - 22, 210 * (1 - G.zs.length / Math.max(1, G.plan.total) * 0 ) * prog, 10);
+      ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(W - 230, H - 22, 210, 10);       ctx.fillStyle = '#7be36a'; ctx.fillRect(W - 230, H - 22, 210 * prog, 10);
       ctx.fillStyle = '#fff'; ctx.font = '11px system-ui'; ctx.textAlign = 'right'; ctx.fillText(`Wave ${Math.min(G.wave, G.plan.waves.length)}/${G.plan.waves.length} · ${G.zs.length} on the lawn`, W - 20, H - 30);
     } else { ctx.fillStyle = '#fff'; ctx.font = 'bold 13px system-ui'; ctx.textAlign = 'right'; ctx.fillText(`Wave ${G.survWave} · ${G.kills} stopped`, W - 20, H - 14); }
     if (G.banner) { ctx.globalAlpha = Math.min(1, G.banner.t); ctx.font = 'bold 28px system-ui'; ctx.textAlign = 'center'; ctx.strokeStyle = '#000'; ctx.lineWidth = 5; ctx.fillStyle = '#fff'; ctx.strokeText(G.banner.text, W / 2, 300); ctx.fillText(G.banner.text, W / 2, 300); if (G.banner.sub) { ctx.font = '16px system-ui'; ctx.lineWidth = 4; ctx.strokeText(G.banner.sub, W / 2, 332); ctx.fillText(G.banner.sub, W / 2, 332); } ctx.globalAlpha = 1; }
@@ -549,7 +549,7 @@
     if (c < 0 || c >= COLS || r < 0 || r >= ROWS) return;
     if (G.shovel) {
       const t = topPlant(c, r);
-      if (t) { G.sun += Math.floor(PLANTS[t.type].cost * 0.0); t.dead = true; G.shovel = false; tone({ freq: 300, to: 150, dur: 0.1, type: 'square', vol: 0.04 }); }
+      if (t) { G.sun += Math.floor(PLANTS[t.type].cost * 0.5); t.dead = true; G.shovel = false; tone({ freq: 300, to: 150, dur: 0.1, type: 'square', vol: 0.04 }); }
       return;
     }
     if (G.sel !== null) {
