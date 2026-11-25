@@ -26,7 +26,7 @@ function mulberry32(seed) {
 const STYLE_NAMES = Object.keys(STYLES);
 
 // Two non-bot tanks 700 px apart near the centre, facing each other, builds applied.
-function makeDuel({ seed, sovBuild, oppBuild, shapes = 70, rng } = {}) {
+function makeDuel({ seed, sovBuild, oppBuild, shapes = 70, rng, swapSides = false } = {}) {
   rng = rng || mulberry32(seed);
   const world = Core.createWorld({ rng, shapes });
   const sov = Core.makeTank(world, { name: 'Sovereign', color: '#ff4fd8' });
@@ -35,20 +35,21 @@ function makeDuel({ seed, sovBuild, oppBuild, shapes = 70, rng } = {}) {
   sov.x = AW / 2 - 350; opp.x = AW / 2 + 350;
   sov.y = opp.y = AH / 2;
   sov.a = 0; opp.a = Math.PI;
+  if (swapSides) { [sov.x, opp.x] = [opp.x, sov.x]; [sov.a, opp.a] = [opp.a, sov.a]; }
   const pick = () => styleBuild(rng, STYLE_NAMES[Math.floor(rng() * STYLE_NAMES.length)]);
   IO.applyBuild(world, sov, sovBuild || pick());
   IO.applyBuild(world, opp, oppBuild || pick());
   return { world, sov, opp };
 }
 
-function runEpisode({ seed, sovNet, sovGreedy = false, opponent, maxT = 120, memWipeEvery = 0, histOff = false, sovBuild, oppBuild, sovStyle }) {
+function runEpisode({ seed, sovNet, sovGreedy = false, opponent, maxT = 120, memWipeEvery = 0, histOff = false, sovBuild, oppBuild, sovStyle, swapSides = false }) {
   const rng = mulberry32(seed);
   const sovRng = mulberry32((seed ^ 0x9e3779b9) >>> 0);   // sampling streams stay apart from world rolls
   const oppRng = mulberry32((seed ^ 0x85ebca6b) >>> 0);
   opponent = opponent || { kind: 'idle' };
   if (!oppBuild && opponent.kind === 'style') oppBuild = styleBuild(rng, opponent.name);
   if (sovStyle && !sovBuild) sovBuild = styleBuild(rng, sovStyle);
-  const { world, sov, opp } = makeDuel({ seed, sovBuild, oppBuild, rng });
+  const { world, sov, opp } = makeDuel({ seed, sovBuild, oppBuild, rng, swapSides });
 
   const OD = IO.OBS_DIM, NH = IO.HEADS.length;
   const obsBuf = new Float32Array(OD), oppObs = new Float32Array(OD);
