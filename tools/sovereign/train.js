@@ -15,7 +15,8 @@
  * exam fills it). With no hall of fame yet, that 30% goes to styles.
  *
  * Writes runs/<name>/latest.json every iteration, snapshots/iter-<n>.json every 25, and one
- * log.jsonl line per iteration. A run with a latest.json resumes unless --fresh.
+ * log.jsonl line per iteration. The build policy (tankfield/build-policy.js) picks Sovereign's
+ * turret path and stats per match from the opponent's build, and learns by REINFORCE on the result. A run with a latest.json resumes unless --fresh.
  */
 const fs = require('fs'), path = require('path'), os = require('os');
 const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
@@ -29,24 +30,39 @@ else main().catch(e => { console.error('[sovereign]', e && e.stack || e); proces
 // ── Rollout worker: plays matches with the weights it is sent ───────────────────────────
 function worker() {
   const Sov = require(path.join(ROOT, 'assets/js/sovereign.js'));
-  const { runEpisode } = require('./tankfield/env.js');
+  const Core = require(path.join(ROOT, 'games/tankfield/core.js'));
+  const IO = require(path.join(ROOT, 'games/tankfield/sovereign-io.js'));
+  const { runEpisode, mulberry32 } = require('./tankfield/env.js');
+  const { STYLES, styleBuild } = require('./tankfield/styles.js');
+  const { sampleBuild } = require('./tankfield/build-policy.js');
+  const { MLP } = require('./nn/ppo.js');
+  const BUILD_STYLES = Object.keys(STYLES).filter(k => k !== 'switcher');
+  // What Sovereign sees of the opponent's build before choosing his own.
+  const featuresOf = build => {
+    const w = Core.createWorld({ rng: mulberry32(1), shapes: 0 }), t = Core.makeTank(w, { name: 'x', color: '#000' });
+    IO.applyBuild(w, t, build); return Array.from(IO.buildFeatures(t));
+  };
   const nets = new Map();   // opponent weights by key, loaded once
   const netOf = (key, json) => { if (!nets.has(key)) nets.set(key, Sov.loadNet(json)); return nets.get(key); };
   parentPort.on('message', msg => {
     if (msg.type === 'opps') { for (const [k, j] of msg.nets) netOf(k, j); return; }
-    const pi = Sov.loadNet(msg.pi);
+    const pi = Sov.loadNet(msg.pi), buildNet = MLP.fromJSON(msg.build);
     const out = { obs: [], acts: [], logps: [], rews: [], episodes: [] };
     let n = 0, k = 0;
     while (n < msg.steps) {
       const spec = msg.plan[k % msg.plan.length];
       const opponent = spec.kind === 'net' ? { kind: 'net', net: spec.key === 'current' ? pi : nets.get(spec.key), greedy: false }
         : spec.kind === 'style' ? { kind: 'style', name: spec.name } : { kind: 'idle' };
-      const r = runEpisode({ seed: (msg.seed + k * 7919) >>> 0, sovNet: pi, opponent, maxT: msg.maxT });
+      const seed = (msg.seed + k * 7919) >>> 0, brng = mulberry32((seed ^ 0x27d4eb2f) >>> 0);
+      // Opponent build: the style's own, or a random style's for nets and idle. Then Sovereign answers it.
+      const oppBuild = styleBuild(brng, spec.kind === 'style' && spec.name !== 'switcher' ? spec.name : BUILD_STYLES[Math.floor(brng() * BUILD_STYLES.length)]);
+      const oppFeatures = featuresOf(oppBuild), sb = sampleBuild(buildNet, oppFeatures, brng, false);
+      const r = runEpisode({ seed, sovNet: pi, opponent, maxT: msg.maxT, oppBuild, sovBuild: { path: IO.BUILD_PATHS[sb.path], alloc: sb.alloc } });
       k++;
       if (!r.len) continue;
       out.obs.push(r.obs); out.acts.push(r.acts); out.logps.push(r.logps); out.rews.push(r.rews);
       let ret = 0; for (const x of r.rews) ret += x;
-      out.episodes.push({ len: r.len, label: spec.label, outcome: r.outcome, ret });
+      out.episodes.push({ len: r.len, label: spec.label, outcome: r.outcome, ret, build: { oppFeatures, path: sb.path, alloc: sb.alloc } });
       n += r.len;
     }
     const cat = (parts, T) => { let L = 0; for (const p of parts) L += p.length; const a = new T(L); let o = 0; for (const p of parts) { a.set(p, o); o += p.length; } return a; };
@@ -71,7 +87,8 @@ async function main() {
   const log = (...a) => console.log('[sovereign]', ...a);
   fs.mkdirSync(SNAPS, { recursive: true });
 
-  const { MLP } = require('./nn/ppo.js');
+  const { MLP, Adam } = require('./nn/ppo.js');
+  const { makeBuildNet, updateBuild } = require('./tankfield/build-policy.js');
   const { TorchPPO } = require('./nn/torch_client.js');
   const IO = require(path.join(ROOT, 'games/tankfield/sovereign-io.js'));
   const HEADS = IO.HEADS, A = HEADS.reduce((a, b) => a + b, 0), H = HEADS.length, D = IO.OBS_DIM;
@@ -86,6 +103,8 @@ async function main() {
   let ck = !args.fresh && loadJSON(ckPath, null), iter = 0, pi, vf;
   if (ck) { iter = ck.iter; log(`resuming ${args.run} at iteration ${iter}`); }
   else if (args.from) { ck = loadJSON(path.resolve(ROOT, args.from), null); if (!ck) throw new Error('cannot read --from ' + args.from); log(`starting from ${args.from}`); }
+  let build = ck && ck.build ? MLP.fromJSON(ck.build) : makeBuildNet();
+  const buildAdam = new Adam(build, 1e-3);
   if (ck) { pi = MLP.fromJSON(ck.pi); vf = MLP.fromJSON(ck.vf); }
   else {
     pi = new MLP([D, 128, 128, A], 0.01).addGru(64);
@@ -148,7 +167,7 @@ async function main() {
     share([...need]);
     const piJSON = pi.toJSON();
     const results = await Promise.all(workers.map((w, i) => ask(w, {
-      pi: piJSON, steps: STEPS, maxT: MAX_T, plan: plans[i].map(({ kind, key, name, label }) => ({ kind, key, name, label })),
+      pi: piJSON, build: build.toJSON(), steps: STEPS, maxT: MAX_T, plan: plans[i].map(({ kind, key, name, label }) => ({ kind, key, name, label })),
       seed: (iter * 1000003 + i * 10007 + 1) >>> 0,
     })));
     const tRoll = Date.now() - it0;
@@ -158,21 +177,25 @@ async function main() {
     const b = { N, D, H, obs: new Float32Array(N * D), acts: new Int32Array(N * H), logps: new Float32Array(N), rews: new Float32Array(N), episodes: [] };
     const byLabel = {};
     let o = 0, retSum = 0, eps = 0;
+    const buildBatch = [];
     for (const r of results) {
       b.obs.set(r.obs, o * D); b.acts.set(r.acts, o * H); b.logps.set(r.logps, o); b.rews.set(r.rews, o);
       for (const e of r.episodes) {
         b.episodes.push({ start: o, len: e.len, trunc: false });
         o += e.len; retSum += e.ret; eps++;
+        buildBatch.push({ oppFeatures: Float32Array.from(e.build.oppFeatures), path: e.build.path, alloc: e.build.alloc,
+          outcome: e.outcome === 'win' ? 1 : e.outcome === 'loss' ? -1 : 0 });
         const s = byLabel[e.label] || (byLabel[e.label] = { n: 0, win: 0, loss: 0 });
         s.n++; if (e.outcome === 'win') s.win++; else if (e.outcome === 'loss') s.loss++;
       }
     }
     const upd = await torch.update(pi, vf, b, iter, { lr, targetKl });
+    updateBuild(build, buildAdam, buildBatch);
     iter++;
 
-    const ckpt = { iter, pi: pi.toJSON(), vf: vf.toJSON(), cfg: CFG, lr, hof };
+    const ckpt = { iter, pi: pi.toJSON(), vf: vf.toJSON(), build: build.toJSON(), cfg: CFG, lr, hof };
     saveJSON(ckPath, ckpt);
-    if (iter % 25 === 0) saveJSON(path.join(SNAPS, `iter-${iter}.json`), { iter, pi: ckpt.pi });
+    if (iter % 25 === 0) saveJSON(path.join(SNAPS, `iter-${iter}.json`), { iter, pi: ckpt.pi, build: ckpt.build });
     const winRate = Object.fromEntries(Object.entries(byLabel).map(([k, s]) => [k, +(s.win / s.n).toFixed(3)]));
     const games = Object.fromEntries(Object.entries(byLabel).map(([k, s]) => [k, s.n]));
     const line = { iter, at: new Date().toISOString(), decisions: N, episodes: eps, winRate, games, meanReward: +(retSum / Math.max(1, eps)).toFixed(4),
