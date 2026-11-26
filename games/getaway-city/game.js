@@ -2909,11 +2909,9 @@
       const vx = mx / Math.max(1, m) * sp, vy = my / Math.max(1, m) * sp;
       A.a = Math.atan2(my, mx);
       A.walk += dt * (c.boost ? 14 : 9);
-      const o = { x: A.px, y: A.py, vx, vy };
       if (!areaSolid(A.px + vx * dt, A.py, 9)) A.px += vx * dt;
       if (!areaSolid(A.px, A.py + vy * dt, 9)) A.py += vy * dt;
       A.noise += (c.boost ? 22 : 1.5) * dt;
-      void o;
     }
     A.noise = Math.max(0, A.noise - (m > 0 ? 1 : 6) * dt);
     // Out the front door.
@@ -2953,7 +2951,6 @@
       sfx.bad();
     }
     if (A.owner && A.owner.awake && !A.called) { A.callT -= dt; if (A.callT <= 0) A.called = true; }
-    // Shoplifting where the clerk can see you.
     // Hiding indoors: any wanted stars fade slowly while you're out of sight.
     if (stars > 0 && !A.called) {
       evadeT += dt * 0.6;
@@ -3019,16 +3016,17 @@
       Gfx.text(g, '🔢', A.keypad.x, A.keypad.y - 26, { size: 14, stroke: null });
     }
     if (A.owner) {
-      drawPersonAt(g, A.owner.x, A.owner.y, A.owner.awake ? Math.sin(time * 6) : 0, '#ffccbc', A.owner.awake);
+      drawPerson(A.owner.x, A.owner.y, A.owner.awake ? Math.sin(time * 6) : 0, '#ffccbc', '#ffe0bd', 0, false);
       if (!A.owner.awake) Gfx.text(g, 'z Z', A.owner.x + 18, A.owner.y - 22 - Math.sin(time * 2) * 4, { size: 14, color: '#fff' });
       else Gfx.text(g, '📞 !', A.owner.x, A.owner.y - 28, { size: 16, color: '#ff5252' });
     }
     if (A.clerk) {
-      drawPersonAt(g, A.clerk.x, A.clerk.y, Math.PI / 2, '#4db6ac', false);
+      drawPerson(A.clerk.x, A.clerk.y, Math.PI / 2, '#4db6ac', '#ffe0bd', 0, false);
       if (A.called) Gfx.text(g, '😱', A.clerk.x, A.clerk.y - 26, { size: 16, stroke: null });
     }
     // You (with your gun out if you have one).
-    drawPersonAt(g, A.px, A.py, A.a, '#7c4dff', false, A.walk);
+    drawPerson(A.px, A.py, A.a, '#7c4dff', '#ffe0bd', A.walk, false);
+    if (s.gun) drawGunInHand(A.px, A.py, A.a);
     // Grab ring.
     if (A.grab && A.grabT > 0) {
       const need = A.grab === A.keypad ? 2.2 : LOOT[A.grab.id].grab;
@@ -3084,15 +3082,6 @@
     }
   }
 
-  // drawPerson draws into the shared ctx; this does the same into any context.
-  function drawPersonAt(g, x, y, a, color, alarm, step = 0) {
-    const keep = ctx;
-    ctx = g;
-    drawPerson(x, y, a, color, '#ffe0bd', step, false);
-    if (g === keep && s.gun && color === '#7c4dff') drawGunInHand(x, y, a);
-    ctx = keep;
-    void alarm;
-  }
   function drawGunInHand(x, y, a) {
     ctx.save(); ctx.translate(x, y); ctx.rotate(a);
     ctx.fillStyle = '#212121';
