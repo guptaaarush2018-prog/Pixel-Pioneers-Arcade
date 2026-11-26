@@ -1,7 +1,10 @@
 /* Getaway City: an open-world city, in 3D with a chase camera or top-down (Classic view). Walk or take any car, run heists and escape the
    police, drive taxi fares and pizza runs, race checkpoints, hit stunt ramps and hunt hidden
    packages. Cash buys faster cars and perks. Progress saves; the score is lifetime earnings.
-   Nobody gets hurt: there are no weapons, and pedestrians always dive out of the way. */
+   Walk into front doors to burgle houses and hold up shops (each is its own area: the city pauses
+   while you're inside), ride the subway, run courier, tow and car-boosting jobs, and follow the
+   seven-chapter story from Vinnie's Diner. Guns only stop cars: nobody gets hurt, and pedestrians
+   always dive out of the way. Public lobbies put up to 8 players in the same city. */
 (() => {
   const ID = 'getaway-city';
   const W = 960, H = 540;
@@ -258,6 +261,62 @@
   const raceLen = RACE.reduce((t, p, k) => t + dist(p, RACE[(k + 1) % RACE.length]), 0);
   const RACE_MEDALS = [raceLen / 360, raceLen / 300, raceLen / 240];      // gold, silver, bronze seconds
 
+  // ---------- More places to go ----------
+  // Added after the original city was laid out, without touching its random stream, so the
+  // streets, packages and ramps stay exactly where they were (and old saves stay valid).
+  const NEW_LANDMARKS = [
+    ['6,8', { kind: 'guns', name: 'Bullseye Guns', color: '#8d6e63', icon: '🔫' }],
+    ['10,13', { kind: 'pawn', name: 'Lucky Pawn', color: '#ab47bc', icon: '💰' }],
+    ['3,9', { kind: 'courier', name: 'Swift Parcel', color: '#8bc34a', icon: '📦' }],
+    ['12,5', { kind: 'tow', name: 'Hook & Haul Towing', color: '#ff9800', icon: '🛻' }],
+    ['14,2', { kind: 'docks', name: 'Export Docks', color: '#29b6f6', icon: '🚢' }],
+    ['7,7', { kind: 'story', name: "Vinnie's Diner", color: '#ffca28', icon: '🍝' }],
+    ['12,8', { kind: 'herald', name: 'City Herald', color: '#eceff1', icon: '📰' }],
+    ['2,14', { kind: 'metro', name: 'Southside Station', color: '#ec407a', icon: '🚇' }],
+    ['14,10', { kind: 'metro', name: 'Eastgate Station', color: '#ec407a', icon: '🚇' }],
+    ['6,0', { kind: 'metro', name: 'Northpoint Station', color: '#ec407a', icon: '🚇' }],
+    ['10,6', { kind: 'metro', name: 'Central Station', color: '#ec407a', icon: '🚇' }],
+    ['0,9', { kind: 'metro', name: 'Westside Station', color: '#ec407a', icon: '🚇' }],
+  ];
+  const NEW_COLORS = { guns: '#5d4037', pawn: '#6a1b9a', courier: '#558b2f', tow: '#e65100', docks: '#607d8b', story: '#c62828', herald: '#455a64', metro: '#ad1457' };
+  for (const [key, land] of NEW_LANDMARKS) {
+    const [bx, by] = key.split(',').map(Number);
+    let blk = blocks[bx][by];
+    // Something there already: take the nearest plain city block instead.
+    if (blk.land || blk.kind !== 'city') blk = allBlocks.filter(b => !b.land && b.kind === 'city').sort((a, b) => Math.hypot(a.bx - bx, a.by - by) - Math.hypot(b.bx - bx, b.by - by))[0];
+    const IN = 26;
+    blk.land = land;
+    blk.buildings = [makeBuilding(blk.x1 + IN, blk.y1 + IN, blk.x2 - IN, blk.y2 - 150, land.kind === 'metro' ? 34 : land.kind === 'herald' ? 120 : 56, NEW_COLORS[land.kind], land.kind === 'docks' ? 'warehouse' : 'flat')];
+    blk.trees = [];
+    blk.forecourt = true;
+    markers.push({ ...land, x: (blk.x1 + blk.x2) / 2, y: blk.y2 - 60, blk });
+  }
+  // A package that ended up inside a new building moves out to its forecourt.
+  for (const p of packages) if (inBuilding(p.x, p.y, 4)) p.y = blockAt(p.x, p.y).y2 - 14;
+  const stations = markers.filter(m => m.kind === 'metro');
+
+  // Doors: every suburb house can be burgled, and some midtown shops can be held up. Walking into
+  // a door takes you inside (a separate area: the city stops while you're in there).
+  const SHOP_NAMES = ['Quik Stop', 'Snack Shack', 'Gadget Hut', 'Donut Den', 'Corner Deli', 'Gas & Go', 'Pop Shop', 'Mini Mart'];
+  const doors = [];
+  {
+    const drng = Gfx.rng(20261125);      // a stream of its own, so the city's stays untouched
+    for (const blk of allBlocks) {
+      if (blk.land) continue;
+      for (const b of blk.buildings) {
+        const x = (b.x1 + b.x2) / 2, y = b.y2 + 7;
+        if (inBuilding(x, y, 4)) continue;
+        if (b.style === 'house') doors.push({ id: doors.length, kind: 'house', x, y, name: 'House' });
+        else if ((b.style === 'flat' || b.style === 'garden') && blk.district === 'midtown' && b.y2 > blk.y2 - 40 && drng() < 0.3) {
+          doors.push({ id: doors.length, kind: 'shop', x, y, name: SHOP_NAMES[Math.floor(drng() * SHOP_NAMES.length)] });
+        }
+      }
+    }
+  }
+  // Detective Kane's house, for the story: the one farthest from the hideout.
+  const kaneDoor = doors.filter(d => d.kind === 'house').sort((a, b) => dist(b, hideout) - dist(a, hideout))[0];
+  if (kaneDoor) { kaneDoor.kane = true; kaneDoor.name = "Kane's house"; }
+
   // ---------- Cars ----------
 
   //   accel px/s², max px/s, grip (sideways friction), turn rad/s, hp, mass, size
@@ -271,6 +330,7 @@
     beast: { name: 'Bulldog 4x4', price: 15000, accel: 420, max: 420, grip: 9, turn: 2.4, hp: 320, mass: 2.6, len: 50, wid: 28, colors: ['#33691e', '#4e342e', '#263238'] },
     super: { name: 'Zenith Hyper', price: 30000, accel: 680, max: 590, grip: 9, turn: 3.1, hp: 120, mass: 1.1, len: 46, wid: 23, colors: ['#76ff03', '#ffffff', '#ff1744', '#651fff'] },
     police: { name: 'Interceptor', price: 0, accel: 480, max: 460, grip: 8.5, turn: 2.9, hp: 180, mass: 1.5, len: 46, wid: 23, colors: ['#eceff1'], hidden: true },
+    tow: { name: 'Tow Truck', price: 0, accel: 300, max: 360, grip: 8, turn: 2.3, hp: 260, mass: 2.4, len: 54, wid: 25, colors: ['#ff9800'], hidden: true },
     riot: { name: 'Riot Van', price: 0, accel: 380, max: 410, grip: 8, turn: 2.2, hp: 400, mass: 2.8, len: 52, wid: 26, colors: ['#263238'], hidden: true },
   };
   const TRAFFIC = ['compact', 'compact', 'sedan', 'sedan', 'van', 'taxi', 'muscle', 'sports'];
@@ -358,7 +418,8 @@
   let s;
   function fresh() {
     return { cash: 200, lifetime: 0, owned: ['compact'], perks: { engine: 0, armor: 0, nitro: 0, scanner: 0 }, heists: 0, heistDone: [0, 0, 0, 0, 0, 0], heistNext: [0, 0, 0, 0, 0, 0], raceMedal: 3,
-      fares: 0, bestFares: 0, deliveries: 0, raceBest: 0, medal: 0, pkgs: [], stunts: [], intro: false, maxStars: 0, map: N };
+      fares: 0, bestFares: 0, deliveries: 0, raceBest: 0, medal: 0, pkgs: [], stunts: [], intro: false, maxStars: 0, map: N,
+      bag: [], guns: {}, gun: null, story: 0, robbed: {}, items: [], holdups: 0, burgles: 0, copsDown: 0, boosts: 0, tows: 0, couriers: 0 };
   }
   function loadSave() {
     const raw = Arcade.load(SAVE_KEY, null);
@@ -825,6 +886,8 @@
       for (let k = 0; k < 4; k++) { const p = randomSidewalk(350, 1000, from); drops.push(p); from = p; }
       mission = { kind: 'pizza', needsCar: true, drops, done: 0, timer: 100, label: 'Pizza run', earned: 0 };
       say('Pizza run!', '4 deliveries in 100 seconds', 2.4, '#ffab91');
+    } else if (JOB_INFO[m.kind]) {
+      startJob(m);
     } else if (m.kind === 'race') {
       mission = { kind: 'race', needsCar: true, cp: 1, t: 0, label: 'Street race', countdown: 3 };
       say('Street race', `Gold ${RACE_MEDALS[0].toFixed(0)} s · Silver ${RACE_MEDALS[1].toFixed(0)} s · Bronze ${RACE_MEDALS[2].toFixed(0)} s`, 3, '#ffffff');
@@ -854,8 +917,10 @@
     const m = mission;
     if (!m) return;
     if (m.kind === 'duel') return updateDuel(dt);
+    if (m.kind === 'story') return updateStory();
     const pc = player.car, here = pc || player, slow = !pc || speedOf(pc) < 70;
     if (m.needsCar && !pc) return failMission('You need a car');
+    if (m.kind === 'courier' || m.kind === 'tow' || m.kind === 'boost') return updateJob(dt);
     if (m.kind === 'heist') {
       if (m.stage === 'crack') {
         const d = Math.hypot(here.x - m.target.x, here.y - m.target.y);
@@ -974,7 +1039,8 @@
     if (m.kind === 'pizza') return { ...m.drops[m.done], color: '#ff7043' };
     if (m.kind === 'race') return { ...RACE[m.cp % RACE.length], color: '#ffffff' };
     if (m.kind === 'duel') return { ...m.dest, color: '#69f0ae' };
-    return null;
+    if (m.kind === 'story') return storyTarget();
+    return jobTarget();
   }
   function objectiveText() {
     const m = mission;
@@ -983,6 +1049,8 @@
     if (m.kind === 'taxi') return `${m.stage === 'pickup' ? 'Pick up the passenger' : 'Drop them off'} · ${Math.ceil(m.timer)} s · fares ${m.fares}`;
     if (m.kind === 'pizza') return `Deliver pizza ${m.done + 1}/${m.drops.length} · ${Math.ceil(m.timer)} s`;
     if (m.kind === 'race') return m.countdown > 0 ? `Get ready… ${Math.ceil(m.countdown)}` : `Checkpoint ${m.cp}/${RACE.length} · ${m.t.toFixed(1)} s`;
+    if (m.kind === 'story') return storyText();
+    if (m.kind === 'courier' || m.kind === 'tow' || m.kind === 'boost') return jobText();
     if (m.kind === 'duel') {
       if (m.countdown > 0) return `Race vs ${live.them} · ${Math.ceil(m.countdown)}…`;
       const mine = Math.hypot((player.car || player).x - m.dest.x, (player.car || player).y - m.dest.y), theirs = Math.hypot(friend.x - m.dest.x, friend.y - m.dest.y);
@@ -1071,8 +1139,9 @@
       taxi: () => ({ title: '🚕 Taxi shift', html: '<p>Pick up passengers and drive them across town before the meter runs out. Fast, careful driving earns tips. The shift goes on until you miss one.</p>', ok: true }),
       pizza: () => ({ title: '🍕 Pizza run', html: '<p>Four hot pizzas, 100 seconds. Every second left over is a bonus.</p>', ok: true }),
       race: () => ({ title: '🏁 Street race', html: `<p>${RACE.length} checkpoints around the city. Beat ${RACE_MEDALS[0].toFixed(0)} s for gold.${s.raceBest ? ` Your best: ${s.raceBest.toFixed(2)} s.` : ''}</p>`, ok: true }),
+      ...JOB_INFO,
     }[m.kind]();
-    const needCar = m.kind !== 'heist' && !player.car;
+    const needCar = m.kind !== 'heist' && !info.noCar && !player.car;
     ui.show({
       title: info.title,
       html: info.html + (needCar ? '<p style="color:#ff8a80">You need a car for this one.</p>' : '') + (mission ? '<p style="color:#ff8a80">Finish your current job first.</p>' : ''),
@@ -1086,6 +1155,10 @@
     s.cash -= fine;
     if (player.car) { player.car.role = 'parked'; player.car = null; }
     const lostLoot = mission && mission.kind === 'heist' && mission.stage === 'escape';
+    const lostBag = (s.bag || []).length > 0;
+    s.bag = [];
+    if (mission && mission.kind === 'story') for (const st of mission.steps) if (st.carRef) st.carRef.keep = false;
+    if (mission && (mission.kind === 'boost' || mission.kind === 'tow')) { if (mission.target) mission.target.keep = false; if (mission.truck) mission.truck.keep = false; }
     if (mission) { mission = null; }
     clearStars(null);
     for (let i = cars.length - 1; i >= 0; i--) if (cars[i].role === 'leaving') cars.splice(i, 1);
@@ -1093,7 +1166,7 @@
     player.y = policeHQ.y + 50;
     sfx.bad();
     persist();
-    ui.show({ title: '🚔 Busted!', html: `<p>The police caught you. You paid a ${money(fine)} fine${lostLoot ? ' and the loot was taken' : ''}.</p>`, button: 'Back to the streets', onAction: () => ui.hide() });
+    ui.show({ title: '🚔 Busted!', html: `<p>The police caught you. You paid a ${money(fine)} fine${lostLoot ? ' and the loot was taken' : ''}${lostBag ? '. They emptied your bag, too' : ''}.</p>`, button: 'Back to the streets', onAction: () => ui.hide() });
   }
 
   // ---------- Input ----------
@@ -1103,6 +1176,9 @@
     if (e.target.tagName === 'INPUT') return;
     keys.add(e.code);
     if (!overlayEl.hidden) return;
+    if (e.code === 'Space') e.preventDefault();
+    if (area) { if (e.code === 'KeyP' || e.code === 'Escape') pause(); return; }
+    if (e.code === 'KeyQ') switchGun();
     if (e.code === 'KeyE' || e.code === 'KeyF' || e.code === 'Enter') {
       if (player.car) exitCar(false); else enterNearest();
     }
@@ -1321,6 +1397,7 @@
       if (c === player.car) continue;
       const d = Math.hypot(c.x - px, c.y - py);
       const keepOwned = c.role === 'parked' && s.owned.includes(c.type) && d < 2600;
+      if (c.keep) continue;
       if ((d > (view3d ? 1700 : 1500) && !keepOwned) || (c.role === 'leaving' && d > 700) || (c.role === 'wreck' && d > 1000)) cars.splice(i, 1);
     }
     const traffic = cars.filter(c => c.role === 'traffic').length;
@@ -1415,6 +1492,13 @@
         persist();
       }
     }
+    // Front doors (on foot): in you go.
+    doorCool = Math.max(0, doorCool - 1 / 60);
+    if (!player.car && doorCool <= 0) {
+      // The door you just came out of (or were turned away from) waits until you've walked off.
+      if (lastDoor && Math.hypot(lastDoor.x - player.x, lastDoor.y - player.y) > 40) lastDoor = null;
+      for (const d of doors) if (d !== lastDoor && Math.abs(d.x - player.x) < 14 && Math.abs(d.y - player.y) < 12) { lastDoor = d; enterArea(d); doorCool = 1; break; }
+    }
     // Markers.
     let on = null;
     for (const m of markers) if (Math.hypot(m.x - here.x, m.y - here.y) < 40 && (!player.car || speedOf(player.car) < 120)) on = m;
@@ -1435,17 +1519,31 @@
         } else if (stars > 0) say('Bring a car to respray', '', 1.6, '#80deea');
         else if (player.car && player.car.hp < player.car.T.hp) { player.car.hp = player.car.T.hp; say('Car fixed up', 'Free when you are not wanted', 1.6, '#80deea'); }
       } else if (on.kind === 'dealer') { if (player.car) player.car.vx = player.car.vy = 0; dealerPanel(); }
-      else if (on.kind === 'police') { /* nothing to do here */ }
+      else if (on.kind === 'police' || on.kind === 'herald') { /* nothing to do here */ }
+      else if (on.kind === 'guns') { if (player.car) player.car.vx = player.car.vy = 0; gunPanel(); }
+      else if (on.kind === 'pawn') { if (player.car) player.car.vx = player.car.vy = 0; pawnPanel(); }
+      else if (on.kind === 'metro') { if (player.car) player.car.vx = player.car.vy = 0; metroPanel(on); }
+      else if (on.kind === 'story') { if (!mission) { if (player.car) player.car.vx = player.car.vy = 0; storyPanel(); } }
       else if (!mission || mission.kind === 'heist') { if (player.car) player.car.vx = player.car.vy = 0; if (!(mission && mission.target === on)) missionPanel(on); }
     }
     inMarker = on;
   }
 
-  let saveT = 0;
+  let saveT = 0, doorCool = 0, lastDoor = null;
   function update(dt) {
     time += dt;
     dayT = (dayT + dt / 480) % 1;
+    if (area) {
+      // Inside: the city waits. Only you, the room and the people online move.
+      updateArea(dt);
+      updateOnline(dt);
+      if (mission && mission.kind === 'story') updateStory();
+      pops.update(dt);
+      if (banner) { banner.t -= dt; if (banner.t <= 0) banner = null; }
+      return;
+    }
     updatePlayer(dt);
+    updateGun(dt);
     updateOnline(dt);
     updateCars(dt);
     updatePeds(dt);
@@ -1667,6 +1765,16 @@
     ctx.restore();
   }
 
+  // A front door you can walk into: a small mat and an icon, brighter when it's on a story job.
+  function drawDoor(d) {
+    const st = storyStep(), hot = st && st.t === 'burgle' && st.door === d, closed = ((s.robbed || {})[(d.kind === 'shop' ? 's' : 'h') + d.id] || 0) > Date.now();
+    ctx.fillStyle = closed ? 'rgba(80,80,80,0.5)' : hot ? '#ffd54f' : d.kind === 'shop' ? '#4fc3f7' : '#ffb74d';
+    ctx.globalAlpha = hot ? 0.6 + 0.4 * Math.sin(time * 6) : 0.85;
+    Gfx.roundRect(ctx, d.x - 11, d.y - 6, 22, 12, 3); ctx.fill();
+    ctx.globalAlpha = 1;
+    Gfx.text(ctx, d.kind === 'shop' ? '🏪' : d.kane ? '🕵️' : '🚪', d.x, d.y - 14, { size: 12, stroke: null });
+  }
+
   function drawMarker(m) {
     const pulse = 0.5 + 0.5 * Math.sin(time * 4);
     const active = mission && mission.kind === 'heist' && mission.target === m;
@@ -1733,13 +1841,15 @@
       });
     }
     for (const m of markers) if (vis(m.x, m.y)) drawMarker(m);
+    for (const d of doors) if (vis(d.x, d.y, 20) && Math.hypot(d.x - player.x, d.y - player.y) < 500) drawDoor(d);
     // People, cars and trees.
     for (const p of peds) if (vis(p.x, p.y)) drawPerson(p.x, p.y, p.a || 0, p.color, p.skin, p.step, p.dive > 0);
-    if (!player.car) drawPerson(player.x, player.y, player.a, '#7c4dff', '#ffe0bd', player.walk, false);
+    if (!player.car) { drawPerson(player.x, player.y, player.a, '#7c4dff', '#ffe0bd', player.walk, false); if (s.gun) drawGunInHand(player.x, player.y, player.a); }
     const air = [];
     for (const c of cars) { if (!vis(c.x, c.y)) continue; if (c.z > 2) air.push(c); else drawCar(c); }
-    if (online() && vis(friend.x, friend.y)) drawFriend2d();
+    for (const f of others()) if (vis(f.x, f.y)) drawPuppet2d(f);
     fx.draw(ctx);
+    drawTracers2d();
     // Buildings and trees, far ones first so near ones overlap them.
     const cxw = x0 + vw / 2, cyw = y0 + vh / 2;
     const bs = [];
@@ -1847,7 +1957,7 @@
     }
     if (big) for (const p of packages) if (!s.pkgs.includes(p.id) && s.pkgs.length >= 10) dot(p.x, p.y, '#a1887f', 2.5);
     for (const c of cars) if (c.role === 'cop') dot(c.x, c.y, Math.floor(time * 6) % 2 ? '#ff1744' : '#2979ff', big ? 4 : 2.5);
-    if (online()) dot(friend.x, friend.y, FRIEND_COLOR, big ? 6 : 3.5);
+    for (const f of others()) dot(f.x, f.y, f.tagColor, big ? 6 : 3.5);
     const tg = missionTarget();
     if (tg) dot(tg.x, tg.y, tg.color, big ? 7 : 4);
     if (mission && mission.kind === 'race') RACE.forEach((p, i) => { if (i >= mission.cp % RACE.length) dot(p.x, p.y, 'rgba(255,255,255,0.5)', 2); });
@@ -1899,6 +2009,10 @@
       let near = null, bd = 46;
       for (const c of cars) { const d = Math.hypot(c.x - player.x, c.y - player.y); if (d < bd && !c.broken) { bd = d; near = c; } }
       if (near) Gfx.text(ctx, `Press E to take the ${near.T.name}`, W / 2, H - 40, { size: 15 });
+    }
+    if ((s.bag || []).length || s.gun) {
+      Gfx.card(ctx, 12, 58, 190, 26);
+      Gfx.text(ctx, `${(s.bag || []).length ? `🎒 ${money(bagValue())}` : ''}${(s.bag || []).length && s.gun ? ' · ' : ''}${s.gun ? `🔫 ${GUNS[s.gun].name} ${s.guns[s.gun]}` : ''}`, 22, 71, { size: 12, align: 'left', stroke: null, color: '#ffe0b2' });
     }
     if (mission && mission.kind === 'heist' && mission.stage === 'crack' && mission.crack > 0) Gfx.bar(ctx, W / 2 - 90, 50, 180, 8, mission.crack / mission.h.crack, '#ffd54f');
     if (view3d) { if (!mapOpen) drawRadar(); drawArrows3d(); }
@@ -2507,6 +2621,11 @@
         }
       }
     }
+    for (const d of doors) {
+      if (!near(d.x, d.y, 420)) continue;
+      const closed = ((s.robbed || {})[(d.kind === 'shop' ? 's' : 'h') + d.id] || 0) > Date.now();
+      flatRing(rings, d.x, d.y, CURB + 0.45, 7, 11, hex(closed ? '#616161' : d.kind === 'shop' ? '#4fc3f7' : '#ffb74d'));
+    }
     if (tg) {
       const g = groundAt(tg.x, tg.y), col = hex(tg.color);
       flatRing(rings, tg.x, tg.y, g + 0.5, 36, 40, col);
@@ -2584,6 +2703,13 @@
       Gfx.text(ctx, f.str, q.x, q.y, { size: clamp(f.size * 220 / q.w, 11, f.size * 1.4), color: f.color });
     }
     ctx.globalAlpha = 1;
+    for (const d of doors) {
+      const dd = Math.hypot(d.x - player.x, d.y - player.y);
+      if (dd > 260) continue;
+      const q = project(d.x, CURB + 20, d.y);
+      if (q) Gfx.text(ctx, d.kind === 'shop' ? `🏪 ${d.name}` : d.kane ? "🕵️ Kane's house" : '🚪', q.x, q.y, { size: clamp(16 * 200 / q.w, 10, 16), color: '#fff', width: 3 });
+    }
+    drawTracers3d();
     friendTag3d();
     if (view3.back) Gfx.text(ctx, 'REAR VIEW', W / 2, H - 24, { size: 14, color: '#80deea' });
   }
@@ -2646,7 +2772,7 @@
     for (const m of markers) dot(m.x, m.y, m.color, 3);
     if (mission && mission.kind === 'race') RACE.forEach((p, i) => { if (i >= mission.cp % RACE.length) dot(p.x, p.y, 'rgba(255,255,255,0.55)', 2); });
     for (const c of cars) if (c.role === 'cop') dot(c.x, c.y, Math.floor(time * 6) % 2 ? '#ff1744' : '#2979ff', 3, true);
-    if (online()) dot(friend.x, friend.y, FRIEND_COLOR, 4.5, true);
+    for (const f of others()) dot(f.x, f.y, f.tagColor, 4.5, true);
     const tg = missionTarget();
     if (tg) { ctx.strokeStyle = '#000'; dot(tg.x, tg.y, tg.color, 5, true); }
     ctx.restore();
@@ -2665,6 +2791,697 @@
     ctx.stroke(); ctx.fill();
     ctx.restore();
   }
+
+  // ---------- Inside: houses and shops ----------
+  // Walking into a door loads a separate area (the city pauses until you come out). Houses are
+  // burglaries: grab what you can carry before anyone notices. By night the owner is asleep and
+  // noise wakes them; by day there's an alarm keypad by the door to beat. Shops can be held up
+  // with a gun. What you steal goes in your bag, and the Lucky Pawn buys it.
+
+  const IW = 760, IH = 480;               // interior size
+  const BAG_SLOTS = 6;
+  const LOOT = {
+    tv: { icon: '📺', name: 'TV', value: 350, grab: 2, slots: 2, noise: 14 },
+    laptop: { icon: '💻', name: 'Laptop', value: 280, grab: 1, slots: 1, noise: 5 },
+    jewels: { icon: '💍', name: 'Jewelry', value: 450, grab: 0.8, slots: 1, noise: 3 },
+    console: { icon: '🎮', name: 'Game console', value: 220, grab: 1, slots: 1, noise: 5 },
+    painting: { icon: '🖼️', name: 'Painting', value: 600, grab: 1.6, slots: 2, noise: 9 },
+    guitar: { icon: '🎸', name: 'Guitar', value: 300, grab: 1, slots: 2, noise: 10 },
+    watch: { icon: '⌚', name: 'Watch', value: 380, grab: 0.6, slots: 1, noise: 2 },
+    cash: { icon: '💵', name: 'Cash stash', cash: [80, 400], grab: 0.6, slots: 0, noise: 2 },
+    safe: { icon: '🔐', name: 'Wall safe', cash: [900, 2400], grab: 7, slots: 0, noise: 30 },
+    snacks: { icon: '🍫', name: 'Snacks', cash: [10, 30], grab: 0.5, slots: 0, noise: 0 },
+    register: { icon: '🧾', name: 'Cash register', cash: [300, 1100], grab: 3.5, slots: 0, noise: 0, holdup: true },
+    ledger: { icon: '📒', name: "The councilman's ledger", grab: 1.2, slots: 0, noise: 3, story: true },
+    file: { icon: '🗂️', name: "Kane's evidence file", grab: 2, slots: 0, noise: 6, story: true },
+  };
+  const bagValue = () => (s.bag || []).reduce((t, id) => t + (LOOT[id]?.value || 0), 0);
+  const bagUsed = () => (s.bag || []).reduce((t, id) => t + (LOOT[id]?.slots || 0), 0);
+  const wall = (x1, y1, x2, y2) => ({ x1, y1, x2, y2, wall: true });
+  const thing = (x1, y1, x2, y2, color, label) => ({ x1, y1, x2, y2, color, label });
+
+  // Two house plans, either way round; what's lying about depends on the house.
+  function houseArea(door) {
+    const r = Gfx.rng(5000 + door.id), flip = r() < 0.5, plan = r() < 0.5 ? 0 : 1, T = 14;
+    let solids = [wall(0, 0, IW, T), wall(0, 0, T, IH), wall(IW - T, 0, IW, IH), wall(0, IH - T, IW / 2 - 44, IH), wall(IW / 2 + 44, IH - T, IW, IH)];
+    let spots;
+    if (plan === 0) {
+      solids.push(wall(300, 0, 300 + T, 170), wall(300, 250, 300 + T, IH), wall(300, 230, 470, 230 + T), wall(550, 230, IW, 230 + T));
+      solids.push(thing(40, 40, 200, 90, '#8d6e63', 'Sofa'), thing(90, 150, 180, 200, '#a1887f', 'Table'), thing(340, 30, 720, 70, '#b0bec5', 'Kitchen'), thing(560, 300, 720, 430, '#7986cb', 'Bed'), thing(330, 262, 410, 300, '#6d4c41', 'Wardrobe'));
+      spots = [[60, 300, ['tv', 'console', 'guitar']], [230, 60, ['painting', 'tv']], [140, 400, ['console', 'laptop', 'guitar']], [400, 120, ['cash', 'laptop']], [690, 140, ['cash', 'watch']], [480, 300, ['jewels', 'watch']], [690, 260, ['safe', 'painting', 'jewels']], [360, 330, ['laptop', 'cash']]];
+    } else {
+      solids.push(wall(0, 210, 250, 210 + T), wall(330, 210, IW, 210 + T), wall(380, 0, 380 + T, 120), wall(380, 160, 380 + T, 210));
+      solids.push(thing(40, 300, 220, 350, '#8d6e63', 'Sofa'), thing(560, 300, 700, 360, '#a1887f', 'Dining table'), thing(40, 30, 180, 150, '#7986cb', 'Bed'), thing(430, 30, 720, 70, '#b0bec5', 'Kitchen'), thing(250, 30, 340, 70, '#6d4c41', 'Desk'));
+      spots = [[290, 110, ['laptop', 'watch']], [60, 180, ['jewels', 'cash']], [330, 170, ['safe', 'painting']], [120, 410, ['tv', 'guitar', 'console']], [400, 420, ['painting', 'tv']], [700, 420, ['cash', 'console']], [600, 120, ['cash', 'laptop']], [240, 300, ['console', 'guitar']]];
+    }
+    const fx_ = x => (flip ? IW - x : x);
+    if (flip) solids = solids.map(b => ({ ...b, x1: IW - b.x2, x2: IW - b.x1 }));
+    const loot = [];
+    for (const [x, y, kinds] of spots) if (r() < 0.75) loot.push({ x: fx_(x), y, id: kinds[Math.floor(r() * kinds.length)] });
+    const bed = solids.find(b => b.label === 'Bed');
+    // The story's special items wait in the bedroom.
+    const st = storyStep();
+    if (st && st.t === 'burgle' && st.door === door) loot.push({ x: (bed.x1 + bed.x2) / 2, y: bed.y2 + 26, id: st.item });
+    const night = darkness() > 0.25 || door.kane;
+    return { kind: 'house', door, w: IW, h: IH, solids, loot, exit: { x: IW / 2, y: IH - 24 }, floor: ['#d7ccc8', '#bcaaa4'][plan],
+      owner: night ? { x: (bed.x1 + bed.x2) / 2, y: (bed.y1 + bed.y2) / 2, awake: false } : null,
+      keypad: night ? null : { x: IW / 2 + 70, y: IH - 40, left: 7, done: false } };
+  }
+
+  function shopArea(door) {
+    const r = Gfx.rng(9000 + door.id), T = 14;
+    const solids = [wall(0, 0, IW, T), wall(0, 0, T, IH), wall(IW - T, 0, IW, IH), wall(0, IH - T, IW / 2 - 44, IH), wall(IW / 2 + 44, IH - T, IW, IH),
+      thing(250, 60, 510, 100, '#5d4037', 'Counter'), thing(60, 180, 90, 380, '#90a4ae', 'Shelf'), thing(200, 180, 230, 380, '#90a4ae', 'Shelf'), thing(530, 180, 560, 380, '#90a4ae', 'Shelf'), thing(670, 180, 700, 380, '#90a4ae', 'Shelf'), thing(620, 30, 740, 70, '#4fc3f7', 'Fridges')];
+    const loot = [{ x: 380, y: 124, id: 'register' }];
+    for (const sx of [75, 215, 545, 685]) for (const sy of [200, 280, 360]) if (r() < 0.45) loot.push({ x: sx + (sx < 380 ? 30 : -30), y: sy, id: 'snacks' });
+    return { kind: 'shop', door, w: IW, h: IH, solids, loot, exit: { x: IW / 2, y: IH - 24 }, floor: '#eceff1', clerk: { x: 380, y: 40 } };
+  }
+
+  let area = null;
+  function enterArea(door) {
+    const key = (door.kind === 'shop' ? 's' : 'h') + door.id, until = (s.robbed || {})[key] || 0;
+    const st = storyStep(), storyHere = st && st.t === 'burgle' && st.door === door;
+    if (until > Date.now() && !storyHere) {
+      const left = Math.ceil((until - Date.now()) / 60000);
+      return say(door.kind === 'shop' ? 'Closed after your last visit' : 'Already cleaned out', `Try again in ${left} min`, 2, '#ff8a80');
+    }
+    if (player.car) return;
+    area = door.kind === 'shop' ? shopArea(door) : houseArea(door);
+    Object.assign(area, { px: area.exit.x, py: area.exit.y - 20, a: -Math.PI / 2, walk: 0, noise: 0, grab: null, grabT: 0, took: 0, called: false, callT: 0, t: 0 });
+    sfx.door();
+    if (area.kind === 'shop') say(door.name, s.gun ? 'Hold E at the register to rob it' : 'Grab a snack, or come back with a gun', 2.4, '#fff59d');
+    else if (area.owner) say('Someone\'s asleep in here', 'Walk, don\'t run (Shift is loud). Hold E to grab things.', 2.8, '#b39ddb');
+    else say('House alarm!', 'Hold E at the keypad by the door before it goes off', 2.6, '#ff8a80');
+  }
+
+  function leaveArea() {
+    const A = area, d = A.door;
+    area = null;
+    player.x = d.x; player.y = d.y + 16; player.a = Math.PI / 2; player.vx = player.vy = 0;
+    cam.x = player.x - W / 2 / cam.z; cam.y = player.y - H / 2 / cam.z;
+    cam3.ready = false;
+    sfx.door();
+    if (A.took) {
+      s.robbed = s.robbed || {};
+      s.robbed[(d.kind === 'shop' ? 's' : 'h') + d.id] = Date.now() + (d.kind === 'shop' ? 8 : 12) * 60000;
+      if (d.kind === 'house') { s.burgles = (s.burgles || 0) + 1; if (s.burgles >= 5) Arcade.flag('getaway-burglar'); }
+    }
+    if (A.called) {
+      addStars(Math.max(stars, A.kind === 'shop' ? 2 : 2), 'Police on the way!');
+      for (let k = 0; k < 2; k++) spawnCop();
+    }
+    persist();
+  }
+
+  function areaSolid(x, y, r) {
+    if (x < r || y < r || x > area.w - r || y > area.h - r) return true;
+    return area.solids.some(b => x > b.x1 - r && x < b.x2 + r && y > b.y1 - r && y < b.y2 + r);
+  }
+
+  function updateArea(dt) {
+    const A = area, c = controls();
+    A.t += dt;
+    // Walking, top-down, whatever the view.
+    let mx = c.x, my = c.y;
+    if (c.stick) { mx = c.stick.x * c.stick.m; my = c.stick.y * c.stick.m; }
+    const m = Math.hypot(mx, my), sp = c.boost ? 190 : 110;
+    if (m > 0) {
+      const vx = mx / Math.max(1, m) * sp, vy = my / Math.max(1, m) * sp;
+      A.a = Math.atan2(my, mx);
+      A.walk += dt * (c.boost ? 14 : 9);
+      const o = { x: A.px, y: A.py, vx, vy };
+      if (!areaSolid(A.px + vx * dt, A.py, 9)) A.px += vx * dt;
+      if (!areaSolid(A.px, A.py + vy * dt, 9)) A.py += vy * dt;
+      A.noise += (c.boost ? 22 : 1.5) * dt;
+      void o;
+    }
+    A.noise = Math.max(0, A.noise - (m > 0 ? 1 : 6) * dt);
+    // Out the front door.
+    if (A.py > A.h - 22 && Math.abs(A.px - A.w / 2) < 44) return leaveArea();
+    // The nearest thing you can grab, or the keypad, held with E.
+    const holding = keys.has('KeyE') || keys.has('KeyF') || touchBrake !== false;
+    let near = null, bd = 40;
+    for (const l of A.loot) { const d = Math.hypot(l.x - A.px, l.y - A.py); if (d < bd) { bd = d; near = l; } }
+    if (A.keypad && !A.keypad.done && Math.hypot(A.keypad.x - A.px, A.keypad.y - A.py) < 40) near = A.keypad;
+    if (near !== A.grab) { A.grab = near; A.grabT = 0; }
+    if (near && holding) {
+      if (near === A.keypad) {
+        A.grabT += dt;
+        if (A.grabT >= 2.2) { near.done = true; A.grab = null; say('Alarm off', 'Now help yourself', 1.6, '#9be37a'); sfx.pickup(); }
+      } else {
+        const L = LOOT[near.id];
+        if (L.holdup && !s.gun) { if (A.grabT === 0) say('The clerk laughs at you', 'You need a gun to rob a shop: try 🔫 Bullseye Guns', 2.4, '#ff8a80'); A.grabT = 0.001; }
+        else if (L.slots && bagUsed() + L.slots > BAG_SLOTS) { if (A.grabT === 0) say('Your bag is full', 'Sell it at the 💰 Lucky Pawn', 2, '#ff8a80'); A.grabT = 0.001; }
+        else {
+          A.grabT += dt;
+          A.noise += L.noise * dt;
+          if (L.holdup && !A.called) { A.called = true; say('"Don\'t shoot! Take it!"', 'The clerk hit the panic button: the police are coming', 2.6, '#ff8a80'); }
+          if (A.grabT >= L.grab) takeLoot(near);
+        }
+      }
+    } else if (A.grab && A.grabT > 0 && !holding) A.grabT = 0;
+    // The day alarm: beat the keypad before it runs out.
+    if (A.keypad && !A.keypad.done && !A.called) {
+      A.keypad.left -= dt;
+      if (A.keypad.left <= 0) { A.called = true; say('ALARM!', 'The police are on their way: grab what you can and go', 2.6, '#ff5252'); sfx.bad(); }
+    }
+    // The night owner: too much noise and they wake up and call it in.
+    if (A.owner && !A.owner.awake && A.noise >= 100) {
+      A.owner.awake = true;
+      A.callT = 10;
+      say('The owner woke up!', 'They\'re calling the police: get out!', 2.6, '#ff5252');
+      sfx.bad();
+    }
+    if (A.owner && A.owner.awake && !A.called) { A.callT -= dt; if (A.callT <= 0) A.called = true; }
+    // Shoplifting where the clerk can see you.
+    // Hiding indoors: any wanted stars fade slowly while you're out of sight.
+    if (stars > 0 && !A.called) {
+      evadeT += dt * 0.6;
+      if (evadeT > 6 + stars * 1.5) { stars--; evadeT = 0; if (stars < 4) heli = null; if (stars === 0) clearStars('They lost you while you hid'); }
+    }
+  }
+
+  function takeLoot(l) {
+    const A = area, L = LOOT[l.id];
+    A.loot = A.loot.filter(x => x !== l);
+    A.grab = null; A.grabT = 0; A.took++;
+    sfx.pickup();
+    if (L.cash) {
+      const n = Math.round(L.cash[0] + Math.random() * (L.cash[1] - L.cash[0]));
+      earn(n, undefined, undefined);
+      pops.add(`${L.icon} +${money(n)}`, player.x, player.y - 40, { color: '#9be37a', size: 18 });
+      floatsIn.push({ text: `${L.icon} +${money(n)}`, x: l.x, y: l.y, t: 1.2 });
+      if (L.holdup) { s.holdups = (s.holdups || 0) + 1; Arcade.flag('getaway-holdup'); }
+    } else if (L.story) {
+      s.items = [...new Set([...(s.items || []), l.id])];
+      floatsIn.push({ text: `${L.icon} Got it!`, x: l.x, y: l.y, t: 1.5 });
+      say(L.name, 'That\'s what you came for', 2, '#ffd54f');
+    } else {
+      s.bag = [...(s.bag || []), l.id];
+      floatsIn.push({ text: `${L.icon} ${L.name} · ${money(L.value)}`, x: l.x, y: l.y, t: 1.2 });
+    }
+  }
+  const floatsIn = [];
+
+  function drawArea() {
+    const A = area, g = ctx;
+    // The whole room fits on screen.
+    const z = Math.min(W / (A.w + 40), H / (A.h + 40)), cx = A.w / 2, cy = A.h / 2;
+    g.fillStyle = '#111318';
+    g.fillRect(0, 0, W, H);
+    g.save();
+    g.translate(W / 2, H / 2); g.scale(z, z); g.translate(-cx, -cy);
+    // Floor.
+    g.fillStyle = A.floor;
+    g.fillRect(0, 0, A.w, A.h);
+    g.strokeStyle = 'rgba(0,0,0,0.06)'; g.lineWidth = 1;
+    for (let x = 0; x < A.w; x += 40) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, A.h); g.stroke(); }
+    for (let y = 0; y < A.h; y += 40) { g.beginPath(); g.moveTo(0, y); g.lineTo(A.w, y); g.stroke(); }
+    // Rug by the door.
+    g.fillStyle = 'rgba(120,60,40,0.35)';
+    g.fillRect(A.w / 2 - 50, A.h - 70, 100, 50);
+    for (const b of A.solids) {
+      if (b.wall) { g.fillStyle = '#3e4451'; g.fillRect(b.x1, b.y1, b.x2 - b.x1, b.y2 - b.y1); continue; }
+      g.fillStyle = 'rgba(0,0,0,0.18)'; g.fillRect(b.x1 + 4, b.y1 + 5, b.x2 - b.x1, b.y2 - b.y1);
+      g.fillStyle = b.color; Gfx.roundRect(g, b.x1, b.y1, b.x2 - b.x1, b.y2 - b.y1, 6); g.fill();
+      Gfx.text(g, b.label, (b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2, { size: 11, color: 'rgba(255,255,255,0.8)', stroke: null });
+    }
+    // Loot glints.
+    for (const l of A.loot) {
+      const L = LOOT[l.id], bob = Math.sin(time * 4 + l.x) * 2;
+      g.fillStyle = L.story ? 'rgba(255,213,79,0.45)' : 'rgba(255,255,255,0.35)';
+      g.beginPath(); g.arc(l.x, l.y, 18 + Math.sin(time * 5) * 2, 0, TAU); g.fill();
+      Gfx.text(g, L.icon, l.x, l.y + bob, { size: 22, stroke: null });
+    }
+    if (A.keypad && !A.keypad.done) {
+      g.fillStyle = A.keypad.left < 3 && Math.floor(time * 6) % 2 ? '#ff1744' : '#263238';
+      Gfx.roundRect(g, A.keypad.x - 10, A.keypad.y - 14, 20, 28, 4); g.fill();
+      Gfx.text(g, '🔢', A.keypad.x, A.keypad.y - 26, { size: 14, stroke: null });
+    }
+    if (A.owner) {
+      drawPersonAt(g, A.owner.x, A.owner.y, A.owner.awake ? Math.sin(time * 6) : 0, '#ffccbc', A.owner.awake);
+      if (!A.owner.awake) Gfx.text(g, 'z Z', A.owner.x + 18, A.owner.y - 22 - Math.sin(time * 2) * 4, { size: 14, color: '#fff' });
+      else Gfx.text(g, '📞 !', A.owner.x, A.owner.y - 28, { size: 16, color: '#ff5252' });
+    }
+    if (A.clerk) {
+      drawPersonAt(g, A.clerk.x, A.clerk.y, Math.PI / 2, '#4db6ac', false);
+      if (A.called) Gfx.text(g, '😱', A.clerk.x, A.clerk.y - 26, { size: 16, stroke: null });
+    }
+    // You (with your gun out if you have one).
+    drawPersonAt(g, A.px, A.py, A.a, '#7c4dff', false, A.walk);
+    // Grab ring.
+    if (A.grab && A.grabT > 0) {
+      const need = A.grab === A.keypad ? 2.2 : LOOT[A.grab.id].grab;
+      g.strokeStyle = '#ffd54f'; g.lineWidth = 4;
+      g.beginPath(); g.arc(A.grab.x, A.grab.y, 24, -Math.PI / 2, -Math.PI / 2 + TAU * Math.min(1, A.grabT / need)); g.stroke();
+    }
+    for (let i = floatsIn.length - 1; i >= 0; i--) {
+      const f = floatsIn[i];
+      f.t -= 1 / 60;
+      if (f.t <= 0) { floatsIn.splice(i, 1); continue; }
+      Gfx.text(g, f.text, f.x, f.y - 30 - (1.2 - f.t) * 30, { size: 15, color: '#9be37a' });
+    }
+    // Night: dim the room, with a pool of light around you.
+    if (A.owner) {
+      g.fillStyle = 'rgba(10,14,40,0.45)';
+      g.fillRect(0, 0, A.w, A.h);
+      g.globalCompositeOperation = 'lighter';
+      const lg = g.createRadialGradient(A.px, A.py, 5, A.px, A.py, 120);
+      lg.addColorStop(0, 'rgba(255,240,200,0.25)'); lg.addColorStop(1, 'rgba(255,240,200,0)');
+      g.fillStyle = lg; g.fillRect(A.px - 120, A.py - 120, 240, 240);
+      g.globalCompositeOperation = 'source-over';
+    }
+    g.restore();
+  }
+
+  function drawAreaHud() {
+    const A = area;
+    const title = A.kind === 'shop' ? `🏪 ${A.door.name}` : A.door.kane ? "🏠 Kane's house" : '🏠 House';
+    Gfx.card(ctx, 12, 12, 260, 40);
+    Gfx.text(ctx, `${title} · ${money(s.cash)}`, 24, 32, { size: 15, align: 'left', stroke: null, color: '#fff' });
+    // The bag.
+    Gfx.card(ctx, 12, H - 64, 260, 52);
+    Gfx.text(ctx, `🎒 ${bagUsed()}/${BAG_SLOTS} · worth ${money(bagValue())}`, 24, H - 46, { size: 13, align: 'left', stroke: null });
+    Gfx.text(ctx, 'Hold E to grab · walk out the front door to leave', 24, H - 26, { size: 11, align: 'left', stroke: null, color: '#90a4ae' });
+    if (A.owner && !A.called) {
+      Gfx.card(ctx, W - 232, 12, 220, 40);
+      Gfx.text(ctx, A.owner.awake ? `Calling the police… ${Math.ceil(A.callT)}` : 'Noise', W - 220, 26, { size: 11, align: 'left', stroke: null, color: A.owner.awake ? '#ff5252' : '#cfd8dc' });
+      Gfx.bar(ctx, W - 220, 34, 196, 9, Math.min(1, A.noise / 100), A.noise > 70 ? '#ff5252' : '#ffd54f');
+    }
+    if (A.keypad && !A.keypad.done && !A.called) {
+      Gfx.card(ctx, W - 232, 12, 220, 40);
+      Gfx.text(ctx, `Alarm in ${A.keypad.left.toFixed(1)} s`, W - 122, 32, { size: 15, stroke: null, color: '#ff8a80' });
+    }
+    if (A.called) Gfx.text(ctx, '🚨 The police are coming. Get out!', W / 2, 30, { size: 16, color: '#ff5252' });
+    const near = A.grab;
+    if (near && near !== A.keypad) { const L = LOOT[near.id]; Gfx.text(ctx, `${L.icon} ${L.name}${L.value ? ' · ' + money(L.value) : ''} · hold E`, W / 2, H - 90, { size: 14 }); }
+    else if (near) Gfx.text(ctx, '🔢 Hold E to disarm', W / 2, H - 90, { size: 14 });
+    if (banner) {
+      ctx.globalAlpha = clamp(banner.t / 0.4, 0, 1);
+      Gfx.text(ctx, banner.text, W / 2, H / 2 - 120, { size: 28, color: banner.color, width: 6 });
+      if (banner.sub) Gfx.text(ctx, banner.sub, W / 2, H / 2 - 90, { size: 14, width: 4 });
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // drawPerson draws into the shared ctx; this does the same into any context.
+  function drawPersonAt(g, x, y, a, color, alarm, step = 0) {
+    const keep = ctx;
+    ctx = g;
+    drawPerson(x, y, a, color, '#ffe0bd', step, false);
+    if (g === keep && s.gun && color === '#7c4dff') drawGunInHand(x, y, a);
+    ctx = keep;
+    void alarm;
+  }
+  function drawGunInHand(x, y, a) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+    ctx.fillStyle = '#212121';
+    ctx.fillRect(4, 3, s.gun === 'pistol' ? 9 : 14, 3);
+    ctx.restore();
+  }
+
+  // ---------- Guns ----------
+  // Guns only hurt vehicles: a shot car smokes and breaks down, and people dive for cover rather
+  // than get hit. Firing where anyone can see brings the police; shooting at them brings more.
+
+  const GUNS = {
+    pistol: { name: 'Pistol', price: 1500, ammo: 24, ammoPrice: 80, dmg: 24, rate: 0.3, range: 440, spread: 0.03, pellets: 1, tone: 900 },
+    smg: { name: 'SMG', price: 6000, ammo: 90, ammoPrice: 160, dmg: 11, rate: 0.085, range: 380, spread: 0.07, pellets: 1, tone: 1200 },
+    shotgun: { name: 'Shotgun', price: 9000, ammo: 16, ammoPrice: 180, dmg: 12, rate: 0.85, range: 270, spread: 0.2, pellets: 6, tone: 300 },
+  };
+  let gunT = 0;
+  const tracers = [];
+  function switchGun() {
+    const owned = Object.keys(GUNS).filter(id => (s.guns || {})[id] !== undefined);
+    if (!owned.length) return say('No guns yet', 'Bullseye Guns sells them', 1.6, '#90a4ae');
+    const order = [null, ...owned], i = order.indexOf(s.gun || null);
+    s.gun = order[(i + 1) % order.length];
+    say(s.gun ? GUNS[s.gun].name : 'Holstered', s.gun ? `${s.guns[s.gun]} rounds · Space to fire` : '', 1.2, '#cfd8dc');
+  }
+  function updateGun(dt) {
+    gunT = Math.max(0, gunT - dt);
+    for (let i = tracers.length - 1; i >= 0; i--) { tracers[i].t -= dt; if (tracers[i].t <= 0) tracers.splice(i, 1); }
+    if (!s.gun || player.car || !held('Space') || gunT > 0) return;
+    const G = GUNS[s.gun];
+    if (!(s.guns[s.gun] > 0)) { gunT = 0.4; Arcade.tone({ freq: 200, dur: 0.04, type: 'square', vol: 0.03 }); return say('Out of ammo', 'Bullseye Guns sells more', 1.4, '#ff8a80'); }
+    gunT = G.rate;
+    s.guns[s.gun]--;
+    // Aim help: the nearest car roughly where you're facing, police first.
+    let aim = player.a, best = null, bs = Infinity;
+    for (const c of cars) {
+      if (c.broken) continue;
+      const dx = c.x - player.x, dy = c.y - player.y, d = Math.hypot(dx, dy);
+      if (d > G.range || Math.abs(angDiff(Math.atan2(dy, dx), player.a)) > 0.5) continue;
+      const sc = d - (c.role === 'cop' ? 200 : 0);
+      if (sc < bs) { bs = sc; best = c; }
+    }
+    if (best) aim = Math.atan2(best.y - player.y, best.x - player.x);
+    let hitCop = false;
+    for (let p = 0; p < G.pellets; p++) {
+      const a = aim + (Math.random() * 2 - 1) * G.spread, ca = Math.cos(a), sa = Math.sin(a);
+      let x = player.x, y = player.y, hit = null;
+      for (let d = 12; d <= G.range; d += 10) {
+        x = player.x + ca * d; y = player.y + sa * d;
+        if (inBuilding(x, y)) break;
+        hit = cars.find(c => !c.broken && Math.hypot(c.x - x, c.y - y) < c.T.len * 0.42);
+        if (hit) break;
+      }
+      tracers.push({ x1: player.x + ca * 10, y1: player.y + sa * 10, x2: x, y2: y, t: 0.07 });
+      if (!hit) continue;
+      const wasCop = hit.role === 'cop';
+      damage(hit, G.dmg);
+      hit.flash = 0.1;
+      for (let k = 0; k < 4; k++) fx.emit({ x, y, vx: Gfx.rand(-120, 120), vy: Gfx.rand(-120, 120), drag: 3, life: 0.25, size: 2, color: '#ffe082', shape: 'spark' });
+      if (wasCop) {
+        hitCop = true;
+        if (hit.broken) { s.copsDown = (s.copsDown || 0) + 1; pops.add('Cruiser disabled!', hit.x, hit.y - 30, { color: '#80deea', size: 16 }); }
+      } else if (hit.role === 'traffic' && hit.ai) { hit.ai.speed = 280; hit.honk = 0.4; }
+    }
+    Arcade.tone({ freq: G.tone, to: G.tone / 4, dur: 0.07, type: 'square', vol: 0.04 });
+    shake.add(s.gun === 'shotgun' ? 0.18 : 0.06);
+    // People scatter.
+    for (const p of peds) if (Math.hypot(p.x - player.x, p.y - player.y) < 340) { p.flee = 4; if (Math.random() < 0.05) pops.add(Arcade.pick(['Run!', 'Aaah!', 'Get down!']), p.x, p.y - 20, { color: '#fff', size: 14, life: 0.8 }); }
+    if (hitCop) addStars(Math.min(MAX_STARS, Math.max(2, stars + (Math.random() < 0.25 ? 1 : 0))), stars < 2 ? 'Shot at the police!' : null);
+    else if (stars < 1 && (copSees(800) || Math.random() < 0.06)) bumpStars('Shots fired!');
+    if (hitCop || stars) evadeT = 0;
+  }
+  function drawTracers2d() {
+    ctx.strokeStyle = 'rgba(255,236,160,0.9)'; ctx.lineWidth = 2;
+    for (const t of tracers) { ctx.beginPath(); ctx.moveTo(t.x1, t.y1); ctx.lineTo(t.x2, t.y2); ctx.stroke(); }
+  }
+  function drawTracers3d() {
+    ctx.strokeStyle = 'rgba(255,236,160,0.9)'; ctx.lineWidth = 2;
+    for (const t of tracers) {
+      const a = project(t.x1, groundAt(t.x1, t.y1) + 12, t.y1), b = project(t.x2, groundAt(t.x2, t.y2) + 10, t.y2);
+      if (!a || !b) continue;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+  }
+
+  // ---------- Shops and the subway ----------
+
+  function gunPanel() {
+    const rows = Object.entries(GUNS).map(([id, G]) => {
+      const own = (s.guns || {})[id] !== undefined;
+      return `<div class="gc-row"><span class="gc-ico">🔫</span><span class="gc-info"><b>${G.name}</b><small>${own ? `${s.guns[id]} rounds` : `Damage ${G.dmg}${G.pellets > 1 ? ' × ' + G.pellets : ''} · range ${G.range}`}</small></span>
+        <button class="btn gc-buy" type="button" data-gun="${id}" ${own ? (s.cash < G.ammoPrice ? 'disabled' : '') : s.cash < G.price ? 'disabled' : ''}>${own ? `+${G.ammo} ammo ${money(G.ammoPrice)}` : money(G.price)}</button></div>`;
+    }).join('');
+    ui.show({
+      title: '🔫 Bullseye Guns',
+      html: `<p class="gc-cash">${money(s.cash)}</p><div class="gc-list">${rows}</div><p style="font-size:12px;color:var(--muted)"><b>Q</b> draws or switches guns, <b>Space</b> fires (on foot). Guns stop cars, not people. Shooting where it's seen brings the police.</p>`,
+      button: 'Leave',
+      onAction: () => ui.hide(),
+      onRender: panel => panel.querySelectorAll('[data-gun]').forEach(b => b.addEventListener('click', () => {
+        const id = b.dataset.gun, G = GUNS[id];
+        s.guns = s.guns || {};
+        if (s.guns[id] !== undefined) { if (s.cash < G.ammoPrice) return; s.cash -= G.ammoPrice; s.guns[id] += G.ammo; }
+        else { if (s.cash < G.price) return; s.cash -= G.price; s.guns[id] = G.ammo; s.gun = id; Arcade.flag('getaway-armed'); }
+        sfx.good(); persist(); gunPanel();
+      })),
+    });
+  }
+
+  function pawnPanel() {
+    const bag = s.bag || [];
+    const counts = {};
+    for (const id of bag) counts[id] = (counts[id] || 0) + 1;
+    const rows = Object.entries(counts).map(([id, n]) => `<div class="gc-row"><span class="gc-ico">${LOOT[id].icon}</span><span class="gc-info"><b>${LOOT[id].name}${n > 1 ? ' × ' + n : ''}</b><small>${money(LOOT[id].value)} each</small></span></div>`).join('');
+    ui.show({
+      title: '💰 Lucky Pawn',
+      html: `<p class="gc-cash">${money(s.cash)}</p>${bag.length ? `<div class="gc-list">${rows}</div>` : '<p>Your bag is empty. Rob a house (walk up to a front door in the suburbs) and bring me what you find.</p>'}${stars ? '<p style="color:#ff8a80">"Not with the cops on you. Lose them and come back."</p>' : ''}`,
+      button: bag.length && !stars ? `Sell it all for ${money(bagValue())}` : 'Leave',
+      onAction: () => {
+        ui.hide();
+        if (!bag.length || stars) return;
+        const v = bagValue();
+        s.bag = [];
+        earn(v, player.x, player.y - 40, 'Sold');
+        persist();
+      },
+    });
+  }
+
+  function metroPanel(from) {
+    const fare = 25;
+    const rows = stations.filter(m => m !== from).map((m, i) => `<div class="gc-row"><span class="gc-ico">🚇</span><span class="gc-info"><b>${m.name}</b><small>${Math.round(dist(m, from) / 10)} m away</small></span>
+      <button class="btn gc-buy" type="button" data-go="${stations.indexOf(m)}" ${stars || s.cash < fare ? 'disabled' : ''}>${money(fare)}</button></div>`).join('');
+    ui.show({
+      title: `🚇 ${from.name}`,
+      html: `<p>Ride the subway across town. Your car stays parked here.</p><div class="gc-list">${rows}</div>${stars ? '<p style="color:#ff8a80">The police are watching the stations. Lose them first.</p>' : ''}`,
+      button: 'Leave',
+      onAction: () => ui.hide(),
+      onRender: panel => panel.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => {
+        if (stars || s.cash < fare) return;
+        const to = stations[+b.dataset.go];
+        s.cash -= fare;
+        if (player.car) exitCar(true);
+        player.x = to.x; player.y = to.y + 46; player.vx = player.vy = 0;
+        cam.x = player.x - W / 2 / cam.z; cam.y = player.y - H / 2 / cam.z;
+        cam3.ready = false;
+        // A fresh street around you.
+        for (let i = cars.length - 1; i >= 0; i--) if (cars[i].role === 'traffic') cars.splice(i, 1);
+        peds.length = 0;
+        inMarker = to;
+        ui.hide();
+        say(to.name, 'Doors closing…', 1.8, '#f48fb1');
+        Arcade.tone({ freq: 660, to: 440, dur: 0.3, type: 'triangle', vol: 0.05 });
+        persist();
+      })),
+    });
+  }
+
+  // ---------- Story: Rise of the Getaway King ----------
+  // Seven chapters told by Vinnie (who runs the diner and fences on the side), Mara (a hacker at the
+  // docks) and Detective Kane (who wants you in a cell). Each chapter is a list of steps built from
+  // the city's own pieces: steal a car, burgle a house, hold up a shop, lose the police, deliver.
+
+  const STORY = [
+    { title: 'New Wheels', who: 'Vinnie', reward: 600,
+      lines: ['"New in town? Nobody respects a pedestrian, kid."', '"Bring me a Cruiser Sedan. Clean. No dents, no cops."'],
+      steps: [{ t: 'steal', car: 'sedan', label: 'Steal the marked Cruiser Sedan' }, { t: 'deliver', to: 'story', minHp: 0.5, label: "Bring it to Vinnie's Diner" }] },
+    { title: 'House Call', who: 'Vinnie', reward: 900,
+      lines: ['"Councilman Reyes keeps a little black ledger at home."', '"Night is best: people sleep. Walk soft."'],
+      steps: [{ t: 'burgle', item: 'ledger', label: "Get the ledger from the councilman's house" }, { t: 'lose', label: 'Lose any cops' }, { t: 'goto', to: 'story', label: 'Take it to Vinnie' }] },
+    { title: 'Hardware', who: 'Vinnie', reward: 800, advance: 1500,
+      lines: ['"The ledger names a cop. Things are going to get rough."', '"Here\'s $1,500. Buy a pistol at Bullseye, then show me you can use it: rob a shop."'],
+      steps: [{ t: 'buy', gun: 'pistol', label: 'Buy a pistol at 🔫 Bullseye Guns' }, { t: 'holdup', label: 'Hold up a corner shop' }, { t: 'lose', label: 'Lose the police' }, { t: 'goto', to: 'story', label: 'Back to the diner' }] },
+    { title: 'Kane', who: 'Detective Kane', reward: 1200,
+      lines: ['A grey sedan idles outside the diner. A man in a long coat leans on it.', '"Detective Kane. I know what you took from Reyes. Run along, I\'ll catch up."'],
+      steps: [{ t: 'stars', n: 3, why: "Kane's crew is on you!" }, { t: 'lose', label: "Shake off Kane's crew" }, { t: 'goto', to: 'docks', label: 'Hide out at the 🚢 Export Docks' }] },
+    { title: 'Showroom Fresh', who: 'Mara', reward: 2500,
+      lines: ['A woman with a laptop sits on a shipping crate. "Mara. Vinnie said you\'re quick."', '"My buyer wants a Vento Sport, and he pays for paint, not dents."'],
+      steps: [{ t: 'steal', car: 'sports', label: 'Steal the marked Vento Sport' }, { t: 'deliver', to: 'docks', minHp: 0.7, label: 'Deliver it to the docks (keep it above 70%)' }] },
+    { title: 'Blind Spots', who: 'Mara', reward: 3000, needs: () => Object.keys(s.guns || {}).length ? '' : 'Mara wants you armed: buy a gun at 🔫 Bullseye Guns first.',
+      lines: ['"Kane\'s men patrol in those old cruisers. Take three out of service."', '"I\'ll loop the traffic cameras. You make some noise."'],
+      steps: [{ t: 'stars', n: 2, why: 'Patrols incoming!' }, { t: 'shoot', n: 3, label: 'Disable 3 police cruisers (shoot them)' }, { t: 'lose', label: 'Lose the police' }, { t: 'goto', to: 'docks', label: 'Report back to Mara' }] },
+    { title: "Kane's File", who: 'Vinnie', reward: 15000, needs: () => (s.heists ? '' : 'Vinnie wants proof you can handle a real job: pull off any 💼 heist first.'),
+      lines: ['"Kane\'s dirty. He keeps an evidence file at home on everyone he squeezes."', '"Get it to the City Herald and he\'s finished. Then this town is ours."'],
+      steps: [{ t: 'burgle', item: 'file', kane: true, label: "Get the evidence file from Kane's house" }, { t: 'stars', n: 5, why: 'Kane sent everyone!' }, { t: 'lose', label: 'Lose them all' }, { t: 'goto', to: 'herald', label: 'Deliver the file to the 📰 City Herald' }] },
+  ];
+
+  function storyStep() { return mission && mission.kind === 'story' ? mission.steps[mission.i] : null; }
+  const placeOf = kind => markerOf(kind);
+
+  function storyPanel() {
+    const ch = STORY[s.story || 0];
+    if (!ch) return ui.show({ title: "🍝 Vinnie's Diner", html: '<p>"Kane\'s in a cell, the Herald\'s printing his file, and you run this town now. Coffee\'s on the house, King."</p>', button: 'Leave', onAction: () => ui.hide() });
+    const blocked = ch.needs ? ch.needs() : '';
+    ui.show({
+      title: `📖 Chapter ${(s.story || 0) + 1}: ${ch.title}`,
+      html: `<p style="text-align:left"><b>${ch.who}</b></p>${ch.lines.map(l => `<p style="text-align:left">${l}</p>`).join('')}<p class="gc-cash">${money(ch.reward)}</p>${blocked ? `<p style="color:#ff8a80">${blocked}</p>` : ''}${mission ? '<p style="color:#ff8a80">Finish your current job first.</p>' : ''}`,
+      button: blocked || mission ? 'OK' : 'Let\'s go',
+      onAction: () => {
+        ui.hide();
+        if (blocked || mission) return;
+        if (ch.advance) earn(ch.advance, player.x, player.y - 40, 'Advance');
+        mission = { kind: 'story', ch, steps: ch.steps.map(x => ({ ...x })), i: 0, label: ch.title };
+        startStep();
+      },
+    });
+  }
+
+  function startStep() {
+    const m = mission, st = m.steps[m.i];
+    m.base = { holdups: s.holdups || 0, copsDown: s.copsDown || 0 };
+    if (st.t === 'steal') {
+      const p = randomSidewalk(1100, 2600);
+      st.carRef = makeCar(st.car, p.x, p.y, Math.random() * TAU, 'parked');
+      st.carRef.keep = true;
+    } else if (st.t === 'deliver') {
+      st.carRef = m.steps[m.i - 1].carRef;
+    } else if (st.t === 'burgle') {
+      st.door = st.kane ? kaneDoor : doors.filter(d => d.kind === 'house' && !d.kane).sort((a, b) => Math.abs(dist(a, placeOf('story')) - 1600) - Math.abs(dist(b, placeOf('story')) - 1600))[0];
+      s.items = (s.items || []).filter(x => x !== st.item);
+    } else if (st.t === 'stars') {
+      addStars(st.n, st.why);
+      for (let k = 0; k < st.n; k++) spawnCop();
+      return nextStep();
+    }
+    say(m.ch.title, st.label, 2.6, '#ffd54f');
+  }
+  function nextStep() {
+    const m = mission;
+    m.i++;
+    if (m.i < m.steps.length) return startStep();
+    // Chapter done.
+    for (const st of m.steps) if (st.carRef) { const k = cars.indexOf(st.carRef); if (k >= 0 && st.carRef !== player.car) cars.splice(k, 1); else st.carRef.keep = false; }
+    const ch = m.ch;
+    mission = null;
+    s.story = (s.story || 0) + 1;
+    earn(ch.reward, player.x, player.y - 40, ch.title);
+    say(`Chapter complete: ${ch.title}`, s.story < STORY.length ? "Vinnie's Diner has your next job" : 'You are the Getaway King', 3.4, '#ffd54f');
+    sfx.good();
+    Arcade.flag('getaway-story-1');
+    if (s.story >= STORY.length) Arcade.flag('getaway-story');
+    persist();
+  }
+  function updateStory() {
+    const m = mission, st = m.steps[m.i], here = player.car || player, slow = !player.car || speedOf(player.car) < 80;
+    const at = kind => { const p = placeOf(kind); return Math.hypot(here.x - p.x, here.y - p.y) < 60 && slow; };
+    if (st.carRef && st.carRef.broken) return failMission('The car got wrecked');
+    if (st.t === 'steal' && player.car === st.carRef) { if (Math.random() < 0.4) bumpStars('Car alarm!'); nextStep(); }
+    else if (st.t === 'deliver' && player.car === st.carRef && at(st.to)) {
+      if (stars) { if (!m.warned) { say('Not with the cops on you', 'Lose them first', 2, '#ff8a80'); m.warned = true; } return; }
+      if (st.minHp && st.carRef.hp / st.carRef.T.hp < st.minHp) return failMission(`Too banged up: it needed to be over ${Math.round(st.minHp * 100)}%`);
+      player.car.vx = player.car.vy = 0;
+      nextStep();
+    } else if (st.t === 'goto' && at(st.to)) {
+      if (stars) { if (!m.warned) { say('Not with the cops on you', 'Lose them first', 2, '#ff8a80'); m.warned = true; } return; }
+      nextStep();
+    } else if (st.t === 'burgle' && (s.items || []).includes(st.item) && !area) nextStep();
+    else if (st.t === 'buy' && (s.guns || {})[st.gun] !== undefined) nextStep();
+    else if (st.t === 'holdup' && (s.holdups || 0) > m.base.holdups && !area) nextStep();
+    else if (st.t === 'shoot' && (s.copsDown || 0) - m.base.copsDown >= st.n) nextStep();
+    else if (st.t === 'lose' && stars === 0) nextStep();
+    else if (st.t === 'shoot' && stars < 2) { addStars(2, 'More patrols!'); spawnCop(); }
+  }
+  function storyTarget() {
+    const st = storyStep();
+    if (!st) return null;
+    if (st.t === 'steal') return { x: st.carRef.x, y: st.carRef.y, color: '#ffd54f' };
+    if ((st.t === 'deliver' && player.car === st.carRef) || st.t === 'goto') { const p = placeOf(st.to); return { x: p.x, y: p.y, color: '#ffd54f' }; }
+    if (st.t === 'deliver') return { x: st.carRef.x, y: st.carRef.y, color: '#ffd54f' };
+    if (st.t === 'burgle') return { x: st.door.x, y: st.door.y, color: '#ffd54f' };
+    if (st.t === 'buy') { const p = placeOf('guns'); return { x: p.x, y: p.y, color: '#ffd54f' }; }
+    if (st.t === 'holdup') { let b = null, bd = Infinity; for (const d of doors) if (d.kind === 'shop') { const k = dist(d, player); if (k < bd) { bd = k; b = d; } } return b && { x: b.x, y: b.y, color: '#ffd54f' }; }
+    return null;
+  }
+  function storyText() {
+    const m = mission, st = m.steps[m.i];
+    if (st.t === 'deliver' && player.car !== st.carRef) return `${m.ch.title}: get back in the car`;
+    if (st.t === 'shoot') return `${m.ch.title}: disable cruisers ${(s.copsDown || 0) - m.base.copsDown}/${st.n}`;
+    return `${m.ch.title}: ${st.label}${stars && (st.t === 'goto' || st.t === 'deliver') ? ' (lose the cops first)' : ''}`;
+  }
+
+  // ---------- New jobs: courier, tow truck, car boosting ----------
+
+  const BOOST_MODELS = ['muscle', 'sports', 'beast', 'super'];
+  function startJob(m) {
+    if (m.kind === 'courier') {
+      const drops = [];
+      let from = m;
+      for (let k = 0; k < 5; k++) { const p = randomSidewalk(400, 1300, from); drops.push(p); from = p; }
+      mission = { kind: 'courier', needsCar: true, drops, done: 0, timer: 170, label: 'Courier run', earned: 0, hp0: player.car ? player.car.hp / player.car.T.hp : 1 };
+      say('Courier run', '5 parcels, 170 seconds. They\'re fragile: drive nicely.', 2.6, '#c5e1a5');
+    } else if (m.kind === 'tow') {
+      if (player.car) exitCar(true);
+      const truck = makeCar('tow', m.x + 70, m.y + 80, 0, 'player');
+      truck.keep = true;
+      player.car = truck; player.x = truck.x; player.y = truck.y;
+      player.nitro = nitroCap();
+      mission = { kind: 'tow', needsCar: true, truck, done: 0, stage: 'find', target: towTarget(), label: 'Tow shift', yard: m };
+      say('Tow shift', 'Hook up broken-down cars and haul them back to the yard', 2.6, '#ffcc80');
+    } else if (m.kind === 'docks') {
+      const model = BOOST_MODELS[Math.min(BOOST_MODELS.length - 1, Math.floor(Math.random() * (1 + Math.min(3, (s.boosts || 0)))))];
+      const p = randomSidewalk(1500, 3200);
+      const car = makeCar(model, p.x, p.y, Math.random() * TAU, 'parked');
+      car.keep = true;
+      mission = { kind: 'boost', target: car, stage: 'steal', model, label: `Boost a ${CARS[model].name}`, dock: m };
+      say('Car boosting', `The client wants a ${CARS[model].name}. Bring it here without wrecking it.`, 2.8, '#81d4fa');
+    }
+  }
+  function towTarget() {
+    const p = randomSidewalk(900, 2600);
+    const car = makeCar(Arcade.pick(['compact', 'sedan', 'van', 'muscle']), p.x, p.y, Math.random() * TAU, 'parked');
+    car.broken = true; car.hp = 0; car.keep = true;
+    return car;
+  }
+  function updateJob(dt) {
+    const m = mission, pc = player.car;
+    if (m.kind === 'courier') {
+      m.timer -= dt;
+      if (m.timer <= 0) return failMission('Too slow: the parcels went back to the depot');
+      const tgt = m.drops[m.done];
+      if (Math.hypot(pc.x - tgt.x, pc.y - tgt.y) < 50 && speedOf(pc) < 90) {
+        m.done++;
+        const fragile = pc.hp / pc.T.hp < m.hp0 * 0.6 ? 0.5 : 1;
+        const pay = Math.round(110 * fragile);
+        earn(pay, pc.x, pc.y - 40, fragile < 1 ? 'Dented parcel' : 'Delivered');
+        m.earned += pay;
+        sfx.pickup();
+        if (m.done >= m.drops.length) {
+          const bonus = Math.round(m.timer * 8);
+          earn(bonus, pc.x, pc.y - 70, 'Time bonus');
+          s.couriers = (s.couriers || 0) + 1;
+          say('All parcels delivered!', `${money(m.earned + bonus)} earned`, 2.6, '#9be37a');
+          sfx.good(); mission = null; persist();
+        }
+      }
+    } else if (m.kind === 'tow') {
+      if (pc !== m.truck) return failMission('You left the tow truck');
+      const t = m.target, T = m.truck;
+      if (m.stage === 'find') {
+        if (Math.hypot(T.x - t.x, T.y - t.y) < 70 && speedOf(T) < 60) { m.stage = 'haul'; t.role = 'towed'; t.haulFrom = { x: t.x, y: t.y }; say('Hooked up', 'Haul it back to the yard', 1.6, '#ffcc80'); sfx.door(); }
+      } else {
+        const back = T.T.len / 2 + t.T.len / 2 + 16;
+        t.x = T.x - Math.cos(T.a) * back; t.y = T.y - Math.sin(T.a) * back;
+        t.a += angDiff(T.a, t.a) * Math.min(1, dt * 6);
+        t.vx = T.vx; t.vy = T.vy; t.z = 0;
+        if (Math.hypot(T.x - m.yard.x, T.y - m.yard.y) < 80 && speedOf(T) < 80) {
+          const pay = Math.round(200 + Math.hypot(t.haulFrom.x - m.yard.x, t.haulFrom.y - m.yard.y) / 8);
+          earn(pay, T.x, T.y - 40, 'Towed');
+          cars.splice(cars.indexOf(t), 1);
+          m.done++;
+          if (m.done >= 3) { s.tows = (s.tows || 0) + 1; say('Shift done!', 'Three cars hauled', 2.4, '#9be37a'); sfx.good(); mission = null; T.keep = false; persist(); }
+          else { m.target = towTarget(); m.stage = 'find'; say('Next call', 'Another breakdown across town', 1.6, '#ffcc80'); }
+        }
+      }
+    } else if (m.kind === 'boost') {
+      const t = m.target;
+      if (t.broken) { t.keep = false; return failMission('The car is wrecked: the client walked'); }
+      if (m.stage === 'steal' && pc === t) { m.stage = 'deliver'; if (Math.random() < 0.5) bumpStars('Car alarm!'); say('Got it', 'Get it to the docks. Clean.', 1.6, '#81d4fa'); }
+      if (m.stage === 'deliver' && pc === t && Math.hypot(t.x - m.dock.x, t.y - m.dock.y) < 70 && speedOf(t) < 80) {
+        if (stars) { if (!m.warned) { say('The buyer won\'t take a hot car', 'Lose the cops first', 2, '#ff8a80'); m.warned = true; } return; }
+        const pay = Math.round(CARS[m.model].price * 0.35 * (0.4 + 0.6 * t.hp / t.T.hp));
+        exitCar(true);
+        cars.splice(cars.indexOf(t), 1);
+        earn(pay, player.x, player.y - 40, 'Boosted');
+        s.boosts = (s.boosts || 0) + 1;
+        if (s.boosts >= 3) Arcade.flag('getaway-boost');
+        say('Sold to the exporter', `${money(pay)} for the ${CARS[m.model].name}`, 2.6, '#9be37a');
+        sfx.good(); mission = null; persist();
+      }
+    }
+  }
+  function jobTarget() {
+    const m = mission;
+    if (m.kind === 'courier') return { ...m.drops[m.done], color: '#9ccc65' };
+    if (m.kind === 'tow') return m.stage === 'find' ? { x: m.target.x, y: m.target.y, color: '#ff9800' } : { x: m.yard.x, y: m.yard.y, color: '#ff9800' };
+    if (m.kind === 'boost') return player.car === m.target ? { x: m.dock.x, y: m.dock.y, color: '#29b6f6' } : { x: m.target.x, y: m.target.y, color: '#29b6f6' };
+    return null;
+  }
+  function jobText() {
+    const m = mission;
+    if (m.kind === 'courier') return `Deliver parcel ${m.done + 1}/${m.drops.length} · ${Math.ceil(m.timer)} s`;
+    if (m.kind === 'tow') return m.stage === 'find' ? `Find the broken-down car (${m.done + 1}/3)` : 'Haul it back to the tow yard';
+    if (m.kind === 'boost') return player.car === m.target ? `Deliver the ${CARS[m.model].name} to the docks${stars ? ' (lose the cops first)' : ''}` : m.stage === 'steal' ? `Steal the marked ${CARS[m.model].name}` : 'Get back in the car';
+    return '';
+  }
+  const JOB_INFO = {
+    courier: () => ({ title: '📦 Swift Parcel', html: '<p>Five parcels across town in 170 seconds. Smash up your car and the parcels get dented: half pay.</p>', ok: true }),
+    tow: () => ({ title: '🛻 Hook & Haul Towing', html: '<p>Take the company tow truck, hook up three broken-down cars and haul them back to the yard. Longer hauls pay more.</p>', ok: true, noCar: true }),
+    docks: () => ({ title: '🚢 Export Docks', html: '<p>The exporter has a client. Steal the model they want, lose any heat, and deliver it in one piece. The better its condition, the better the pay.</p>', ok: true, noCar: true }),
+  };
 
   // ---------- Online: two friends in one city (live.js) ----------
   // The city is the same for everyone (it's seeded), so nothing big has to be sent. Each player
@@ -2697,6 +3514,50 @@
   });
   const online = () => live.on && !!friend.net;
 
+  // ---------- Public lobby: up to 8 players in one city (public-lobby.js) ----------
+  // Like a friend session, with whoever drops in. Everyone keeps their own save, jobs, traffic and
+  // police; you see each other drive and walk about, and bump cars.
+  const CROWD_COLORS = ['#ffb74d', '#81c784', '#f06292', '#64b5f6', '#ba68c8', '#4db6ac', '#fff176', '#ff8a65'];
+  const crowd = new Map();      // slot -> puppet
+  let pub = null, pubError = '', pubToken = 0;
+  const pubOn = () => !!pub;
+  const addPuppet = (slot, name) => crowd.set(slot, { x: 0, y: 0, a: 0, car: null, color: '#fff', z: 0, walk: 0, stars: 0, net: null, name: String(name || 'Player').slice(0, 24), tagColor: CROWD_COLORS[slot % CROWD_COLORS.length] });
+  async function joinPub(reshow) {
+    live.leave(); friend.net = null;
+    const token = ++pubToken;
+    ui.show({ title: 'Finding a public city…', html: Relay.CONNECTING, button: 'Cancel', onAction: () => { pubToken++; reshow(); }, onRender: Relay.ticker });
+    try {
+      const lobby = await PublicLobby.join(ID, {
+        onJoined: d => { addPuppet(d.slot, d.name); say(`${d.name} rolled into town`, '', 1.8, '#ffe0b2'); },
+        onLeft: d => { crowd.delete(d.slot); if (d.name) say(`${d.name} left town`, '', 1.6, '#cfd8dc'); },
+        onState: (slot, st) => {
+          const p = crowd.get(slot);
+          if (!p || !st) return;
+          const first = !p.net;
+          p.net = { ...st, at: performance.now() };
+          if (first) { p.x = +st.x || 0; p.y = +st.y || 0; p.a = +st.a || 0; }
+        },
+        onClosed: () => { leavePub(); say('Lost the connection', 'You\'re back on your own', 2.4, '#ff8a80'); },
+      });
+      if (token !== pubToken) return lobby.leave();
+      pub = { lobby };
+      crowd.clear();
+      for (const [slot, name] of lobby.names) if (slot !== lobby.slot) addPuppet(slot, name);
+      Arcade.flag('getaway-public');
+      ui.hide();
+      say('Public city', `${lobby.names.size} player${lobby.names.size === 1 ? '' : 's'} in town. Everyone keeps their own cash and cops.`, 3, '#ffe0b2');
+    } catch (e) {
+      if (token !== pubToken) return;
+      pubError = e.message || "Couldn't join a public city.";
+      reshow();
+    }
+  }
+  function leavePub() {
+    if (pub) pub.lobby.leave();
+    pub = null;
+    crowd.clear();
+  }
+
   function onlineHtml() {
     if (live.on) {
       return `<p class="bf-label" style="color:${FRIEND_COLOR};text-align:left;margin:10px 0 4px">Online with ${Online.escape(live.them)}</p>
@@ -2706,14 +3567,22 @@
           <button class="btn secondary" type="button" data-leave-online>Leave online</button>
         </div>`;
     }
+    if (pub) {
+      return `<p class="bf-label" style="color:#ffe0b2;text-align:left;margin:10px 0 4px">In a public city · ${pub.lobby.names.size} player${pub.lobby.names.size === 1 ? '' : 's'}</p>
+        <div class="menu"><button class="btn secondary" type="button" data-leave-pub>Leave the public city</button></div>`;
+    }
     if (!live.enabled()) return '';
-    const err = onlineError;
-    onlineError = '';
-    return `<p style="text-align:left;margin:10px 0 4px;font-size:13px"><b>Play with a friend online:</b> drive the same city together, meet up and race each other.</p>
+    const err = onlineError || pubError;
+    onlineError = ''; pubError = '';
+    return `<p style="text-align:left;margin:10px 0 4px;font-size:13px"><b>Public city:</b> drop into a city with up to 7 other players.</p>
+      <div class="menu"><button class="btn" type="button" data-pub>Join a public city</button></div>
+      <p style="text-align:left;margin:10px 0 4px;font-size:13px"><b>Play with a friend online:</b> drive the same city together, meet up and race each other.</p>
       ${live.html()}<p class="error">${Online.escape(err)}</p>`;
   }
   function wireOnline(panel, reshow) {
     live.wire(panel);
+    panel.querySelector('[data-pub]')?.addEventListener('click', () => joinPub(reshow));
+    panel.querySelector('[data-leave-pub]')?.addEventListener('click', () => { leavePub(); reshow(); });
     panel.querySelector('[data-race]')?.addEventListener('click', () => { ui.hide(); challenge(); });
     panel.querySelector('[data-meet]')?.addEventListener('click', () => { ui.hide(); meetUp(); });
     panel.querySelector('[data-leave-online]')?.addEventListener('click', () => {
@@ -2824,33 +3693,43 @@
     say(`Met up with ${live.them}`, '', 1.6, FRIEND_COLOR);
   }
 
+  function myState() {
+    const c = player.car, r = v => Math.round(v * 10) / 10;
+    const o = c || player;
+    return { x: r(o.x), y: r(o.y), a: Math.round((c ? c.a : player.a) * 100) / 100, vx: r(o.vx || 0), vy: r(o.vy || 0), c: c ? c.type : 0, col: c ? c.color : 0, z: c ? r(c.z) : 0, w: r(player.walk % 100), st: stars, in: area ? 1 : 0 };
+  }
   function updateOnline(dt) {
-    if (!live.on) return;
+    if (!live.on && !pub) return;
     netT -= dt;
     if (netT <= 0) {
       netT = 1 / 15;
-      const c = player.car, r = v => Math.round(v * 10) / 10;
-      const o = c || player;
-      live.state({ x: r(o.x), y: r(o.y), a: Math.round((c ? c.a : player.a) * 100) / 100, vx: r(o.vx || 0), vy: r(o.vy || 0), c: c ? c.type : 0, col: c ? c.color : 0, z: c ? r(c.z) : 0, w: r(player.walk % 100), st: stars });
+      const st = myState();
+      if (live.on) live.state(st);
+      if (pub) pub.lobby.state(st);
     }
-    const n = friend.net;
+    if (live.on) easePuppet(friend, dt);
+    for (const p of crowd.values()) easePuppet(p, dt);
+  }
+  // Ease someone's puppet toward where they should be by now, and bump cars with them.
+  function easePuppet(f, dt) {
+    const n = f.net;
     if (!n) return;
-    // Ease their puppet toward where they should be by now.
     const lag = Math.min(0.2, (performance.now() - n.at) / 1000);
     const tx = (+n.x || 0) + (+n.vx || 0) * lag, ty = (+n.y || 0) + (+n.vy || 0) * lag;
-    if (Math.hypot(tx - friend.x, ty - friend.y) > 200) { friend.x = tx; friend.y = ty; }
-    else { friend.x = Gfx.approach(friend.x, tx, 14, dt); friend.y = Gfx.approach(friend.y, ty, 14, dt); }
-    friend.a += angDiff(+n.a || 0, friend.a) * Math.min(1, dt * 14);
-    friend.car = CARS[n.c] ? n.c : null;
-    friend.color = typeof n.col === 'string' && /^#[0-9a-f]{3,8}$/i.test(n.col) ? n.col : '#ffffff';
-    friend.z = +n.z || 0;
-    friend.walk = +n.w || 0;
-    friend.stars = clamp(n.st | 0, 0, MAX_STARS);
+    if (Math.hypot(tx - f.x, ty - f.y) > 200) { f.x = tx; f.y = ty; }
+    else { f.x = Gfx.approach(f.x, tx, 14, dt); f.y = Gfx.approach(f.y, ty, 14, dt); }
+    f.a += angDiff(+n.a || 0, f.a) * Math.min(1, dt * 14);
+    f.car = CARS[n.c] ? n.c : null;
+    f.color = typeof n.col === 'string' && /^#[0-9a-f]{3,8}$/i.test(n.col) ? n.col : '#ffffff';
+    f.z = +n.z || 0;
+    f.walk = +n.w || 0;
+    f.stars = clamp(n.st | 0, 0, MAX_STARS);
+    f.inside = !!n.in;
     // Bumping into their car: you bounce off on your screen, and they do on theirs.
     const pc = player.car;
-    if (pc && friend.car && friend.z < 6 && pc.z < 6) {
-      const dx = pc.x - friend.x, dy = pc.y - friend.y, d = Math.hypot(dx, dy);
-      const min = (pc.T.len + CARS[friend.car].len) * 0.42;
+    if (pc && f.car && !f.inside && f.z < 6 && pc.z < 6) {
+      const dx = pc.x - f.x, dy = pc.y - f.y, d = Math.hypot(dx, dy);
+      const min = (pc.T.len + CARS[f.car].len) * 0.42;
       if (d > 0.01 && d < min) {
         const nx = dx / d, ny = dy / d;
         pc.x += nx * (min - d); pc.y += ny * (min - d);
@@ -2863,27 +3742,36 @@
     }
   }
 
-  const friendCar = () => ({ type: friend.car, T: CARS[friend.car], color: friend.color, x: friend.x, y: friend.y, z: friend.z, a: friend.a, role: 'friend', honk: 0, broken: false, siren: 0 });
-  const friendTag = () => `${live.them}${friend.stars ? ' ' + '★'.repeat(friend.stars) : ''}`;
-  function drawFriend2d() {
-    if (!online()) return;
-    if (friend.car) drawCar(friendCar());
-    else drawPerson(friend.x, friend.y, friend.a, FRIEND_COLOR, '#ffe0bd', friend.walk, false);
-    Gfx.text(ctx, friendTag(), friend.x, friend.y - (friend.car ? 32 : 22), { size: 13, color: FRIEND_COLOR, width: 3 });
+  // Everyone else you can see: your friend (live.js) and the people in your public lobby.
+  function others() {
+    const out = [];
+    if (online() && !friend.inside) { friend.name = live.them; friend.tagColor = FRIEND_COLOR; out.push(friend); }
+    for (const p of crowd.values()) if (p.net && !p.inside) out.push(p);
+    return out;
+  }
+  const puppetCar = f => ({ type: f.car, T: CARS[f.car], color: f.color, x: f.x, y: f.y, z: f.z, a: f.a, role: 'friend', honk: 0, broken: false, siren: 0 });
+  const puppetTag = f => `${f.name}${f.stars ? ' ' + '★'.repeat(f.stars) : ''}`;
+  function drawPuppet2d(f) {
+    if (f.car) drawCar(puppetCar(f));
+    else drawPerson(f.x, f.y, f.a, f.tagColor, '#ffe0bd', f.walk, false);
+    Gfx.text(ctx, puppetTag(f), f.x, f.y - (f.car ? 32 : 22), { size: 13, color: f.tagColor, width: 3 });
   }
   function drawFriend3d() {
-    if (!online() || Math.hypot(friend.x - player.x, friend.y - player.y) > 1300) return;
-    if (friend.car) {
-      M4.trs(model, friend.x, groundAt(friend.x, friend.y) + friend.z, friend.y, -friend.a);
-      G3.draw(carMesh(friend.car, friend.color), model);
-    } else drawPerson3d(friend.x, friend.y, friend.a, FRIEND_COLOR, '#ffe0bd', friend.walk, false);
+    for (const f of others()) {
+      if (Math.hypot(f.x - player.x, f.y - player.y) > 1300) continue;
+      if (f.car) {
+        M4.trs(model, f.x, groundAt(f.x, f.y) + f.z, f.y, -f.a);
+        G3.draw(carMesh(f.car, f.color), model);
+      } else drawPerson3d(f.x, f.y, f.a, f.tagColor, '#ffe0bd', f.walk, false);
+    }
   }
   function friendTag3d() {
-    if (!online()) return;
-    const d = Math.hypot(friend.x - player.x, friend.y - player.y);
-    if (d > 1300) return;
-    const q = project(friend.x, groundAt(friend.x, friend.y) + (friend.car ? 34 : 26), friend.y);
-    if (q && q.x > 0 && q.x < W && q.y > 0 && q.y < H) Gfx.text(ctx, friendTag(), q.x, q.y, { size: clamp(14 * 300 / q.w, 11, 16), color: FRIEND_COLOR, width: 3 });
+    for (const f of others()) {
+      const d = Math.hypot(f.x - player.x, f.y - player.y);
+      if (d > 1300) continue;
+      const q = project(f.x, groundAt(f.x, f.y) + (f.car ? 34 : 26), f.y);
+      if (q && q.x > 0 && q.x < W && q.y > 0 && q.y < H) Gfx.text(ctx, puppetTag(f), q.x, q.y, { size: clamp(14 * 300 / q.w, 11, 16), color: f.tagColor, width: 3 });
+    }
   }
   // An arrow at the screen's edge pointing to your friend (Classic view).
   function friendArrow2d() {
@@ -2911,14 +3799,18 @@
     const raw = (now - last) / 1000, dt = Math.min(0.05, raw);
     last = now;
     if (overlayEl.hidden && !mapOpen) update(dt);
-    else if (live.on) updateOnline(dt);   // a menu open online: keep your friend moving
-    if (view3d) {
+    else if (live.on || pubOn()) updateOnline(dt);   // a menu open online: keep the others moving
+    if (area) {
+      ctx.clearRect(0, 0, W, H);
+      drawArea();
+      drawAreaHud();
+    } else if (view3d) {
       render3d(dt);
       ctx.clearRect(0, 0, W, H);
       drawWorldHud3d();
       checkSpeed(raw);
     } else drawWorld();
-    drawHud();
+    if (!area) drawHud();
     updateStats();
     requestAnimationFrame(frame);
   }
@@ -2939,6 +3831,7 @@
       <li>Heists and reckless driving bring the police. The wanted scale runs to <b>8 stars</b>: past five, riot vans join the chase. Stay out of their sight until the stars fade, or slip into a <b>🎨 Spray Shop</b> unseen for a respray. The fence only pays once you've lost every cop, and getting <b>busted</b> costs you the loot and a fine.</li>
       <li>Hit the yellow <b>ramps</b> fast for stunt cash, and hunt for 120 hidden <b>📦 packages</b> across the city. <b>M</b> shows the map, hold <b>C</b> to look behind you, and <b>V</b> switches between the 3D and Classic (top-down) views.</li>
       <li>Spend your cash on cars at the <b>🚗 Dealer</b> and perks at the Hideout.</li>
+      <li><b>New:</b> walk into a <b>🚪 front door</b> to burgle a house (sell the haul at the <b>💰 Lucky Pawn</b>) or a <b>🏪 shop</b> to hold it up. Buy guns at <b>🔫 Bullseye Guns</b> (<b>Q</b> to draw, <b>Space</b> to fire: they stop cars, not people). Ride the <b>🚇 subway</b>, take <b>📦 courier</b>, <b>🛻 tow</b> and <b>🚢 boosting</b> jobs, and start the story at <b>🍝 Vinnie's Diner</b>.</li>
     </ul>`;
   function showIntro() {
     const html = s.intro ? `<p>${money(s.cash)} in your pocket · ${s.heists} heists pulled</p>${tips}` : `<p>A whole city to drive around, and plenty of ways to make money in it.</p>${tips}`;
@@ -2947,5 +3840,7 @@
   showIntro();
   const invite = Live.invite('getaway');
   if (invite) live.connect('public', invite);
+  // Console handle for testing (only with #dev in the address).
+  if (location.hash === '#dev') window.__gc = { get s() { return s; }, player, doors, markers, cars, get area() { return area; }, get mission() { return mission; }, enterArea, storyPanel, gunPanel, pawnPanel, setDay: v => { dayT = v; }, startJob, get pub() { return pub; }, crowd };
   requestAnimationFrame(frame);
 })();
