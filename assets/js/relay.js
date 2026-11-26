@@ -300,5 +300,5 @@ const Relay = (() => {
 
   if (enabled) wake();
 
-  return { enabled, join, quickMatch, createRoom, joinRoom, joinPublic, takeInvite, showWaiting, result, CONNECTING, ticker };
+  return { enabled, wake, wsUrl, UNREACHABLE, join, quickMatch, createRoom, joinRoom, joinPublic, takeInvite, showWaiting, result, CONNECTING, ticker };
 })();

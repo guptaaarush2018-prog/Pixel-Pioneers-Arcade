@@ -42,14 +42,21 @@
   // while he's alive and an arrow at the edge points to him.
   const ASSASSIN_BUILD = IO.KITS.assassin;
   // undefined: not asked yet; null: failed (fallback boss); else { v, pi, build }.
-  let bossWeights, bossWeightsP = null, boss = null, bannerT = 0;
+  let bossWeights, bossWeightsP = null, boss = null, bannerT = 0, banner = null;
+  const showBanner = (text, sub) => { banner = { text, sub }; bannerT = 4; };
   const prefetchBoss = () => { bossWeightsP = bossWeightsP || Sov.loadWeights(ID).then(w => { bossWeights = w; }); };
-  const soloRun = () => netMode !== 'live' && !(typeof Versus !== 'undefined' && Versus.active());
+  const soloRun = () => !netMode && !(typeof Versus !== 'undefined' && Versus.active());
+
+  // What drives Sovereign's tank: the net when the weights loaded, else a rule bot (no flags).
+  function bossBrain(t) {
+    const w = bossWeights, net = w ? Sov.loadNet(w.pi) : null;
+    if (!net) t.ai = { mode: 'farm', target: null, thinkT: 0, wander: 0, aimErr: 0, courage: 2 };
+    return { net, state: net ? Sov.newState(net) : null, act: new Int32Array(IO.HEADS.length), prev: new Int32Array(IO.HEADS.length),
+      obs: new Float32Array(IO.OBS_DIM), c: { mx: 0, my: 0, aim: t.a, fire: false }, decisionT: 0, version: w ? w.v : null, fallback: !net };
+  }
 
   function spawnBoss() {
     const w = bossWeights;
-    const net = w ? Sov.loadNet(w.pi) : null;
-    const fallback = !net;
     const t = C.makeTank(world, { name: 'Sovereign', color: '#ffd23f', bot: false });
     const a = R(0, TAU), r = 40;
     t.x = clamp(me.x + Math.cos(a) * BOSS_DIST, r, AW - r);
@@ -57,15 +64,13 @@
     t.a = Math.atan2(me.y - t.y, me.x - t.x);
     const build = ASSASSIN_BUILD;
     IO.applyBuild(world, t, build);
-    // The fallback is a rule bot: give it the bot brain without making core drive it.
-    if (fallback) t.ai = { mode: 'farm', target: null, thinkT: 0, wander: 0, aimErr: 0, courage: 2 };
     world.tanks.push(t);
-    boss = { tank: t, net, state: net ? Sov.newState(net) : null, act: new Int32Array(IO.HEADS.length), prev: new Int32Array(IO.HEADS.length),
-      obs: new Float32Array(IO.OBS_DIM), c: { mx: 0, my: 0, aim: t.a, fire: false }, decisionT: 0, version: w ? w.v : null, fallback, outcome: null, build,
+    const brain = bossBrain(t), fallback = brain.fallback;
+    boss = { tank: t, ...brain, outcome: null, build,
       // The fight is recorded for training (net boss only): both tanks at 10 Hz, your inputs and his choices.
       recorder: fallback ? null : new Sov.Recorder({ game: ID, version: w.v, hz: 10 }), recT: 0, startT: time,
       playerBuild: { turret: me.turret, stats: { ...me.stats } } };
-    bannerT = 4;
+    showBanner('SOVEREIGN HAS ENTERED', 'Matches against Sovereign help train him.');
     shake.add(0.8);
     Arcade.tone({ freq: 110, to: 55, dur: 0.9, type: 'sawtooth', vol: 0.07 });
     Arcade.tone({ freq: 523, to: 1046, dur: 0.4, type: 'triangle', vol: 0.05 });
@@ -73,10 +78,10 @@
 
   // Sovereign's controls this frame. The net decides every REPEAT sim frames (as in training)
   // and holds its move, aim and trigger in between; the turret turns like the player's auto-aim.
-  function bossControl(dt) {
+  function bossControl(dt, opp = me) {
     const t = boss.tank;
     if (boss.fallback) {
-      const rivals = new Set(world.tanks.filter(o => o !== me && o !== t));
+      const rivals = new Set(world.tanks.filter(o => o !== opp && o !== t));
       const b = C.botControl(world, t, dt, { ignore: rivals });
       return { mx: b.mx, my: b.my, aim: null, fire: false };
     }
@@ -84,10 +89,10 @@
     if (boss.decisionT <= 0) {
       boss.decisionT += IO.REPEAT / 60;
       if (boss.decisionT <= 0) boss.decisionT = IO.REPEAT / 60;
-      IO.observe(world, t, me, boss.prev, boss.obs);
+      IO.observe(world, t, opp, boss.prev, boss.obs);
       Sov.sample(Sov.forward(boss.net, boss.obs, boss.state), IO.HEADS, boss.act, true);
       boss.prev.set(boss.act);
-      boss.c = IO.applyAction(world, t, me, boss.act, dt);
+      boss.c = IO.applyAction(world, t, opp, boss.act, dt);
     }
     t.a += angDiff(boss.c.aim, t.a) * Math.min(1, dt * 12);
     return boss.c;
@@ -117,6 +122,7 @@
   // ---------- Flow ----------
 
   function start() {
+    leavePub();
     netMode = null; rival = null;
     world = newWorld(SHAPES);
     fx.clear();
@@ -131,7 +137,7 @@
     }
     world.events.length = 0;
     kills = 0; time = 0; picking = null;
-    boss = null; bannerT = 0;
+    boss = null; bannerT = 0; world.truce = null;
     prefetchBoss();
     cam.x = me.x; cam.y = me.y; cam.z = viewZoom();
     state = 'play';
@@ -176,7 +182,8 @@
           if (o === me || !o.alive) continue;
           const d = Math.hypot(o.x - me.x, o.y - me.y);
           // Only tanks that are after you, or right on top of you: auto-aim shouldn't start fights.
-          const hostile = o.remote || (boss && o === boss.tank) || (o.ai?.mode === 'fight' && o.ai.target === me) || d < 260;
+          if (world.truce && world.truce(o, me)) continue;
+          const hostile = (o.remote && !o.bot) || (boss && o === boss.tank) || (o.ai?.mode === 'fight' && o.ai.target === me) || (o.remote && o.bot && d < 520) || d < 260;
           if (hostile && d < bd) { bs = 1e9 - d; auto = o; bd = d; }
         }
         if (!auto) for (const s of world.shapes) { const d = Math.hypot(s.x - me.x, s.y - me.y); if (d > 460) continue; const sc = s.k.xp / (d + 60); if (sc > bs) { bs = sc; auto = s; } }
@@ -186,13 +193,17 @@
       controls.set(me, { mx, my, aim: null, fire: mouse.down || keys.has('Space') || (aimMode === 'auto' && auto && autoFire) });
     }
     if (netMode === 'live') updateLive(dt);
+    if (netMode === 'pub') updatePub(dt);
     // Sovereign arrives once per solo run at 20,000 xp; while he lives the rivals leave you two alone.
     if (!boss && me.alive && me.xp >= BOSS_XP && soloRun() && bossWeights !== undefined) spawnBoss();
-    const duel = boss && boss.tank.alive && me.alive;
+    const duel = boss && !boss.raid && boss.tank.alive && me.alive;
     if (duel) { controls.set(boss.tank, bossControl(dt)); recordBoss(dt); }
+    const raid = netMode === 'pub' && boss && boss.raid && boss.tank.alive && !boss.tank.remote;
+    if (raid) { const opp = raidTarget(dt); controls.set(boss.tank, opp ? bossControl(dt, opp) : { mx: 0, my: 0, fire: false }); }
     bannerT = Math.max(0, bannerT - dt);
     // A new player gets 30 seconds to find their feet (the bots' grace), unless they start the fight.
-    C.step(world, dt, controls, { spawnShapes: netMode !== 'live' || live.host, graceTarget: me, graceUntil: 30, ignore: duel ? new Set([me, boss.tank]) : undefined });
+    const makesShapes = netMode === 'live' ? live.host : netMode === 'pub' ? pubAuth() : true;
+    C.step(world, dt, controls, { spawnShapes: makesShapes, graceTarget: netMode ? null : me, graceUntil: 30, ignore: duel ? new Set([me, boss.tank]) : raid ? new Set([boss.tank]) : undefined });
     handleEvents();
     cam.x = Gfx.approach(cam.x, me.x, 6, dt);
     cam.y = Gfx.approach(cam.y, me.y, 6, dt);
@@ -206,6 +217,7 @@
     let fired = false;
     for (const e of world.events) {
       if (e.type === 'shot') {
+        if (netMode === 'pub' && e.t.nid && (e.t === me || (pubAuth() && !e.t.remote))) { const s = e.snap; pub.shots.push([e.t.nid, ...[s.x, s.y, s.vx, s.vy, s.r, s.dmg, s.life, s.pierce].map(v => Math.round(v * 10) / 10)]); }
         if (e.t !== me) continue;
         fired = true;
         const s = e.snap;   // as fired, not as step has since moved it
@@ -219,12 +231,15 @@
         if (e.t === me) picking = e.options;
       } else if (e.type === 'shapeHit') {
         if (netMode === 'live' && e.by === me) liveHits.push([e.s.id, Math.round(e.n * 10) / 10]);
+        if (netMode === 'pub' && e.by === me) pub.hits.push([e.s.id, Math.round(e.n * 10) / 10]);
       } else if (e.type === 'hit') {
         if (e.target === me) shake.add(0.12);
+        // Raid: who did how much to Sovereign, for the reward split.
+        if (netMode === 'pub' && boss && boss.raid && e.target === boss.tank && pubAuth()) { const k = e.by === me ? pub.lobby.slot : e.by?.slot; if (k !== undefined) pub.dmg[k] = (pub.dmg[k] || 0) + e.n; }
         if (e.sx !== undefined) fx.burst(3, () => ({ x: e.sx, y: e.sy, vx: R(-80, 80), vy: R(-80, 80), life: 0.25, size: 2, color: '#fff', shape: 'spark' }));
       } else if (e.type === 'shapeKilled') {
         const s = e.s;
-        if (netMode === 'live') goneShapes.add(s.id);
+        if (netMode === 'live' || netMode === 'pub') goneShapes.add(s.id);
         fx.burst(10, () => ({ x: s.x, y: s.y, vx: R(-120, 120), vy: R(-120, 120), life: R(0.3, 0.6), size: R(2, 5), color: s.k.color, drag: 3, shape: 'square', spin: R(-10, 10) }));
         if (e.by === me) {
           floats.add(`+${s.k.xp}`, s.x, s.y - 12, { color: s.k.color, size: 12 + Math.min(10, s.k.xp / 40) });
@@ -234,7 +249,8 @@
         const t = e.t;
         fx.burst(40, () => { const a = R(0, TAU), v = R(60, 260); return { x: t.x, y: t.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: R(0.5, 1), size: R(3, 7), color: t.color, drag: 2.5, shape: 'square', spin: R(-8, 8) }; });
         Arcade.tone({ freq: 150, to: 40, dur: 0.5, type: 'sawtooth', vol: 0.06 });
-        if (boss && t === boss.tank) {
+        if (netMode === 'pub' && pubAuth() && t !== me) pubKilled(e);
+        if (boss && !boss.raid && t === boss.tank) {
           shake.add(1);
           if (e.by === me && !boss.fallback) {
             Arcade.flag('tankfield-sovereign');
@@ -242,10 +258,10 @@
           }
           if (!boss.outcome) { boss.outcome = e.by === me ? 'win' : 'other'; finishBoss(boss.outcome); }
         }
-        if (t === me && boss && boss.tank.alive && !boss.outcome) { boss.outcome = e.by === boss.tank ? 'loss' : 'other'; finishBoss(boss.outcome); }
+        if (t === me && boss && !boss.raid && boss.tank.alive && !boss.outcome) { boss.outcome = e.by === boss.tank ? 'loss' : 'other'; finishBoss(boss.outcome); }
         if (t === me) {
           shake.add(0.8);
-          if (netMode === 'live') liveDied(e.by); else setTimeout(gameOver, 1000);
+          if (netMode === 'live') liveDied(e.by); else if (netMode === 'pub') pubDied(e.by); else setTimeout(gameOver, 1000);
         } else if (e.by === me) {
           kills++;
           floats.add(`${t.name} destroyed! +${e.xp}`, t.x, t.y - 30, { color: '#ffd23f', size: 18 });
@@ -290,6 +306,7 @@
   addEventListener('pointerup', () => { mouse.down = false; });
   function pause() {
     if (state === 'play' && netMode === 'live') return livePause();
+    if (state === 'play' && netMode === 'pub') return pubPause();
     if (state !== 'play' || (typeof Versus !== 'undefined' && Versus.active())) return;
     state = 'paused';
     ui.show({ title: 'Paused', html: `<p>Level ${me.level} ${T(me).name}</p>`, button: 'Resume', onAction: () => { state = 'play'; ui.hide(); } });
@@ -316,7 +333,9 @@
     if (sx > 20 && sx < W - 20 && sy > 20 && sy < H - 20) return;
     const a = Math.atan2(sy - H / 2, sx - W / 2), m = 34;
     const k = Math.min((W / 2 - m) / Math.abs(Math.cos(a) || 1e-6), (H / 2 - (Math.sin(a) > 0 ? 70 : m)) / Math.abs(Math.sin(a) || 1e-6));
-    const x = W / 2 + Math.cos(a) * k, y = H / 2 + Math.sin(a) * k;
+    const x = W / 2 + Math.cos(a) * k;
+    let y = H / 2 + Math.sin(a) * k;
+    if (x > W - 175 && y > H - 150) y = H - 150;   // clear of the minimap
     ctx.save(); ctx.translate(x, y); ctx.rotate(a);
     ctx.globalAlpha = 0.75 + 0.25 * Math.sin(time * 8);
     ctx.fillStyle = '#ffd23f'; ctx.strokeStyle = '#3a2a00'; ctx.lineWidth = 2;
@@ -453,7 +472,7 @@
     Gfx.text(ctx, `${aimMode === 'auto' ? 'Auto-aim' : 'Mouse aim'} (Q)${autoFire || aimMode === 'mouse' ? '' : ' · auto-fire off (E)'}`, 14, 20, { size: 11, align: 'left', color: '#2b2f3a', stroke: 'rgba(255,255,255,0.6)', width: 3 });
     // Turret choice.
     if (picking) {
-      const n = picking.length, w = 150, x = W / 2 - (n * (w + 10) - 10) / 2, y = 60;
+      const n = picking.length, w = 150, x = W / 2 - (n * (w + 10) - 10) / 2, y = netMode === 'pub' ? 82 : 60;
       Gfx.text(ctx, `Level ${me.level}: pick a new turret (keys 1-${n})`, W / 2, y - 14, { size: 16 });
       picking.forEach((id, i) => {
         const t = TURRETS[id], bx = x + i * (w + 10);
@@ -468,12 +487,13 @@
         hits.push({ x: bx, y, w, h: 120, fn: () => { me.turret = id; picking = null; Arcade.flag('tankfield-turret'); } });
       });
     }
+    if (netMode === 'pub' && pub) drawPubHud();
     // Last, so nothing covers it.
     if (bannerT > 0) {
       const al = Math.min(1, bannerT / 0.6, (4 - bannerT) / 0.3);
       ctx.save(); ctx.globalAlpha = al;
-      Gfx.text(ctx, 'SOVEREIGN HAS ENTERED', W / 2, H / 2 - 110, { size: 34, color: '#ffd23f', width: 6 });
-      Gfx.text(ctx, 'Matches against Sovereign help train him.', W / 2, H / 2 - 78, { size: 14, color: '#fff', width: 4 });
+      Gfx.text(ctx, banner?.text || '', W / 2, H / 2 - 110, { size: 34, color: '#ffd23f', width: 6 });
+      Gfx.text(ctx, banner?.sub || '', W / 2, H / 2 - 78, { size: 14, color: '#fff', width: 4 });
       ctx.restore();
     }
   }
@@ -492,7 +512,7 @@
   function frame(now) {
     const dt = Math.min(0.033, (now - last) / 1000);
     last = now;
-    if (state === 'play' && (overlayEl.hidden || netMode === 'live' || (typeof Versus !== 'undefined' && Versus.active()))) update(dt);
+    if (state === 'play' && (overlayEl.hidden || netMode === 'live' || netMode === 'pub' || (typeof Versus !== 'undefined' && Versus.active()))) update(dt);
     else { fx.update(dt); floats.update(dt); shake.update(dt); }
     draw();
     requestAnimationFrame(frame);
@@ -736,6 +756,395 @@
     showMenu();
   }
 
+  // ---------- Public lobby (public-lobby.js) ----------
+  // Up to 10 real players share one arena with bots. One player's browser (the lobby's authority)
+  // runs the bots, the shapes and Sovereign, and streams them 10 times a second; every player
+  // streams their own tank. As in the 1v1, the machine that owns a tank applies the damage it
+  // takes (from any shot it sees), and the shooter is told about kills so it can collect the xp.
+  // Sovereign raids every RAID_EVERY seconds of the lobby's clock, tougher for every player in
+  // the lobby; while he's up, players can't hurt each other, and his reward is split by damage.
+  // If the authority leaves, the next player's browser takes the bots over from the last snapshot.
+
+  const PUB_RIVALS = 10, RAID_EVERY = 450, RAID_LIFE = 240, RAID_POOL = 10050;
+  const TURRET_IDS = Object.keys(TURRETS);
+  const PEER_COLORS = ['#2f6fff', '#00b8d4', '#00c853', '#aa00ff', '#ff6d00', '#c51162', '#6200ea', '#00bfa5', '#ffab00', '#304ffe'];
+  let pub = null, pubError = '', pubToken = 0;
+  const pubAuth = () => netMode === 'pub' && !!pub && pub.lobby.isAuthority;
+  const statStr = t => STATS.map(s => t.stats[s.id]).join('');
+  const readStats = (t, str) => { if (typeof str === 'string' && str.length === 7) STATS.forEach((s, i) => { t.stats[s.id] = clamp(+str[i] || 0, 0, MAX_STAT); }); };
+  const r1 = v => Math.round(v * 10) / 10;
+  const raidOn = () => !!(boss && boss.raid && boss.tank.alive);
+
+  async function joinPub() {
+    leavePub();
+    live.leave();
+    const token = ++pubToken;
+    ui.show({ title: 'Joining a public lobby…', html: Relay.CONNECTING, button: 'Cancel', onAction: () => { pubToken++; showMenu(); }, onRender: Relay.ticker });
+    prefetchBoss();
+    try {
+      const lobby = await PublicLobby.join(ID, {
+        color: '#4f8cff',
+        onJoined: d => { if (pub) { addPeer(d.slot, d.name); floats.add(`${d.name} joined`, me.x, me.y - 60, { color: '#fff', size: 14 }); } },
+        onLeft: d => { if (pub) { removePeer(d.slot); if (d.name) floats.add(`${d.name} left`, me.x, me.y - 60, { color: '#cfd8dc', size: 14 }); } },
+        onAuthority: slot => { if (pub && slot === pub.lobby.slot) takeOver(); },
+        onState: (slot, st) => { const t = pub?.byNid.get('p' + slot); if (t && st) t.net = { ...st, at: performance.now() }; },
+        onWorld: w => { if (pub && !pub.lobby.isAuthority) applyWorld(w); },
+        onEvent: (from, type, d) => { if (pub) pubEvent(from, type, d); },
+        onClosed: () => pubGone(),
+      });
+      if (token !== pubToken) return lobby.leave();
+      startPub(lobby);
+    } catch (e) {
+      if (token !== pubToken) return;
+      pubError = Online.escape(e.message || "Couldn't join a lobby.");
+      showMenu();
+    }
+  }
+
+  function leavePub() {
+    if (!pub) return;
+    pub.lobby.leave();
+    pub = null;
+  }
+
+  function register(t, nid) { t.nid = nid; pub.byNid.set(nid, t); }
+
+  function startPub(lobby) {
+    netMode = 'pub'; rival = null; boss = null; bannerT = 0;
+    world = newWorld(lobby.isAuthority ? SHAPES : 0);
+    world.shapeTarget = SHAPES;
+    fx.clear(); goneShapes = new Set();
+    pub = { lobby, byNid: new Map(), shots: [], hits: [], sendT: 0, flushT: 0, worldT: 0, shapesT: 0, respawnT: 0,
+      bossK: Math.floor(lobby.clock() / 1000 / RAID_EVERY), bossEnd: 0, dmg: {} };
+    // Players can't hurt each other while Sovereign is up.
+    world.truce = (a, b) => raidOn() && a !== boss.tank && b !== boss.tank && !a.bot && !b.bot;
+    me = C.makeTank(world, { name: 'You', color: '#4f8cff', bot: false });
+    world.tanks.push(me);
+    register(me, 'p' + lobby.slot);
+    me.shield = 5; me.deaths = 0;
+    for (const [slot, name] of lobby.names) if (slot !== lobby.slot) addPeer(slot, name);
+    if (lobby.isAuthority) for (let i = 0; i < PUB_RIVALS; i++) addPubBot(i);
+    kills = 0; time = 0; picking = null;
+    cam.x = me.x; cam.y = me.y; cam.z = viewZoom();
+    state = 'play';
+    ui.hide();
+    Arcade.countPlay();
+    floats.add(`Public lobby · ${lobby.names.size} player${lobby.names.size === 1 ? '' : 's'}`, me.x, me.y - 60, { color: '#fff', size: 18 });
+    updateHud();
+  }
+
+  function addPubBot(i) {
+    const b = C.makeTank(world, { name: NAMES[i % NAMES.length], color: COLORS[i % COLORS.length], bot: true });
+    world.tanks.push(b);
+    register(b, 'b' + i);
+    C.gainXp(world, b, Math.floor(Math.random() * (i < 3 ? 3000 : 500)));
+    world.events.length = 0;
+  }
+
+  function addPeer(slot, name) {
+    if (pub.byNid.has('p' + slot)) removePeer(slot);
+    const t = C.makeTank(world, { name: String(name || 'Player').slice(0, 24), color: PEER_COLORS[slot % PEER_COLORS.length], bot: false });
+    t.remote = true; t.alive = false; t.slot = slot; t.deaths = 0; t.net = null;
+    world.tanks.push(t);
+    register(t, 'p' + slot);
+  }
+
+  function removePeer(slot) {
+    const t = pub.byNid.get('p' + slot);
+    if (!t) return;
+    world.tanks = world.tanks.filter(x => x !== t);
+    pub.byNid.delete('p' + slot);
+  }
+
+  function explode(t) {
+    fx.burst(40, () => { const a = R(0, TAU), v = R(60, 260); return { x: t.x, y: t.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: R(0.5, 1), size: R(3, 7), color: t.color, drag: 2.5, shape: 'square', spin: R(-8, 8) }; });
+    if (Math.hypot(t.x - me.x, t.y - me.y) < 1400) Arcade.tone({ freq: 150, to: 40, dur: 0.5, type: 'sawtooth', vol: 0.05 });
+  }
+
+  // The previous authority left: run its bots, Sovereign and shapes from here on.
+  function takeOver() {
+    for (const t of world.tanks) {
+      if (!t.remote || !t.nid || t.nid[0] === 'p') continue;
+      t.remote = false; t.net = null;
+      if (t.nid === 'S') {
+        boss = { tank: t, raid: true, ...bossBrain(t), target: null, targetT: 0 };
+        if (!t.alive) { world.tanks = world.tanks.filter(x => x !== t); pub.byNid.delete('S'); boss = null; }
+      } else if (!t.alive) t.respawnT = 2;
+    }
+    for (const sh of world.shapes) { delete sh.tx; delete sh.ty; }
+    world.shapeTarget = SHAPES;
+    // A lobby whose bots all left with the old authority gets a fresh set.
+    if (![...pub.byNid.keys()].some(k => k[0] === 'b')) for (let i = 0; i < PUB_RIVALS; i++) addPubBot(i);
+  }
+
+  // ---- Authority: the shared world ----
+
+  const tankRowPub = t => [t.nid, r1(t.x), r1(t.y), Math.round(t.vx), Math.round(t.vy), Math.round(t.a * 100), Math.ceil(Math.max(0, t.hp)), Math.round(t.max), t.level,
+    TURRET_IDS.indexOf(t.turret), Math.floor(t.xp), t.alive ? 1 : 0, statStr(t), t.name, t.color];
+
+  function sendWorld() {
+    const w = { b: world.tanks.filter(t => t.nid && t.nid[0] !== 'p').map(tankRowPub), bk: pub.bossK, be: pub.bossEnd };
+    if (pub.shapesT <= 0) {
+      pub.shapesT = 0.5;
+      w.t = world.shapes.map(sh => [sh.id, SHAPE_KINDS.indexOf(sh.k), Math.round(sh.x), Math.round(sh.y), Math.ceil(sh.hp)]);
+    }
+    pub.lobby.world(w);
+  }
+
+  function applyWorld(w) {
+    if (!w || !Array.isArray(w.b)) return;
+    const seen = new Set();
+    for (const row of w.b.slice(0, 40)) {
+      const [nid, x, y, vx, vy, a, hp, max, lv, tu, xp, al, st, name, color] = row;
+      if (typeof nid !== 'string' || nid[0] === 'p' || !isFinite(x) || !isFinite(y)) continue;
+      seen.add(nid);
+      let t = pub.byNid.get(nid);
+      if (!t) {
+        t = C.makeTank(world, { name: String(name || 'Tank').slice(0, 24), color: /^#[0-9a-f]{6}$/i.test(color) ? color : '#888888', bot: nid !== 'S' });
+        t.remote = true; t.x = clamp(x, 0, AW); t.y = clamp(y, 0, AH);
+        world.tanks.push(t);
+        register(t, nid);
+      }
+      t.net = { x: clamp(x, 0, AW), y: clamp(y, 0, AH), vx: +vx || 0, vy: +vy || 0, a: (+a || 0) / 100, at: performance.now() };
+      t.max = Math.max(1, +max || 1); t.hp = clamp(+hp || 0, 0, t.max);
+      t.level = clamp(lv | 0, 1, 45);
+      if (TURRET_IDS[tu]) t.turret = TURRET_IDS[tu];
+      t.xp = Math.max(0, +xp || 0);
+      readStats(t, st);
+      const alive = !!al;
+      if (t.alive && !alive) explode(t);
+      if (!t.alive && alive) { t.x = t.net.x; t.y = t.net.y; }
+      t.alive = alive;
+      if (nid === 'S' && (!boss || boss.tank !== t) && alive) { boss = { tank: t, raid: true }; raidStarted(); }
+    }
+    for (const [nid, t] of [...pub.byNid]) {
+      if (nid[0] === 'p' || seen.has(nid)) continue;
+      world.tanks = world.tanks.filter(x => x !== t);
+      pub.byNid.delete(nid);
+      if (boss && boss.tank === t) boss = null;
+    }
+    if (isFinite(w.bk)) pub.bossK = w.bk;
+    if (isFinite(w.be)) pub.bossEnd = w.be;
+    if (w.t) applyShapes(w.t);
+  }
+
+  function raidStarted() {
+    showBanner('SOVEREIGN RAID', 'Team up and bring him down. Players can\'t hurt each other until he falls.');
+    shake.add(0.8);
+    Arcade.tone({ freq: 110, to: 55, dur: 0.9, type: 'sawtooth', vol: 0.07 });
+    Arcade.tone({ freq: 523, to: 1046, dur: 0.4, type: 'triangle', vol: 0.05 });
+  }
+
+  function players() { return world.tanks.filter(t => t.nid && t.nid[0] === 'p'); }
+
+  function spawnRaid() {
+    const alive = players().filter(t => t.alive);
+    const focus = alive.length ? alive[Math.floor(Math.random() * alive.length)] : me;
+    const t = C.makeTank(world, { name: 'Sovereign', color: '#ffd23f', bot: false });
+    const a = R(0, TAU), r = 40;
+    t.x = clamp(focus.x + Math.cos(a) * BOSS_DIST, r, AW - r);
+    t.y = clamp(focus.y + Math.sin(a) * BOSS_DIST, r, AH - r);
+    t.a = Math.atan2(focus.y - t.y, focus.x - t.x);
+    IO.applyBuild(world, t, ASSASSIN_BUILD);
+    // Tougher for every player in the lobby. His reward is the raid split, so his own kill pays little.
+    const n = players().length;
+    t.max = Math.round(C.maxHp(t) * (1 + 0.9 * (n - 1))); t.hp = t.max; t.xp = 0;
+    world.tanks.push(t);
+    register(t, 'S');
+    boss = { tank: t, raid: true, ...bossBrain(t), target: null, targetT: 0 };
+    pub.bossEnd = pub.lobby.clock() / 1000 + RAID_LIFE;
+    pub.dmg = {};
+    raidStarted();
+  }
+
+  // Sovereign hunts whoever is closest, re-checked every few seconds; his memory resets on a switch.
+  function raidTarget(dt) {
+    boss.targetT -= dt;
+    if (boss.targetT <= 0 || !boss.target || !boss.target.alive || !world.tanks.includes(boss.target)) {
+      boss.targetT = 4;
+      const t = boss.tank;
+      let best = null, bd = Infinity;
+      for (const p of players()) { if (!p.alive) continue; const d = Math.hypot(p.x - t.x, p.y - t.y); if (d < bd) { bd = d; best = p; } }
+      if (best !== boss.target && boss.net) boss.state = Sov.newState(boss.net);
+      boss.target = best;
+    }
+    return boss.target;
+  }
+
+  function endRaid(won) {
+    const total = Object.values(pub.dmg).reduce((a, b) => a + b, 0);
+    const xp = {};
+    if (won) for (const [k, v] of Object.entries(pub.dmg)) if (v >= total * 0.03) xp[k] = Math.round(RAID_POOL * Math.max(0.3, v / total));
+    const t = boss.tank;
+    if (!won) { t.alive = false; explode(t); }
+    world.tanks = world.tanks.filter(x => x !== t);
+    pub.byNid.delete('S');
+    pub.lobby.send('raid', { won: won ? 1 : 0, xp });
+    raidOver({ won, xp });
+  }
+
+  function raidOver(d) {
+    boss = null;
+    const mine = clamp(+(d.xp || {})[pub.lobby.slot] || 0, 0, RAID_POOL);
+    if (d.won) {
+      showBanner('SOVEREIGN FALLS', mine ? `Your share of the reward: +${mine.toLocaleString()} xp` : 'Hit him next time to share the reward.');
+      Arcade.tone({ freq: 523, to: 1568, dur: 0.6, type: 'triangle', vol: 0.06 });
+      if (mine) { C.gainXp(world, me, mine); Arcade.flag('tankfield-raid'); }
+    } else showBanner('SOVEREIGN WITHDRAWS', `He'll be back in ${Math.round(RAID_EVERY / 60 * 2) / 2} minutes.`);
+  }
+
+  function pubKilled(e) {
+    const t = e.t;
+    if (boss && boss.raid && t === boss.tank) return endRaid(true);
+    // A bot here, destroyed by another player: they collect the xp on their machine.
+    if (e.by && e.by.remote && e.by.slot !== undefined) pub.lobby.send('kill', { xp: e.xp, name: t.name }, e.by.slot);
+  }
+
+  // ---- Everyone ----
+
+  function pubDied(by) {
+    me.alive = false;
+    me.deaths++;
+    pub.respawnT = 4;
+    pub.lobby.send('dead', { by: by?.nid || null, xp: Math.floor(me.xp), d: me.deaths });
+  }
+
+  function pubRespawn() {
+    // Back as a fresh tank with 30% of your xp (the turret choices come round again).
+    const keep = Math.floor(me.xp * 0.3);
+    Object.assign(me, { xp: 0, level: 1, points: 0, stats: Object.fromEntries(STATS.map(s => [s.id, 0])), turret: 'basic', alive: true, vx: 0, vy: 0 });
+    me.max = maxHp(me); me.hp = me.max;
+    C.place(world, me);
+    C.gainXp(world, me, keep);
+    me.hp = me.max; me.shield = 5;
+    cam.x = me.x; cam.y = me.y;
+  }
+
+  function pubEvent(from, type, d) {
+    if (state !== 'play' || netMode !== 'pub') return;
+    if (type === 'f') {
+      for (const v of (Array.isArray(d?.s) ? d.s : []).slice(0, 120)) {
+        const owner = pub.byNid.get(v[0]);
+        if (!owner || !owner.remote) continue;
+        const [x, y, vx, vy, r, dmg, life, pierce] = v.slice(1).map(Number);
+        if (![x, y, vx, vy].every(isFinite)) continue;
+        world.shots.push({ x, y, vx, vy, r: clamp(r, 1, 14), dmg: clamp(dmg, 0, 100), life: clamp(life, 0, 3), owner, pierce: clamp(pierce | 0, 1, 3), color: owner.color });
+      }
+      for (const [id, n] of (Array.isArray(d?.h) ? d.h : []).slice(0, 60)) {
+        const sh = world.shapes.find(x => x.id === id);
+        if (!sh || sh.dead) continue;
+        sh.hitT = 0.08;
+        sh.hp -= clamp(+n || 0, 0, 200);
+        if (sh.hp <= 0) C.killShape(world, sh, null);
+      }
+    } else if (type === 'dead') {
+      const t = pub.byNid.get('p' + from);
+      if (t) { t.deaths = Math.max(t.deaths + 1, d?.d | 0); if (t.alive) explode(t); t.alive = false; }
+      const xp = Math.round(clamp(+d?.xp || 0, 0, 1e7) * 0.5) + 50;
+      if (d?.by === me.nid) {
+        C.gainXp(world, me, xp);
+        kills++;
+        if (t) floats.add(`${t.name} destroyed! +${xp}`, t.x, t.y - 30, { color: '#ffd23f', size: 18 });
+        shake.add(0.3);
+        Arcade.flag('tankfield-kill');
+        if (kills >= 5) Arcade.flag('tankfield-five');
+      } else if (pubAuth() && typeof d?.by === 'string' && d.by[0] === 'b') {
+        const b = pub.byNid.get(d.by);
+        if (b && !b.remote && b.alive) C.gainXp(world, b, xp);
+      }
+    } else if (type === 'kill') {
+      const xp = clamp(d?.xp | 0, 0, 1e7);
+      C.gainXp(world, me, xp);
+      kills++;
+      floats.add(`${String(d?.name || 'Tank').slice(0, 24)} destroyed! +${xp}`, me.x, me.y - 50, { color: '#ffd23f', size: 18 });
+      shake.add(0.3);
+      Arcade.flag('tankfield-kill');
+      if (kills >= 5) Arcade.flag('tankfield-five');
+    } else if (type === 'raid' && from === pub.lobby.authority) {
+      raidOver({ won: !!d?.won, xp: d?.xp || {} });
+    }
+  }
+
+  function syncRemote(t, dt) {
+    const st = t.net;
+    if (!st) return;
+    if (t.nid[0] === 'p') {
+      const wasAlive = t.alive;
+      t.alive = !!st.al && (st.d | 0) >= t.deaths;
+      if (!wasAlive && t.alive) { t.x = st.x; t.y = st.y; }
+      t.level = clamp(st.l | 0, 1, 45);
+      t.max = Math.max(1, st.m | 0); t.hp = clamp(st.h | 0, 0, t.max);
+      if (TURRETS[st.u]) t.turret = st.u;
+      t.xp = Math.max(0, st.p | 0);
+      readStats(t, st.st);
+      t.shield = st.sh ? 1 : 0;
+    }
+    const lag = Math.min(0.15, (performance.now() - st.at) / 1000);
+    const tx = st.x + (st.vx || 0) * lag, ty = st.y + (st.vy || 0) * lag;
+    if (Math.hypot(tx - t.x, ty - t.y) > 250) { t.x = tx; t.y = ty; }
+    else { t.x = Gfx.approach(t.x, tx, 14, dt); t.y = Gfx.approach(t.y, ty, 14, dt); }
+    t.x = clamp(t.x, 0, AW); t.y = clamp(t.y, 0, AH);
+    t.vx = st.vx || 0; t.vy = st.vy || 0;
+    t.a += angDiff(+st.a || 0, t.a) * Math.min(1, dt * 20);
+  }
+
+  function updatePub(dt) {
+    const L = pub.lobby;
+    pub.sendT -= dt; pub.flushT -= dt; pub.worldT -= dt; pub.shapesT -= dt;
+    me.shield = Math.max(0, (me.shield || 0) - dt);
+    if (!me.alive) { pub.respawnT -= dt; if (pub.respawnT <= 0) pubRespawn(); }
+    if (pub.sendT <= 0) {
+      pub.sendT = 0.05;
+      L.state({ x: r1(me.x), y: r1(me.y), vx: r1(me.vx), vy: r1(me.vy), a: Math.round(me.a * 100) / 100, h: Math.round(Math.max(0, me.hp)), m: Math.round(me.max), l: me.level, u: me.turret,
+        p: Math.floor(me.xp), st: statStr(me), al: me.alive ? 1 : 0, d: me.deaths, sh: me.shield > 0 ? 1 : 0 });
+    }
+    if (pub.flushT <= 0 && (pub.shots.length || pub.hits.length)) {
+      pub.flushT = 0.05;
+      L.send('f', { s: pub.shots.splice(0, 120), h: pub.hits.splice(0, 60) });
+    }
+    if (L.isAuthority) {
+      const c = L.clock() / 1000, k = Math.floor(c / RAID_EVERY);
+      if (!boss && k > pub.bossK && bossWeights !== undefined) { pub.bossK = k; spawnRaid(); }
+      if (raidOn() && c > pub.bossEnd) endRaid(false);
+      if (pub.worldT <= 0) { pub.worldT = 0.1; sendWorld(); }
+    }
+    for (const t of world.tanks) if (t.remote) syncRemote(t, dt);
+  }
+
+  function drawPubHud() {
+    const c = pub.lobby.clock() / 1000;
+    Gfx.card(ctx, W / 2 - 160, 10, 320, raidOn() ? 46 : 36);
+    if (raidOn()) {
+      const t = boss.tank, left = Math.max(0, pub.bossEnd - c);
+      Gfx.text(ctx, `SOVEREIGN RAID · ${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')} left`, W / 2, 24, { size: 13, stroke: null, color: '#ffd23f' });
+      Gfx.bar(ctx, W / 2 - 145, 34, 290, 10, Math.max(0, t.hp) / t.max, '#ffd23f');
+    } else {
+      const next = Math.max(0, (pub.bossK + 1) * RAID_EVERY - c);
+      Gfx.text(ctx, `Public lobby · ${pub.lobby.names.size} player${pub.lobby.names.size === 1 ? '' : 's'}`, W / 2, 22, { size: 12, stroke: null, color: '#fff' });
+      Gfx.text(ctx, `Sovereign raid in ${Math.floor(next / 60)}:${String(Math.floor(next % 60)).padStart(2, '0')}`, W / 2, 37, { size: 11, stroke: null, color: next < 30 ? '#ffd23f' : '#cfd8dc' });
+    }
+    if (!me.alive) Gfx.text(ctx, `Back in ${Math.ceil(pub.respawnT)}…`, W / 2, H / 2 - 40, { size: 22 });
+  }
+
+  function pubPause() {
+    ui.show({
+      title: 'Menu',
+      html: `<p>The lobby keeps going while this is open.</p><p>Level ${me.level} ${T(me).name} · ${kills} tank${kills === 1 ? '' : 's'} destroyed</p>
+        <div class="menu"><button class="btn secondary" type="button" data-quit>Leave the lobby</button></div>`,
+      button: 'Back in',
+      onAction: () => ui.hide(),
+      onRender: p => p.querySelector('[data-quit]').addEventListener('click', showMenu),
+    });
+  }
+
+  function pubGone() {
+    if (netMode !== 'pub') return;
+    pub = null;
+    state = 'over';
+    netMode = null;
+    ui.show({ title: 'Connection lost', html: '<p>Lost the connection to the game server.</p>', button: 'Back to menu', onAction: showMenu });
+  }
+
   // ---------- Menu ----------
 
   const INTRO_HTML = `<p>Shoot shapes for experience, level up, and outgrow the rival tanks before they come for you. One life.</p>
@@ -746,10 +1155,19 @@
     ui, start, score: () => (me && netMode !== 'live' ? Math.floor(me.xp) : 0),
     intro: {
       title: '🛡️ Tankfield',
-      get html() { return `${INTRO_HTML}${live.html(`Live 1v1 against a real player: same arena, no bots, first to ${LIVE_KILLS} kills`)}<p class="error" data-live-error>${liveError}</p>`; },
+      get html() {
+        const lobby = PublicLobby.enabled ? `<p class="za-label" style="margin-top:10px">Public lobby: drop into a shared arena with real players and bots. Sovereign raids every 7½ minutes; bring him down together.</p>
+          <div class="menu"><button class="btn" type="button" data-pub>Join a public lobby <span data-pub-count></span></button></div><p class="error">${pubError}</p>` : '';
+        return `${INTRO_HTML}${lobby}${live.html(`Live 1v1 against a real player: same arena, no bots, first to ${LIVE_KILLS} kills`)}<p class="error" data-live-error>${liveError}</p>`;
+      },
       button: 'Roll out',
       onAction: start,
-      onRender: p => { live.wire(p); liveError = ''; },
+      onRender: p => {
+        live.wire(p); liveError = ''; pubError = '';
+        p.querySelector('[data-pub]')?.addEventListener('click', joinPub);
+        const n = p.querySelector('[data-pub-count]');
+        if (n) PublicLobby.count(ID).then(c => { if (c && n.isConnected) n.textContent = `· ${c} playing`; });
+      },
     },
   };
   function showMenu() {
@@ -757,6 +1175,8 @@
     netMode = null;
     rival = null;
     live.leave();
+    leavePub();
+    boss = null; world.truce = null;
     world.tanks = []; world.shots = []; world.pending = []; world.events.length = 0;
     Versus.attach(attachOpts);
   }
@@ -766,6 +1186,6 @@
   Versus.attach(attachOpts);
   if (liveInvite) live.connect('public', liveInvite);
   // Console handle for testing (only with #dev in the address).
-  if (location.hash === '#dev') window.__tank = { get me() { return me; }, get boss() { return boss; }, get world() { return world; }, spawnBoss };
+  if (location.hash === '#dev') window.__tank = { get me() { return me; }, get boss() { return boss; }, get world() { return world; }, get pub() { return pub; }, spawnBoss, spawnRaid: () => spawnRaid() };
   requestAnimationFrame(frame);
 })();

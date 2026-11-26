@@ -159,6 +159,8 @@
   // `at` is the shot that did it (if any); the hit event carries its position for the spark.
   function damage(world, target, n, by, at) {
     if (target.shield > 0 || target.dead || target.alive === false) return;
+    // A truce (public lobby raids: players can't hurt each other while Sovereign is up).
+    if (world.truce && by && world.truce(target, by)) return;
     // Live: each machine owns its own tank, so damage to the other player only happens over
     // there (they report it). The spark still shows.
     if (target.remote) {
