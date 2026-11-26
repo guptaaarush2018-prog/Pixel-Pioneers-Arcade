@@ -10,7 +10,7 @@
 (() => {
   const ID = 'tankfield';
   const W = 960, H = 540, TAU = Math.PI * 2;
-  const RIVALS = 6, SHAPES = 70;
+  const RIVALS = 14, SHAPES = 170;
   const LIVE_KILLS = 3, LIVE_TIME = 300;
   const canvas = document.getElementById('game');
   const ctx = Arcade.setupCanvas(canvas, W, H);
@@ -23,24 +23,24 @@
   const fx = Gfx.particles(700), floats = Gfx.floaters(), shake = Gfx.shaker();
 
   const C = TankCore;
-  const { AW, AH, STATS, MAX_STAT, TURRETS, SHAPE_KINDS, xpFor, radius, shotSpeed, maxHp } = C;
+  const { AW, AH, MID_W, MID_H, STATS, MAX_STAT, TURRETS, SHAPE_KINDS, xpFor, radius, shotSpeed, shotRange, maxHp } = C;
   const T = t => TURRETS[t.turret];
   // All the rules live in core.js; this file draws, listens and keeps score.
   const newWorld = shapes => C.createWorld({ rng: () => Math.random(), shapes });
   let world = newWorld(SHAPES);
   const controls = new Map();
 
-  let me = null, state = 'menu', cam = { x: AW / 2, y: AH / 2 }, time = 0, aimMode = Arcade.load('tank:aim', 'auto');
+  let me = null, state = 'menu', cam = { x: AW / 2, y: AH / 2, z: 0.8 }, time = 0, aimMode = Arcade.load('tank:aim', 'auto');
   let mouse = { x: W / 2, y: H / 2, down: false }, kills = 0, picking = null;
   const spend = (t, i) => C.spend(world, t, i);
 
   // ---------- Sovereign ----------
-  const BOSS_XP = 20000, BOSS_DIST = 700;
+  const BOSS_XP = 20000, BOSS_DIST = 1300;
   const IO = TankSovIO, Sov = Sovereign;
-  const SIDX = id => STATS.findIndex(s => s.id === id);
-  const FALLBACK_BUILD = { path: ['longshot', 'rail'], alloc: [
-    ...Array(7).fill(SIDX('shotPower')), ...Array(7).fill(SIDX('reload')), ...Array(7).fill(SIDX('shotSpeed')),
-    ...Array(6).fill(SIDX('armor')), ...Array(6).fill(SIDX('speed'))] };
+  // The assassin kit: a Railgun with shot speed, power, reload and engine all maxed (28 of his 33
+  // points) and the last 5 in armor. His shots cross the whole screen, so the camera pulls back
+  // while he's alive and an arrow at the edge points to him.
+  const ASSASSIN_BUILD = IO.KITS.assassin;
   // undefined: not asked yet; null: failed (fallback boss); else { v, pi, build }.
   let bossWeights, bossWeightsP = null, boss = null, bannerT = 0;
   const prefetchBoss = () => { bossWeightsP = bossWeightsP || Sov.loadWeights(ID).then(w => { bossWeights = w; }); };
@@ -48,15 +48,14 @@
 
   function spawnBoss() {
     const w = bossWeights;
-    const net = w ? Sov.loadNet(w.pi) : null, buildNet = w && w.build ? Sov.loadNet(w.build) : null;
-    const fallback = !net || !buildNet;
+    const net = w ? Sov.loadNet(w.pi) : null;
+    const fallback = !net;
     const t = C.makeTank(world, { name: 'Sovereign', color: '#ffd23f', bot: false });
     const a = R(0, TAU), r = 40;
     t.x = clamp(me.x + Math.cos(a) * BOSS_DIST, r, AW - r);
     t.y = clamp(me.y + Math.sin(a) * BOSS_DIST, r, AH - r);
     t.a = Math.atan2(me.y - t.y, me.x - t.x);
-    let build = FALLBACK_BUILD;
-    if (!fallback) { const b = IO.chooseBuild(buildNet, IO.buildFeatures(me), Math.random, true); build = { path: IO.BUILD_PATHS[b.path], alloc: b.alloc }; }
+    const build = ASSASSIN_BUILD;
     IO.applyBuild(world, t, build);
     // The fallback is a rule bot: give it the bot brain without making core drive it.
     if (fallback) t.ai = { mode: 'farm', target: null, thinkT: 0, wander: 0, aimErr: 0, courage: 2 };
@@ -111,8 +110,9 @@
   }
   addEventListener('pagehide', () => { if (boss && !boss.outcome) finishBoss('other'); });
 
-  const NAMES = ['Rumble', 'Ironsides', 'Boomer', 'Tread', 'Clank', 'Bolt', 'Rivet', 'Howitzer', 'Pounder', 'Sprocket'];
-  const COLORS = ['#ff5a5f', '#ffb02e', '#3ccf8e', '#ff7ae0', '#b07cff', '#2ee6c9'];
+  const NAMES = ['Rumble', 'Ironsides', 'Boomer', 'Tread', 'Clank', 'Bolt', 'Rivet', 'Howitzer', 'Pounder', 'Sprocket',
+    'Mortar', 'Brick', 'Gauge', 'Piston', 'Torque', 'Ratchet', 'Anvil', 'Flint', 'Grinder', 'Turbo', 'Bastion', 'Cinder'];
+  const COLORS = ['#ff5a5f', '#ffb02e', '#3ccf8e', '#ff7ae0', '#b07cff', '#2ee6c9', '#ff8a3d', '#9be37a', '#e05aff', '#5ad1ff', '#ffd23f', '#ff6fa3', '#7ee0b5', '#c99bff'];
 
   // ---------- Flow ----------
 
@@ -125,15 +125,15 @@
     me.x = AW / 2 + R(-300, 300); me.y = AH / 2 + R(-200, 200);
     const names = [...NAMES].sort(() => Math.random() - 0.5);
     for (let i = 0; i < RIVALS; i++) {
-      const b = C.makeTank(world, { name: names[i], color: COLORS[i], bot: true });
+      const b = C.makeTank(world, { name: names[i], color: COLORS[i % COLORS.length], bot: true });
       world.tanks.push(b);
-      C.gainXp(world, b, Math.floor(Math.random() * 300));
+      C.gainXp(world, b, Math.floor(Math.random() * (i < 3 ? 2500 : 400)));
     }
     world.events.length = 0;
     kills = 0; time = 0; picking = null;
     boss = null; bannerT = 0;
     prefetchBoss();
-    cam.x = me.x; cam.y = me.y;
+    cam.x = me.x; cam.y = me.y; cam.z = viewZoom();
     state = 'play';
     ui.hide();
     updateHud();
@@ -169,14 +169,14 @@
       let my = (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0) - (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0);
       // Aim: the mouse, or the nearest thing worth shooting.
       let want = me.a, auto = null;
-      if (aimMode === 'mouse') want = Math.atan2(mouse.y + cam.y - H / 2 - me.y, mouse.x + cam.x - W / 2 - me.x);
+      if (aimMode === 'mouse') want = Math.atan2((mouse.y - H / 2) / cam.z + cam.y - me.y, (mouse.x - W / 2) / cam.z + cam.x - me.x);
       else {
-        let bd = 520 * (T(me).range || 1), bs = -Infinity;
+        let bd = Math.max(520 * (T(me).range || 1), Math.min(shotRange(me) * 0.9, 1400)), bs = -Infinity;
         for (const o of world.tanks) {
           if (o === me || !o.alive) continue;
           const d = Math.hypot(o.x - me.x, o.y - me.y);
           // Only tanks that are after you, or right on top of you: auto-aim shouldn't start fights.
-          const hostile = o.remote || (o.ai?.mode === 'fight' && o.ai.target === me) || d < 260;
+          const hostile = o.remote || (boss && o === boss.tank) || (o.ai?.mode === 'fight' && o.ai.target === me) || d < 260;
           if (hostile && d < bd) { bs = 1e9 - d; auto = o; bd = d; }
         }
         if (!auto) for (const s of world.shapes) { const d = Math.hypot(s.x - me.x, s.y - me.y); if (d > 460) continue; const sc = s.k.xp / (d + 60); if (sc > bs) { bs = sc; auto = s; } }
@@ -196,6 +196,7 @@
     handleEvents();
     cam.x = Gfx.approach(cam.x, me.x, 6, dt);
     cam.y = Gfx.approach(cam.y, me.y, 6, dt);
+    cam.z = Gfx.approach(cam.z, viewZoom(), 2, dt);
     fx.update(dt); floats.update(dt); shake.update(dt);
     updateHud();
   }
@@ -295,6 +296,35 @@
   }
   Arcade.onBlur(pause);
 
+  // ---------- Camera ----------
+
+  // How much of the arena you see: a little more as your tank grows, more again with a long-range
+  // turret (as in the turret's own reach), and the widest view while Sovereign is alive.
+  function viewZoom() {
+    if (!me) return 0.8;
+    let z = 0.82 - Math.min(44, me.level - 1) * 0.004;
+    if (T(me).range) z *= 0.82;
+    if (boss && boss.tank.alive) z = Math.min(z, 0.5);
+    return z;
+  }
+
+  // An arrow on the screen edge pointing to Sovereign when he's out of view, with his distance.
+  function drawBossArrow() {
+    if (!boss || !boss.tank.alive) return;
+    const t = boss.tank, z = cam.z;
+    const sx = W / 2 + (t.x - cam.x) * z, sy = H / 2 + (t.y - cam.y) * z;
+    if (sx > 20 && sx < W - 20 && sy > 20 && sy < H - 20) return;
+    const a = Math.atan2(sy - H / 2, sx - W / 2), m = 34;
+    const k = Math.min((W / 2 - m) / Math.abs(Math.cos(a) || 1e-6), (H / 2 - (Math.sin(a) > 0 ? 70 : m)) / Math.abs(Math.sin(a) || 1e-6));
+    const x = W / 2 + Math.cos(a) * k, y = H / 2 + Math.sin(a) * k;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+    ctx.globalAlpha = 0.75 + 0.25 * Math.sin(time * 8);
+    ctx.fillStyle = '#ffd23f'; ctx.strokeStyle = '#3a2a00'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(16, 0); ctx.lineTo(-10, -11); ctx.lineTo(-5, 0); ctx.lineTo(-10, 11); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.restore();
+    Gfx.text(ctx, `Sovereign · ${Math.round(Math.hypot(t.x - me.x, t.y - me.y) / 10) * 10}`, clamp(x, 70, W - 70), clamp(y + (y > H / 2 ? -22 : 22), 14, H - 14), { size: 11, color: '#ffd23f', width: 3 });
+  }
+
   // ---------- Drawing ----------
 
   function polygon(x, y, r, n, a) {
@@ -345,14 +375,14 @@
     ctx.save();
     ctx.translate(off.x, off.y);
     ctx.fillStyle = '#aab3c2'; ctx.fillRect(-10, -10, W + 20, H + 20);
-    const ox = W / 2 - cam.x, oy = H / 2 - cam.y;
+    const z = cam.z, hw = W / 2 / z, hh = H / 2 / z;
     ctx.save();
-    ctx.translate(ox, oy);
-    const x0 = Math.max(0, Math.floor((cam.x - W / 2) / 80) * 80), y0 = Math.max(0, Math.floor((cam.y - H / 2) / 80) * 80);
-    for (let x = x0; x < Math.min(AW, cam.x + W / 2 + 80); x += 80) for (let y = y0; y < Math.min(AH, cam.y + H / 2 + 80); y += 80) grid.draw(ctx, x, y);
+    ctx.translate(W / 2, H / 2); ctx.scale(z, z); ctx.translate(-cam.x, -cam.y);
+    const x0 = Math.max(0, Math.floor((cam.x - hw) / 80) * 80), y0 = Math.max(0, Math.floor((cam.y - hh) / 80) * 80);
+    for (let x = x0; x < Math.min(AW, cam.x + hw + 80); x += 80) for (let y = y0; y < Math.min(AH, cam.y + hh + 80); y += 80) grid.draw(ctx, x, y);
     // The middle, where the big shapes gather.
-    ctx.fillStyle = 'rgba(176,124,255,0.07)'; ctx.fillRect(AW / 2 - 500, AH / 2 - 340, 1000, 680);
-    const vis = (x, y, m) => Math.abs(x - cam.x) < W / 2 + m && Math.abs(y - cam.y) < H / 2 + m;
+    ctx.fillStyle = 'rgba(176,124,255,0.07)'; ctx.fillRect(AW / 2 - MID_W, AH / 2 - MID_H, MID_W * 2, MID_H * 2);
+    const vis = (x, y, m) => Math.abs(x - cam.x) < hw + m && Math.abs(y - cam.y) < hh + m;
     for (const s of world.shapes) {
       if (!vis(s.x, s.y, 60)) continue;
       Gfx.shadow(ctx, s.x + 2, s.y + 4, s.r, s.r * 0.6, 0.2);
@@ -362,7 +392,15 @@
       if (s.hp < s.max) Gfx.bar(ctx, s.x - s.r, s.y + s.r + 6, s.r * 2, 4, s.hp / s.max, '#3ccf8e');
     }
     for (const s of world.shots) {
-      if (!vis(s.x, s.y, 20)) continue;
+      if (!vis(s.x, s.y, 60)) continue;
+      // Fast shots (Long Shot, Railgun) leave a streak so you can see where they came from.
+      const v = Math.hypot(s.vx, s.vy);
+      if (v > 700) {
+        const k = Math.min(0.09, 140 / v);
+        ctx.strokeStyle = s.color; ctx.globalAlpha = 0.45; ctx.lineWidth = s.r * 1.3; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(s.x - s.vx * k, s.y - s.vy * k); ctx.lineTo(s.x, s.y); ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
       ctx.fillStyle = Gfx.shade(s.color, -0.3); ctx.beginPath(); ctx.arc(s.x, s.y + 1.5, s.r, 0, TAU); ctx.fill();
       ctx.fillStyle = s.color; ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, TAU); ctx.fill();
     }
@@ -373,6 +411,7 @@
     ctx.restore();
     ctx.restore();
     if (state === 'menu' || !me) return;
+    drawBossArrow();
     drawPanels();
   }
 
@@ -398,7 +437,7 @@
     // Minimap.
     const mw = 150, mh = mw * AH / AW, mx = W - mw - 12, my = H - mh - 12, k = mw / AW;
     Gfx.card(ctx, mx - 4, my - 4, mw + 8, mh + 8);
-    ctx.fillStyle = 'rgba(176,124,255,0.2)'; ctx.fillRect(mx + (AW / 2 - 500) * k, my + (AH / 2 - 340) * k, 1000 * k, 680 * k);
+    ctx.fillStyle = 'rgba(176,124,255,0.2)'; ctx.fillRect(mx + (AW / 2 - MID_W) * k, my + (AH / 2 - MID_H) * k, MID_W * 2 * k, MID_H * 2 * k);
     for (const t of world.tanks) { if (!t.alive) continue; ctx.fillStyle = t.color; ctx.beginPath(); ctx.arc(mx + t.x * k, my + t.y * k, t === me ? 3.5 : 2.5, 0, TAU); ctx.fill(); }
     // Leaderboard.
     const top = [...world.tanks].filter(t => t.alive).sort((a, b) => b.xp - a.xp).slice(0, 5);

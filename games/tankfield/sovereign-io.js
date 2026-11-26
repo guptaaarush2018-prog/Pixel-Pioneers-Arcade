@@ -149,7 +149,16 @@
     return { path: p.pick, alloc, logp };
   }
 
-  const api = { HEADS, REPEAT, AIM_OFFSETS, OBS_DIM, LAYOUT, observe, applyAction,
+  // Fixed kits that skip the build head. assassin: Railgun with shot speed, power, reload and
+  // engine maxed and the last 5 points in armor (the boss Tankfield ships).
+  const SI = id => STATS.findIndex(s => s.id === id);
+  const KITS = {
+    assassin: { path: ['longshot', 'rail'], alloc: [
+      ...Array(7).fill(SI('shotSpeed')), ...Array(7).fill(SI('shotPower')), ...Array(7).fill(SI('reload')),
+      ...Array(7).fill(SI('speed')), ...Array(5).fill(SI('armor'))] },
+  };
+
+  const api = { KITS, HEADS, REPEAT, AIM_OFFSETS, OBS_DIM, LAYOUT, observe, applyAction,
     BUILD_PATHS, BUILD_IN, buildFeatures, applyBuild, chooseBuild };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.TankSovIO = api;
