@@ -3,7 +3,10 @@
  * tools/sovereign/train.js: trains Sovereign with PPO. DEV ONLY.
  *
  *   node tools/sovereign/train.js --game=tankfield --run=<name> [--iters=N] [--hours=H]
- *        [--workers=K] [--steps=S] [--from=<ckpt>] [--clones=<dir>] [--fresh]
+ *        [--workers=K] [--steps=S] [--from=<ckpt>] [--clones=<dir>] [--kit=assassin] [--fresh]
+ *
+ * --kit fixes Sovereign's build to one of TankSovIO.KITS (the build head isn't used or trained)
+ * and starts duels 700-1700 px apart, so a long-range kit learns to fight from range.
  *
  * Each iteration every worker thread plays whole headless duels (tankfield/env.js) with the
  * current weights until it has --steps decisions, then the PyTorch sidecar (nn/torch_ppo.py)
@@ -59,7 +62,8 @@ function worker() {
       // Opponent build: the style's own, or a random style's for nets and idle. Then Sovereign answers it.
       const oppBuild = styleBuild(brng, spec.kind === 'style' && spec.name !== 'switcher' ? spec.name : BUILD_STYLES[Math.floor(brng() * BUILD_STYLES.length)]);
       const oppFeatures = featuresOf(oppBuild), sb = sampleBuild(buildNet, oppFeatures, brng, false);
-      const r = runEpisode({ seed, sovNet: pi, opponent, maxT: msg.maxT, oppBuild, sovBuild: { path: IO.BUILD_PATHS[sb.path], alloc: sb.alloc } });
+      const kit = msg.kit && IO.KITS[msg.kit];
+      const r = runEpisode({ seed, sovNet: pi, opponent, maxT: msg.maxT, oppBuild, sovBuild: kit || { path: IO.BUILD_PATHS[sb.path], alloc: sb.alloc }, gap: kit ? 700 + brng() * 1000 : 700 });
       k++;
       if (!r.len) continue;
       out.obs.push(r.obs); out.acts.push(r.acts); out.logps.push(r.logps); out.rews.push(r.rews);
@@ -85,6 +89,7 @@ async function main() {
   const MAX_IT = parseInt(args.iters, 10) || Infinity;
   const HOURS = parseFloat(args.hours) || Infinity;
   const MAX_T = 120;
+  const KIT = args.kit ? String(args.kit) : null;
   const DIR = path.join(LAB, 'runs', String(args.run)), SNAPS = path.join(DIR, 'snapshots');
   const log = (...a) => console.log('[sovereign]', ...a);
   fs.mkdirSync(SNAPS, { recursive: true });
@@ -174,7 +179,7 @@ async function main() {
     share([...need]);
     const piJSON = pi.toJSON();
     const results = await Promise.all(workers.map((w, i) => ask(w, {
-      pi: piJSON, build: build.toJSON(), steps: STEPS, maxT: MAX_T, plan: plans[i].map(({ kind, key, name, label }) => ({ kind, key, name, label })),
+      pi: piJSON, build: build.toJSON(), kit: KIT, steps: STEPS, maxT: MAX_T, plan: plans[i].map(({ kind, key, name, label }) => ({ kind, key, name, label })),
       seed: (iter * 1000003 + i * 10007 + 1) >>> 0,
     })));
     const tRoll = Date.now() - it0;
@@ -197,7 +202,7 @@ async function main() {
       }
     }
     const upd = await torch.update(pi, vf, b, iter, { lr, targetKl });
-    updateBuild(build, buildAdam, buildBatch);
+    if (!KIT) updateBuild(build, buildAdam, buildBatch);
     iter++;
 
     const ckpt = { iter, pi: pi.toJSON(), vf: vf.toJSON(), build: build.toJSON(), cfg: CFG, lr, hof };

@@ -1117,6 +1117,7 @@ window.CATALOG = [
       { id: 'tankfield-turret', title: 'Tankfield: Upgrade', desc: 'Pick a new turret.' },
       { id: 'tankfield-final', title: 'Tankfield: Final Form', desc: 'Pick a level 20 turret.' },
       { id: 'tankfield-sovereign', title: 'Tankfield: Dethroned', desc: 'Destroy Sovereign, the level 45 boss tank.' },
+      { id: 'tankfield-raid', title: 'Tankfield: Kingslayers', desc: 'Help bring down Sovereign in a public lobby raid.' },
       { id: 'tankfield-hexagon', title: 'Tankfield: Hex Breaker', desc: 'Destroy a giant hexagon.' },
       { id: 'tankfield-25', title: 'Tankfield: Heavy Armor', desc: 'Reach level 25.' },
       { id: 'tankfield-online-win', title: 'Tankfield: Top Tank', desc: 'Win a live 1v1 against a real player.' },

@@ -3,7 +3,9 @@
    world.rng, and everything the player should see or hear comes out as world.events. */
 (function (root) {
   const TAU = Math.PI * 2;
-  const AW = 2600, AH = 1800;
+  const AW = 4000, AH = 2800;
+  // The middle, where pentagons and the rare big hexagon gather (half sizes).
+  const MID_W = 700, MID_H = 480;
   const LEVEL_CAP = 45;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
@@ -41,6 +43,16 @@
     { sides: 5, r: 24, hp: 100, xp: 130, color: '#7aa2ff', w: 10 },
     { sides: 6, r: 44, hp: 600, xp: 1200, color: '#b07cff', w: 1 },
   ];
+  // Rival bot builds: the turret path they take and the order they buy stats in (indexes into
+  // STATS), plus the range they like to fight at.
+  const KITS = {
+    sniper: { paths: [['longshot', 'rail'], ['longshot', 'hunter']], pref: [3, 4, 5, 6, 0, 1, 2], range: 620 },
+    gunner: { paths: [['twin', 'triple'], ['twin', 'quad']], pref: [5, 4, 3, 0, 1, 6, 2], range: 330 },
+    sprayer: { paths: [['spray', 'hose'], ['spray', 'shotgun']], pref: [5, 4, 0, 6, 1, 3, 2], range: 240 },
+    guard: { paths: [['guard', 'star'], ['guard', 'tri']], pref: [4, 5, 0, 1, 3, 6, 2], range: 300 },
+    rammer: { paths: [['guard', 'tri']], pref: [2, 0, 6, 1, 5, 4, 3], range: 0 },
+  };
+  const KIT_IDS = Object.keys(KITS);
   const xpFor = lv => Math.round(20 * Math.pow(lv, 1.75));   // total xp needed to reach level lv+1
 
   const T = t => TURRETS[t.turret];
@@ -63,6 +75,7 @@
   function makeTank(world, { name, color, bot }) {
     const t = { id: ++world.tankId, name, color, bot, x: 0, y: 0, vx: 0, vy: 0, a: 0, r: 22, hp: 100, max: 100, xp: 0, level: 1, points: 0, stats: freshStats(), turret: 'basic', reload: 0, phase: 0, alive: true, hitT: 0, regenT: 0, respawnT: 0, recoilT: 0,
       ai: bot ? { mode: 'farm', target: null, thinkT: 0, wander: rand(world, 0, TAU), aimErr: 0, courage: rand(world, 0.5, 1.2) } : null };
+    if (bot) { t.ai.kit = KIT_IDS[Math.floor(world.rng() * KIT_IDS.length)]; t.ai.path = Math.floor(world.rng() * 2); t.ai.dodge = 0; }
     place(world, t);
     return t;
   }
@@ -84,7 +97,10 @@
       // New turrets at 10 and 20.
       if ((t.level === 10 || t.level === 20) && T(t).next) {
         const options = T(t).next;
-        if (t.bot) t.turret = options[Math.floor(world.rng() * options.length)];
+        if (t.bot) {
+          const kit = t.ai && KITS[t.ai.kit], want = kit && kit.paths[t.ai.path % kit.paths.length][t.level === 10 ? 0 : 1];
+          t.turret = options.includes(want) ? want : options[Math.floor(world.rng() * options.length)];
+        }
         else world.events.push({ type: 'turretPick', t, options });
       }
       if (t.bot) botSpend(world, t);
@@ -100,11 +116,13 @@
     return true;
   }
   function botSpend(world, t) {
-    const pref = [4, 5, 0, 3, 6, 1, 2];
+    const kit = t.ai && KITS[t.ai.kit];
+    const pref = kit ? kit.pref : [4, 5, 0, 3, 6, 1, 2];
     while (t.points > 0) {
       const opts = pref.filter(i => t.stats[STATS[i].id] < MAX_STAT);
       if (!opts.length) break;
-      spend(world, t, opts[Math.floor(world.rng() * Math.min(3, opts.length))]);
+      // Kit bots mostly stick to their order (a build that hangs together); the rest pick from their top three.
+      spend(world, t, opts[kit ? (world.rng() < 0.75 ? 0 : Math.floor(world.rng() * Math.min(2, opts.length))) : Math.floor(world.rng() * Math.min(3, opts.length))]);
     }
   }
   function setTurret(world, t, id) {
@@ -141,6 +159,8 @@
   // `at` is the shot that did it (if any); the hit event carries its position for the spark.
   function damage(world, target, n, by, at) {
     if (target.shield > 0 || target.dead || target.alive === false) return;
+    // A truce (public lobby raids: players can't hurt each other while Sovereign is up).
+    if (world.truce && by && world.truce(target, by)) return;
     // Live: each machine owns its own tank, so damage to the other player only happens over
     // there (they report it). The spark still shows.
     if (target.remote) {
@@ -180,7 +200,7 @@
     for (const kk of SHAPE_KINDS) { if (r < kk.w) { k = kk; break; } r -= kk.w; }
     // Pentagons and the rare big hexagon gather in the middle.
     const mid = k.sides >= 5;
-    const x = mid ? AW / 2 + rand(world, -450, 450) : 60 + world.rng() * (AW - 120), y = mid ? AH / 2 + rand(world, -300, 300) : 60 + world.rng() * (AH - 120);
+    const x = mid ? AW / 2 + rand(world, -MID_W * 0.9, MID_W * 0.9) : 60 + world.rng() * (AW - 120), y = mid ? AH / 2 + rand(world, -MID_H * 0.9, MID_H * 0.9) : 60 + world.rng() * (AH - 120);
     const s = makeShape(world, k, x, y, ++world.shapeId);
     world.shapes.push(s);
     return s;
@@ -191,47 +211,77 @@
 
   // ---------- Bots ----------
 
+  // How far this tank's shots fly before they fade.
+  const shotRange = t => shotSpeed(t) * 1.3 * (T(t).range || 1);
+
   function botControl(world, t, dt, opts = {}) {
     const ai = t.ai;
+    const kit = KITS[ai.kit] || KITS.gunner;
+    const reach = Math.min(shotRange(t) * 0.85, 1100);
     ai.thinkT -= dt;
     if (ai.thinkT <= 0) {
-      ai.thinkT = 0.4 + rand(world, 0, 0.4);
-      // Enemies close by: fight them if we're not much weaker, otherwise back off.
-      let foe = null, fd = 650;
+      ai.thinkT = 0.3 + rand(world, 0, 0.3);
+      // Enemies in sight: pick the best one to fight (close, hurt, not too strong for us).
+      let foe = null, best = -Infinity, fd = Infinity;
+      const sight = Math.max(800, reach + 150);
       for (const o of world.tanks) {
         if (o === t || !o.alive) continue;
         if (opts.ignore && opts.ignore.has(o)) continue;
         // A new player gets a grace period to find their feet, unless they start the fight.
         if (o === opts.graceTarget && world.time < opts.graceUntil && !ai.provoked) continue;
         const d = Math.hypot(o.x - t.x, o.y - t.y);
-        if (d < fd) { fd = d; foe = o; }
+        if (d > sight) continue;
+        const sc = -d / sight - (o.hp / o.max) * 0.6 - Math.max(0, o.level - t.level) * 0.03 + (o === ai.target ? 0.25 : 0);
+        if (sc > best) { best = sc; foe = o; fd = d; }
       }
-      const brave = foe && (t.level * ai.courage >= foe.level * 0.8 || t.hp > t.max * 0.7);
-      if (foe && brave && t.hp > t.max * 0.3) { ai.mode = 'fight'; ai.target = foe; }
-      else if (foe && fd < 450) { ai.mode = 'flee'; ai.target = foe; }
+      const strong = foe && (t.level * ai.courage >= foe.level * 0.8 || t.hp > foe.hp * 1.3);
+      // Low on armour: break off and heal (repair kicks in once nothing has hit us for a while).
+      if (t.hp < t.max * 0.3 && foe && fd < sight) { ai.mode = 'flee'; ai.target = foe; }
+      else if (foe && strong && t.hp > t.max * 0.45) { ai.mode = 'fight'; ai.target = foe; }
+      else if (foe && fd < 500) { ai.mode = 'flee'; ai.target = foe; }
       else {
         ai.mode = 'farm';
-        let best = null, bs = -Infinity;
-        for (const s of world.shapes) { const d = Math.hypot(s.x - t.x, s.y - t.y); const sc = s.k.xp / (d + 150) - (s.k.sides === 6 && t.level < 15 ? 1 : 0); if (sc > bs) { bs = sc; best = s; } }
-        ai.target = best;
+        let bs = -Infinity, pick = null;
+        for (const s of world.shapes) { const d = Math.hypot(s.x - t.x, s.y - t.y); const sc = s.k.xp / (d + 150) - (s.k.sides === 6 && t.level < 15 ? 1 : 0); if (sc > bs) { bs = sc; pick = s; } }
+        ai.target = pick;
       }
-      ai.aimErr = rand(world, -0.12, 0.12);
+      // Aim gets steadier as a bot levels up.
+      const err = 0.12 * Math.max(0.25, 1 - t.level / 40);
+      ai.aimErr = rand(world, -err, err);
+      // Incoming fire: sidestep the closest shot that's coming our way.
+      ai.dodge = 0;
+      let near = 380;
+      for (const s of world.shots) {
+        if (s.owner === t) continue;
+        const rx = t.x - s.x, ry = t.y - s.y, d = Math.hypot(rx, ry);
+        if (d > near) continue;
+        const v = Math.hypot(s.vx, s.vy) || 1;
+        const along = (rx * s.vx + ry * s.vy) / v;                 // > 0: heading our way
+        const miss = Math.abs(rx * s.vy - ry * s.vx) / v;           // how wide it would pass
+        if (along > 0 && miss < radius(t) + s.r + 18) { near = d; ai.dodge = (rx * s.vy - ry * s.vx) >= 0 ? 1 : -1; ai.dodgeX = -s.vy / v; ai.dodgeY = s.vx / v; }
+      }
     }
     const tg = ai.target && (ai.target.alive !== false) && !ai.target.dead ? ai.target : null;
     let mx = 0, my = 0;
     if (tg) {
       const dx = tg.x - t.x, dy = tg.y - t.y, d = Math.hypot(dx, dy) || 1;
       const lead = d / shotSpeed(t);
-      t.a += angDiff(Math.atan2(tg.y + (tg.vy || 0) * lead - t.y, tg.x + (tg.vx || 0) * lead - t.x) + ai.aimErr, t.a) * Math.min(1, dt * 6);
-      const want = ai.mode === 'fight' ? 260 * (T(t).range || 1) : ai.mode === 'flee' ? 99999 : 160;
+      t.a += angDiff(Math.atan2(tg.y + (tg.vy || 0) * lead - t.y, tg.x + (tg.vx || 0) * lead - t.x) + ai.aimErr, t.a) * Math.min(1, dt * 7);
+      const want = ai.mode === 'fight' ? Math.min(kit.range, reach * 0.8) : ai.mode === 'flee' ? 99999 : 160;
       const dir = ai.mode === 'flee' ? -1 : d > want ? 1 : d < want * 0.7 ? -1 : 0;
       mx = dx / d * dir; my = dy / d * dir;
-      if (ai.mode !== 'flee') { const s = Math.sin(world.time * 1.3 + ai.wander) * 0.6; mx += -dy / d * s; my += dx / d * s; }
-      if (ai.mode !== 'flee' || d < 400) if (Math.abs(angDiff(Math.atan2(dy, dx), t.a)) < 0.3 && d < 520 * (T(t).range || 1)) fire(world, t);
+      if (ai.mode !== 'flee') { const s = Math.sin(world.time * 1.3 + ai.wander) * 0.7; mx += -dy / d * s; my += dx / d * s; }
+      const inRange = d < (ai.mode === 'farm' ? 520 * (T(t).range || 1) : reach);
+      if (ai.mode !== 'flee' || d < reach) if (Math.abs(angDiff(Math.atan2(dy, dx), t.a)) < 0.3 && inRange) fire(world, t);
     } else {
       mx = Math.cos(ai.wander); my = Math.sin(ai.wander);
       ai.wander += rand(world, -0.5, 0.5) * dt;
     }
+    if (ai.dodge && ai.mode !== 'farm') { mx += ai.dodgeX * ai.dodge * 1.6; my += ai.dodgeY * ai.dodge * 1.6; }
+    // Keep off the walls, where a tank is easy to pin.
+    const m = 140;
+    if (t.x < m) mx += 1; else if (t.x > AW - m) mx -= 1;
+    if (t.y < m) my += 1; else if (t.y > AH - m) my -= 1;
     return { mx, my };
   }
 
@@ -349,8 +399,8 @@
     }
   }
 
-  const api = { AW, AH, STATS, MAX_STAT, TURRETS, SHAPE_KINDS, xpFor, LEVEL_CAP,
-    maxHp, moveSpeed, reloadTime, shotDamage, shotSpeed, radius,
+  const api = { AW, AH, MID_W, MID_H, KITS, STATS, MAX_STAT, TURRETS, SHAPE_KINDS, xpFor, LEVEL_CAP,
+    maxHp, moveSpeed, reloadTime, shotDamage, shotSpeed, shotRange, radius,
     createWorld, makeTank, makeShape, killShape, place, gainXp, spend, botSpend, setTurret, fire, damage, drive, botControl, respawnBot, spawnShape, step };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.TankCore = api;
