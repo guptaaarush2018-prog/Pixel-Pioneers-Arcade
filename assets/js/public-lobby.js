@@ -61,6 +61,8 @@ const PublicLobby = (() => {
         else if (ev === 'arc:ev') h.onEvent?.(d.from, d.type, d.data);
       });
       conn.ready.then(() => conn.emit('arc:join', { game, name: Arcade.profile().name, color: h.color })).catch(reject);
+      // A server without public lobbies never answers the join.
+      setTimeout(() => { if (me < 0) { conn.close(); reject(new Error("Public lobbies aren't available on the game server yet.")); } }, 15000);
     });
     await welcomed;
     addEventListener('pagehide', () => conn.emit('arc:leave'));
