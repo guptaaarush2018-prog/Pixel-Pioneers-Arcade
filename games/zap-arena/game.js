@@ -1,5 +1,6 @@
 /* Zap Arena: a fast first-person laser-tag arena against bots. Free-for-all: first to 20 tags,
-   or the most tags when the clock runs out. Momentum movement (air strafing, bunny hops,
+   or the most tags when the clock runs out. Public lobbies (public-lobby.js) are an endless
+   free-for-all with real players, topped up with bots. Momentum movement (air strafing, bunny hops,
    slides, jump pads) and three blasters. Everyone who gets tagged just respawns. */
 (() => {
   const ID = 'zap-arena';
@@ -381,7 +382,8 @@
         let dmg = w.dmg * (head ? w.head : 1);
         if (w.falloff && dist > w.falloff) dmg *= Math.max(0.3, 1 - (dist - w.falloff) / (w.range - w.falloff));
         // The other player's machine owns their health: tell it, and it confirms any tag.
-        if (victim.remote) pending.push({ d: Math.round(dmg * 10) / 10, h: head ? 1 : 0, w: f.weapon });
+        if (victim.remote && netMode === 'pub') pubHits.push({ v: victim.nid, o: f.nid, d: Math.round(dmg * 10) / 10, h: head ? 1 : 0, w: f.weapon });
+        else if (victim.remote) pending.push({ d: Math.round(dmg * 10) / 10, h: head ? 1 : 0, w: f.weapon });
         else damage(victim, dmg, f, head);
         if (f === me) { hits++; if (head) heads++; hitMark = head ? 0.25 : 0.15; }
         for (let k = 0; k < 4; k++) sparks.push({ x: ex, y: ey, z: ez, vx: (Math.random() - 0.5) * 5, vy: Math.random() * 4, vz: (Math.random() - 0.5) * 5, t: 0.4, c: w.color });
@@ -390,6 +392,7 @@
       }
       if (!bestHit && victim) bestHit = victim;
       if (f === me && netMode === 'live') shotBeams.push([...beams[beams.length - 1].a, ex, ey, ez].map(v => Math.round(v * 100) / 100));
+      if (netMode === 'pub' && !f.remote) pubBeams.push([f.weapon, ...[...beams[beams.length - 1].a, ex, ey, ez].map(v => Math.round(v * 100) / 100)]);
     }
     if (f === me && netMode === 'live') flushShots();
     // Sound: loud for you, quieter with distance for the bots.
@@ -437,8 +440,9 @@
         banner = { text: streak >= 3 ? `${streak} IN A ROW!` : head ? 'HEADSHOT TAG!' : 'TAGGED!', t: 1.2, color: head ? '#ffd23f' : '#7ef0ff' };
       }
       if (v === me) { streak = 0; banner = { text: `Tagged by ${by.name}`, t: 2.4, color: '#ff6b6b' }; }
-      if (v === me && by.remote) live.send('tagged', { h: head ? 1 : 0, w: lastHitWeapon, n: me.deaths });
-      if (by.tags >= goal()) endMatch();
+      if (v === me && by.remote && netMode === 'live') live.send('tagged', { h: head ? 1 : 0, w: lastHitWeapon, n: me.deaths });
+      if (netMode === 'pub') pub.lobby.send('out', { v: v.nid, o: by.nid, h: head ? 1 : 0, n: v.deaths });
+      else if (by.tags >= goal()) endMatch();
     }
   }
   let recoil = 0, streak = 0, banner = null, lastHitWeapon = 0;
@@ -564,6 +568,7 @@
   // ---------- Match flow ----------
 
   function start() {
+    if (netMode === 'pub') { leavePub(); netMode = null; }
     map = MAPS[prefs.map] || MAPS[0];
     diff = DIFFS[prefs.diff] || DIFFS[1];
     buildMap();
@@ -621,6 +626,7 @@
     if (state !== 'play') return;
     mouseL = mouseR = false;
     if (netMode === 'live') return livePause();
+    if (netMode === 'pub') return pubPause();
     ui.show({
       title: 'Paused',
       html: `<p>${me.tags} tags · ${Math.ceil(matchT)} s left</p>
@@ -648,11 +654,12 @@
         <li><b>Click</b> to zap, <b>right click</b> to zoom. <b>1 2 3</b> switch between the Pulse Blaster, Scatter Zapper and Rail Lance.</li>
         <li>Hold <b>Space</b> to bunny hop, steer in the air to keep your speed, and <b>Shift</b> while running to slide. Green pads launch you.</li>
       </ul>
-      ${pick(MAPS, prefs.map, 'map', 'Arena')}${pick(DIFFS, prefs.diff, 'diff', 'Bots')}${live.html(`Live 1v1 against a real player: first to ${LIVE_TAGS} tags, on the arena picked above`)}<p class="error" data-live-error>${liveError}</p>`;
+      ${pick(MAPS, prefs.map, 'map', 'Arena')}${pick(DIFFS, prefs.diff, 'diff', 'Bots')}${PublicLobby.enabled ? `<p class="za-label" style="margin-top:10px">Public lobby: drop into a free-for-all with real players (bots fill the empty spots)</p><div class="menu"><button class="btn secondary" type="button" data-pub>Join a public lobby</button></div><p class="error">${pubError}</p>` : ''}${live.html(`Live 1v1 against a real player: first to ${LIVE_TAGS} tags, on the arena picked above`)}<p class="error" data-live-error>${liveError}</p>`;
   }
   function wireMenu(p) {
     live.wire(p);
-    liveError = '';
+    liveError = ''; pubError = '';
+    p.querySelector('[data-pub]')?.addEventListener('click', joinPub);
     p.querySelectorAll('[data-map]').forEach(b => b.addEventListener('click', () => { prefs.map = +b.dataset.map; Arcade.save(PREFS_KEY, prefs); showMenu(); }));
     p.querySelectorAll('[data-diff]').forEach(b => b.addEventListener('click', () => { prefs.diff = +b.dataset.diff; Arcade.save(PREFS_KEY, prefs); showMenu(); }));
   }
@@ -660,6 +667,7 @@
     state = 'menu';
     netMode = null;
     live.leave();
+    leavePub();
     look.unlock();
     ui.show({ title: '⚡ Zap Arena', html: menuHtml(), button: 'Start match', onAction: start, onRender: wireMenu });
   }
@@ -857,13 +865,236 @@
     showMenu();
   }
 
+  // ---------- Public lobby (public-lobby.js) ----------
+  // Drop-in free-for-all with up to 8 real players, topped up with bots to PUB_FIGHTERS. One
+  // player's browser (the lobby's authority) runs the bots and streams them; everyone streams
+  // their own player. As in the 1v1, the shooter decides what it hit and the target's machine
+  // takes the damage, then tells everyone who tagged whom. No clock: play as long as you like.
+
+  const PUB_FIGHTERS = 6;
+  const PEER_COLORS = ['#ff4f6d', '#ffb02e', '#7ed957', '#b07cff', '#ff7ae0', '#ffe14d', '#2ee6c9', '#ff8a3c', '#9be3ff', '#f4f4f4'];
+  let pub = null, pubError = '', pubToken = 0, pubBeams = [], pubHits = [], pubSendT = 0, pubWorldT = 0, pubFlushT = 0, botN = 0;
+  const byNid = new Map();
+  const pubAuth = () => netMode === 'pub' && !!pub && pub.lobby.isAuthority;
+  const reg = (f, nid) => { f.nid = nid; byNid.set(nid, f); return f; };
+  const r2 = v => Math.round(v * 100) / 100;
+
+  async function joinPub() {
+    leavePub();
+    live.leave();
+    const token = ++pubToken;
+    ui.show({ title: 'Joining a public lobby…', html: Relay.CONNECTING, button: 'Cancel', onAction: () => { pubToken++; showMenu(); }, onRender: Relay.ticker });
+    try {
+      const lobby = await PublicLobby.join(ID, {
+        color: '#4fc3ff',
+        onJoined: d => { if (pub) { addPeer(d.slot, d.name); feedLine(`${d.name} joined`); balanceBots(); } },
+        onLeft: d => { if (pub) { removeNid('p' + d.slot); if (d.name) feedLine(`${d.name} left`); balanceBots(); } },
+        onAuthority: slot => { if (pub && slot === pub.lobby.slot) takeOver(); },
+        onState: (slot, st) => { const f = byNid.get('p' + slot); if (f && st) f.net = { ...st, at: performance.now() }; },
+        onWorld: w => { if (pub && !pub.lobby.isAuthority) applyWorld(w); },
+        onEvent: (from, type, d) => { if (pub) pubEvent(from, type, d); },
+        onClosed: () => pubGone(),
+      });
+      if (token !== pubToken) return lobby.leave();
+      startPub(lobby);
+    } catch (e) {
+      if (token !== pubToken) return;
+      pubError = Online.escape(e.message || "Couldn't join a lobby.");
+      showMenu();
+    }
+  }
+  function leavePub() {
+    if (pub) pub.lobby.leave();
+    pub = null;
+    byNid.clear();
+  }
+  const feedLine = text => { feed.unshift({ text, mine: false, t: 4 }); if (feed.length > 5) feed.pop(); };
+
+  function startPub(lobby) {
+    netMode = 'pub';
+    map = MAPS[0];
+    diff = DIFFS[1];
+    buildMap();
+    byNid.clear();
+    pub = { lobby };
+    me = reg(makeFighter('You', '#4fc3ff', false, 0), 'p' + lobby.slot);
+    fighters = [me];
+    for (const [slot, name] of lobby.names) if (slot !== lobby.slot) addPeer(slot, name);
+    balanceBots();
+    spawn(me);
+    matchT = 0;
+    feed = []; beams = []; sparks = []; streak = 0; shots = 0; hits = 0; heads = 0; pubBeams = []; pubHits = [];
+    banner = { text: 'PUBLIC LOBBY · FREE FOR ALL', t: 2.6, color: '#ffffff' };
+    state = 'play';
+    Arcade.countPlay();
+    ui.hide();
+    look.lock();
+  }
+
+  function addPeer(slot, name) {
+    removeNid('p' + slot);
+    const f = reg(makeFighter(String(name || 'Player').slice(0, 24), PEER_COLORS[slot % PEER_COLORS.length], false, 0), 'p' + slot);
+    f.remote = true; f.alive = false; f.net = null; f.slot = slot;
+    fighters.push(f);
+  }
+  function removeNid(nid) {
+    const f = byNid.get(nid);
+    if (!f) return;
+    fighters = fighters.filter(x => x !== f);
+    byNid.delete(nid);
+  }
+
+  // The authority keeps the arena at PUB_FIGHTERS with bots: one leaves for every player who joins.
+  function balanceBots() {
+    if (!pubAuth()) return;
+    const players = fighters.filter(f => !f.isBot).length, want = clamp(PUB_FIGHTERS - players, 1, 5);
+    let bots = fighters.filter(f => f.isBot);
+    while (bots.length < want) {
+      const used = new Set(fighters.map(f => f.name));
+      const name = NAMES.find(n => !used.has(n)) || 'Bot';
+      const f = reg(makeFighter(name, COLORS[botN % COLORS.length], true, [0, 0, 1, 0, 2][botN % 5]), 'b' + botN++);
+      fighters.push(f);
+      spawn(f);
+      bots = fighters.filter(x => x.isBot);
+    }
+    while (bots.length > want) { removeNid(bots[bots.length - 1].nid); bots = fighters.filter(x => x.isBot); }
+  }
+
+  function takeOver() {
+    for (const f of fighters) if (f.isBot && f.remote) { f.remote = false; f.net = null; if (!f.alive) f.respawnT = 1; }
+    botN = Math.max(botN, ...fighters.filter(f => f.isBot).map(f => +f.nid.slice(1) + 1), 0);
+    balanceBots();
+  }
+
+  function sendWorld() {
+    pub.lobby.world({ b: fighters.filter(f => f.isBot).map(f => [f.nid, r2(f.x), r2(f.y), r2(f.z), r2(f.vx), r2(f.vy), r2(f.vz), r2(f.yaw), r2(f.pitch), f.crouch ? 1 : 0, f.ground ? 1 : 0, f.weapon, Math.round(Math.max(0, f.hp)), f.alive ? 1 : 0, f.deaths, f.tags, f.name, f.color]) });
+  }
+  function applyWorld(w) {
+    if (!w || !Array.isArray(w.b)) return;
+    const seen = new Set();
+    for (const row of w.b.slice(0, 12)) {
+      const [nid, x, y, z, vx, vy, vz, yaw, p, c, g, wp, hp, al, d, tg, name, color] = row;
+      if (typeof nid !== 'string' || nid[0] !== 'b' || ![x, y, z].every(isFinite)) continue;
+      seen.add(nid);
+      let f = byNid.get(nid);
+      if (!f) {
+        f = reg(makeFighter(String(name || 'Bot').slice(0, 24), /^#[0-9a-f]{6}$/i.test(color) ? color : '#ffffff', true, wp | 0), nid);
+        f.remote = true; f.x = x; f.y = y; f.z = z;
+        fighters.push(f);
+      }
+      f.net = { x, y, z, vx, vy, vz, yaw, p, c, g, w: wp, hp, a: al, d, at: performance.now() };
+      f.tags = Math.max(f.tags, tg | 0);
+    }
+    for (const f of [...fighters]) if (f.isBot && f.remote && !seen.has(f.nid)) removeNid(f.nid);
+  }
+
+  // Someone else's fighter (a player, or a bot run elsewhere): ease toward where it should be.
+  function syncRemote(f, dt) {
+    const s = f.net;
+    if (!s) return;
+    const lag = Math.min(0.15, (performance.now() - s.at) / 1000);
+    const tx = s.x + s.vx * lag, tz = s.z + s.vz * lag, ty = s.g ? s.y : s.y + s.vy * lag;
+    const wasAlive = f.alive;
+    f.alive = !!s.a && (s.d | 0) >= f.deaths;
+    if ((!wasAlive && f.alive) || Math.hypot(tx - f.x, tz - f.z) > 5) { f.x = tx; f.y = ty; f.z = tz; }
+    else { f.x = Gfx.approach(f.x, tx, 18, dt); f.y = Gfx.approach(f.y, ty, 18, dt); f.z = Gfx.approach(f.z, tz, 18, dt); }
+    f.yaw += angDiff(s.yaw, f.yaw) * Math.min(1, dt * 20);
+    f.pitch = s.p;
+    f.vx = s.vx; f.vz = s.vz;
+    f.crouch = !!s.c; f.ground = !!s.g;
+    f.weapon = clamp(s.w | 0, 0, 2);
+    f.hp = s.hp;
+    if (s.tg !== undefined) f.tags = Math.max(f.tags, s.tg | 0);
+    f.step += Math.hypot(s.vx, s.vz) * dt * (s.g ? 1 : 0);
+  }
+
+  function updatePub(dt) {
+    const L = pub.lobby;
+    pubSendT -= dt; pubFlushT -= dt; pubWorldT -= dt;
+    if (pubSendT <= 0) {
+      pubSendT = 0.05;
+      L.state({ x: r2(me.x), y: r2(me.y), z: r2(me.z), vx: r2(me.vx), vy: r2(me.vy), vz: r2(me.vz), yaw: r2(me.yaw), p: r2(me.pitch), c: me.crouch ? 1 : 0, g: me.ground ? 1 : 0, w: me.weapon, hp: Math.round(Math.max(0, me.hp)), a: me.alive ? 1 : 0, d: me.deaths, tg: me.tags });
+    }
+    if (pubFlushT <= 0 && (pubBeams.length || pubHits.length)) {
+      pubFlushT = 0.05;
+      if (pubBeams.length) L.send('fire', { b: pubBeams.splice(0, 40) });
+      // Damage goes to whoever owns the target: a player's own machine, or the authority for bots.
+      for (const h of pubHits.splice(0, 40)) {
+        const v = byNid.get(h.v);
+        if (!v) continue;
+        L.send('hit', h, v.isBot ? 'auth' : v.slot);
+      }
+    }
+    if (L.isAuthority && pubWorldT <= 0) { pubWorldT = 0.1; sendWorld(); }
+    for (const f of fighters) if (f.remote) syncRemote(f, dt);
+  }
+
+  function pubEvent(from, type, d) {
+    if (state !== 'play' || netMode !== 'pub') return;
+    if (type === 'fire') {
+      for (const b of (Array.isArray(d?.b) ? d.b : []).slice(0, 40)) {
+        const w = WEAPONS[b[0] | 0] || WEAPONS[0], pts = b.slice(1, 7).map(Number);
+        if (!pts.every(isFinite)) continue;
+        beams.push({ a: pts.slice(0, 3), b: pts.slice(3, 6), t: 0.09, c: w.color, w: w.id === 'rail' ? 0.05 : 0.025 });
+        const dist = Math.hypot(pts[0] - me.x, pts[2] - me.z), vol = 0.025 * Math.max(0, 1 - dist / 50);
+        if (vol > 0.003) Arcade.tone(w.id === 'blaster' ? { freq: 900, to: 300, dur: 0.07, type: 'square', vol } : w.id === 'scatter' ? { freq: 260, to: 60, dur: 0.18, type: 'sawtooth', vol: vol * 1.4 } : { freq: 1600, to: 200, dur: 0.35, type: 'sine', vol: vol * 1.6 });
+      }
+    } else if (type === 'hit') {
+      const v = byNid.get(d?.v), by = byNid.get(d?.o);
+      if (!v || !by || v.remote || !v.alive) return;
+      if (v === me) lastHitWeapon = d.w | 0;
+      damage(v, clamp(+d.d || 0, 0, 160), by, !!d.h);
+    } else if (type === 'out') {
+      // Someone's machine says its fighter was tagged.
+      const v = byNid.get(d?.v), by = byNid.get(d?.o), head = !!d?.h;
+      if (v && v.remote) {
+        v.deaths = Math.max(v.deaths + 1, d.n | 0);
+        v.alive = false;
+        for (let k = 0; k < 24; k++) sparks.push({ x: v.x, y: v.y + 1, z: v.z, vx: (Math.random() - 0.5) * 8, vy: Math.random() * 6, vz: (Math.random() - 0.5) * 8, t: 0.7, c: hex(v.color) });
+      }
+      if (!v || !by) return;
+      by.tags++;
+      feed.unshift({ text: `${by.name} ⚡ ${v.name}${head ? ' (headshot)' : ''}`, mine: by === me, t: 4 });
+      if (feed.length > 5) feed.pop();
+      if (by === me) {
+        Arcade.tone({ freq: 660, to: 1320, dur: 0.18, type: 'triangle', vol: 0.06 });
+        streak++;
+        if (streak >= 5) Arcade.flag('zap-arena-streak');
+        if (head && WEAPONS[me.weapon].id === 'rail') Arcade.flag('zap-arena-rail');
+        banner = { text: streak >= 3 ? `${streak} IN A ROW!` : head ? 'HEADSHOT TAG!' : 'TAGGED!', t: 1.2, color: head ? '#ffd23f' : '#7ef0ff' };
+      }
+    }
+  }
+
+  function pubPause() {
+    ui.show({
+      title: 'Menu',
+      html: `<p>The lobby keeps going while this is open.</p><p>${me.tags} tags · ${me.deaths} out</p>
+        <div class="menu"><button class="btn secondary" type="button" data-quit>Leave the lobby</button></div>`,
+      button: 'Back in',
+      onAction: () => { ui.hide(); look.lock(); },
+      onRender: p => p.querySelector('[data-quit]').addEventListener('click', showMenu),
+    });
+  }
+  function pubGone() {
+    if (netMode !== 'pub') return;
+    pub = null;
+    netMode = null;
+    state = 'over';
+    look.unlock();
+    ui.show({ title: 'Connection lost', html: '<p>Lost the connection to the game server.</p>', button: 'Back to menu', onAction: showMenu });
+  }
+
   // ---------- Update ----------
 
   function update(dt) {
-    matchT -= dt;
-    // Online, the host's clock is the one that ends the match.
-    if (matchT <= 0 && netMode === 'live' && !live.host) matchT = 0;
-    else if (matchT <= 0) { matchT = 0; if (netMode === 'live') live.send('end', { a: me.tags, b: rival.tags }); endMatch(); return; }
+    if (netMode === 'pub') matchT += dt;      // no clock in a public lobby: this counts up
+    else {
+      matchT -= dt;
+      // Online, the host's clock is the one that ends the match.
+      if (matchT <= 0 && netMode === 'live' && !live.host) matchT = 0;
+      else if (matchT <= 0) { matchT = 0; if (netMode === 'live') live.send('end', { a: me.tags, b: rival.tags }); endMatch(); return; }
+    }
     // You.
     if (me.alive) {
       const fwd = (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
@@ -873,6 +1104,7 @@
       zoomT = Gfx.approach(zoomT, mouseR && me.reloadT <= 0 ? 1 : 0, 14, dt);
     }
     if (netMode === 'live') updateLive(dt);
+    if (netMode === 'pub') updatePub(dt);
     for (const f of fighters) {
       if (f.remote) continue;
       if (!f.alive) {
@@ -1068,8 +1300,13 @@
     const lead = [...fighters].sort((a, b) => b.tags - a.tags)[0];
     const mm = Math.floor(matchT / 60), ss = String(Math.floor(matchT % 60)).padStart(2, '0');
     Gfx.card(hud, W / 2 - 110, 10, 220, 38);
-    Gfx.text(hud, `${mm}:${ss}`, W / 2, 22, { size: 15, stroke: null });
-    Gfx.text(hud, `You ${me.tags} · ${lead === me ? 'leading' : `${lead.name} ${lead.tags}`} · first to ${goal()}`, W / 2, 38, { size: 11, color: '#9aa3b5', stroke: null });
+    if (netMode === 'pub') {
+      Gfx.text(hud, `Public lobby · ${pub ? pub.lobby.names.size : 1} player${pub && pub.lobby.names.size === 1 ? '' : 's'}`, W / 2, 22, { size: 13, stroke: null });
+      Gfx.text(hud, `You ${me.tags} · ${lead === me ? 'leading' : `${lead.name} ${lead.tags}`} · Tab for scores`, W / 2, 38, { size: 11, color: '#9aa3b5', stroke: null });
+    } else {
+      Gfx.text(hud, `${mm}:${ss}`, W / 2, 22, { size: 15, stroke: null });
+      Gfx.text(hud, `You ${me.tags} · ${lead === me ? 'leading' : `${lead.name} ${lead.tags}`} · first to ${goal()}`, W / 2, 38, { size: 11, color: '#9aa3b5', stroke: null });
+    }
     if (netMode === 'live' && liveLag() > 3) Gfx.text(hud, `Waiting for ${rival.name}…`, W / 2, 64, { size: 13, color: '#ffb02e', width: 3 });
     // Kill feed.
     feed.forEach((f, i) => Gfx.text(hud, f.text, W - 16, 22 + i * 20, { size: 12, align: 'right', color: f.mine ? '#ffd23f' : '#e0e6f0', width: 3 }));
@@ -1105,7 +1342,7 @@
   function frame(now) {
     const dt = Math.min(0.04, (now - last) / 1000);
     last = now;
-    if (state === 'play' && (overlayEl.hidden || netMode === 'live' || (typeof Versus !== 'undefined' && Versus.active()))) update(dt);
+    if (state === 'play' && (overlayEl.hidden || netMode === 'live' || netMode === 'pub' || (typeof Versus !== 'undefined' && Versus.active()))) update(dt);
     if (mapMesh) draw();
     $('tags').textContent = me ? me.tags : 0;
     $('clock').textContent = state === 'play' ? `${Math.floor(matchT / 60)}:${String(Math.floor(matchT % 60)).padStart(2, '0')}` : '-';
